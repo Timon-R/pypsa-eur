@@ -361,7 +361,7 @@ def calculate_supply(n, label, supply):
 
 def calculate_supply_energy(n, label, supply_energy):
     """
-    Calculate the total energy supply/consuption of each component at the buses
+    Calculate the total energy supply/consumption of each component at the buses
     aggregated by carrier.
     """
     bus_carriers = n.buses.carrier.unique()
