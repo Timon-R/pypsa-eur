@@ -2398,12 +2398,14 @@ def add_biomass(n, costs):
             bus0=spatial.biomass.df.loc[urban_central, "nodes"].values,
             bus1=urban_central,
             bus2=urban_central + " urban central heat",
+            bus3="co2 atmosphere",
             carrier="urban central solid biomass CHP",
             p_nom_extendable=True,
             capital_cost=costs.at[key, "fixed"] * costs.at[key, "efficiency"],
             marginal_cost=costs.at[key, "VOM"],
             efficiency=costs.at[key, "efficiency"],
             efficiency2=costs.at[key, "efficiency-heat"],
+            efficiency3= biomass_ef.get("solid biomass"),
             lifetime=costs.at[key, "lifetime"],
         )
 
@@ -2435,7 +2437,7 @@ def add_biomass(n, costs):
                 - costs.at["biomass CHP capture", "heat-input"]
             ),
             efficiency3=-costs.at["solid biomass", "CO2 intensity"]
-            * costs.at["biomass CHP capture", "capture_rate"],
+            * costs.at["biomass CHP capture", "capture_rate"] + biomass_ef.get("solid biomass"),
             efficiency4=costs.at["solid biomass", "CO2 intensity"]
             * costs.at["biomass CHP capture", "capture_rate"],
             lifetime=costs.at[key, "lifetime"],
@@ -2456,8 +2458,10 @@ def add_biomass(n, costs):
                 p_nom_extendable=True,
                 bus0=spatial.biomass.df.loc[nodes, "nodes"].values,
                 bus1=nodes + f" {name} heat",
+                bus2="co2 atmosphere",
                 carrier=name + " biomass boiler",
                 efficiency=costs.at["biomass boiler", "efficiency"],
+                efficiency2=biomass_ef.get("solid biomass"),
                 capital_cost=costs.at["biomass boiler", "efficiency"]
                 * costs.at["biomass boiler", "fixed"]
                 * options["overdimension_individual_heating"],
@@ -2592,6 +2596,8 @@ def add_industry(n, costs):
         spatial.biomass.industry,
         bus0=spatial.biomass.nodes,
         bus1=spatial.biomass.industry,
+        bus2="co2 atmosphere",
+        efficiency2= biomass_ef.get("solid biomass"),
         carrier="solid biomass for industry",
         p_nom_extendable=True,
         efficiency=1.0,
@@ -2615,7 +2621,7 @@ def add_industry(n, costs):
         * costs.at["solid biomass", "CO2 intensity"],
         efficiency=0.9,  # TODO: make config option
         efficiency2=-costs.at["solid biomass", "CO2 intensity"]
-        * costs.at["cement capture", "capture_rate"],
+        * costs.at["cement capture", "capture_rate"] + biomass_ef.get("solid biomass"),
         efficiency3=costs.at["solid biomass", "CO2 intensity"]
         * costs.at["cement capture", "capture_rate"],
         lifetime=costs.at["cement capture", "lifetime"],
@@ -3958,6 +3964,7 @@ if __name__ == "__main__":
 
     options = snakemake.params.sector
     cf_industry = snakemake.params.industry
+    biomass_ef = snakemake.params.biomass_ef
 
     investment_year = int(snakemake.wildcards.planning_horizons[-4:])
 
