@@ -173,16 +173,35 @@ def plot_map(
     fig, ax = plt.subplots(subplot_kw={"projection": proj})
     fig.set_size_inches(7, 6)
 
-    n.plot(
-        bus_sizes=costs / bus_size_factor,
-        bus_colors=tech_colors,
-        line_colors=ac_color,
-        link_colors=dc_color,
-        line_widths=line_widths / linewidth_factor,
-        link_widths=link_widths / linewidth_factor,
-        ax=ax,
-        **map_opts,
-    )
+    #check_colors(costs / bus_size_factor, tech_colors)  # Adjust arguments as necessary
+    
+    try:
+        n.plot(
+            bus_sizes=costs / bus_size_factor,
+            bus_colors=tech_colors,
+            line_colors=ac_color,
+            link_colors=dc_color,
+            line_widths=line_widths / linewidth_factor,
+            link_widths=link_widths / linewidth_factor,
+            ax=ax,
+            **map_opts,
+        )
+    except Exception as e:
+        error_message = str(e)
+        if "Colors not defined for all elements" in error_message:
+            # Extract elements from bus_sizes' second MultiIndex level
+            elements = set(costs.index.get_level_values(1))  # Assuming 'costs' MultiIndex structure is similar to 'bus_sizes'
+            # Combine keys from bus_colors and n.carriers.color for comparison
+            defined_colors = set(tech_colors.keys()) | set(n.carriers.color.keys())
+            # Identify missing elements
+            missing_elements = elements - defined_colors
+            logger.error(f"Missing color definitions for: {missing_elements}")
+            print(f"Missing color definitions for: {missing_elements}")
+        else:
+            logger.error(f"Error plotting network: {error_message}")
+            print(f"Error plotting network: {error_message}")
+        raise e
+
 
     sizes = [20, 10, 5]
     labels = [f"{s} bEUR/a" for s in sizes]
