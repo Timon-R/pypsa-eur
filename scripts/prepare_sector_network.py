@@ -63,12 +63,16 @@ def define_spatial(nodes, options):
         spatial.biomass.locations = nodes
         spatial.biomass.industry = nodes + " solid biomass for industry"
         spatial.biomass.industry_cc = nodes + " solid biomass for industry CC"
+        spatial.biomass.waste_industry = nodes + " waste biomass for industry"
+        spatial.biomass.waste_industry_cc = nodes + " waste biomass for industry CC"
     else:
         spatial.biomass.solid_biomass = ["EU solid biomass"]
         spatial.biomass.waste_biomass = ["EU waste biomass"]
         spatial.biomass.locations = ["EU"]
         spatial.biomass.industry = ["solid biomass for industry"]
         spatial.biomass.industry_cc = ["solid biomass for industry CC"]
+        spatial.biomass.waste_industry = ["waste biomass for industry"]
+        spatial.biomass.waste_industry_cc = ["waste biomass for industry CC"]
 
     spatial.biomass.df = pd.DataFrame(vars(spatial.biomass), index=nodes)
 
@@ -2728,6 +2732,17 @@ def add_industry(n, costs):
         p_nom_extendable=True,
         efficiency=1.0,
     )
+    n.madd(
+        "Link",
+        spatial.biomass.waste_industry,
+        bus0=spatial.biomass.waste_biomass,
+        bus1=spatial.biomass.industry,
+        bus2="co2 atmosphere",
+        efficiency2= biomass_ef.get("waste biomass"),
+        carrier="waste biomass for industry",
+        p_nom_extendable=True,
+        efficiency=1.0,
+    )
 
     if len(spatial.biomass.industry_cc) <= 1 and len(spatial.co2.nodes) > 1:
         link_names = nodes + " " + spatial.biomass.industry_cc
@@ -2748,6 +2763,25 @@ def add_industry(n, costs):
         efficiency=0.9,  # TODO: make config option
         efficiency2=-costs.at["solid biomass", "CO2 intensity"]
         * costs.at["cement capture", "capture_rate"] + biomass_ef.get("solid biomass"),
+        efficiency3=costs.at["solid biomass", "CO2 intensity"]
+        * costs.at["cement capture", "capture_rate"],
+        lifetime=costs.at["cement capture", "lifetime"],
+    )
+
+    n.madd(
+        "Link",
+        link_names,
+        bus0=spatial.biomass.waste_biomass,
+        bus1=spatial.biomass.waste_industry,
+        bus2="co2 atmosphere",
+        bus3=spatial.co2.nodes,
+        carrier="waste biomass for industry CC",
+        p_nom_extendable=True,
+        capital_cost=costs.at["cement capture", "fixed"]
+        * costs.at["solid biomass", "CO2 intensity"],
+        efficiency=0.9,  # TODO: make config option
+        efficiency2=-costs.at["solid biomass", "CO2 intensity"]
+        * costs.at["cement capture", "capture_rate"] + biomass_ef.get("waste biomass"),
         efficiency3=costs.at["solid biomass", "CO2 intensity"]
         * costs.at["cement capture", "capture_rate"],
         lifetime=costs.at["cement capture", "lifetime"],
