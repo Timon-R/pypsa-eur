@@ -58,19 +58,25 @@ def define_spatial(nodes, options):
     spatial.biomass = SimpleNamespace()
 
     if options.get("biomass_spatial", options["biomass_transport"]):
-        spatial.biomass.solid_biomass = nodes + " solid biomass"
+        spatial.biomass.forest_res_biomass = nodes + " forest residues biomass"
+        spatial.biomass.rest_product_biomass = nodes + " rest product biomass"
         spatial.biomass.waste_biomass = nodes + "waste biomass"
         spatial.biomass.locations = nodes
-        spatial.biomass.industry = nodes + " solid biomass for industry"
-        spatial.biomass.industry_cc = nodes + " solid biomass for industry CC"
+        spatial.biomass.forest_res_industry = nodes + " forest residues biomass for industry"
+        spatial.biomass.forest_res_industry_cc = nodes + " forest residues biomass for industry CC"
+        spatial.biomass.rest_product_industry = nodes + " rest product biomass for industry"
+        spatial.biomass.rest_product_industry_cc = nodes + " rest product biomass for industry CC"
         spatial.biomass.waste_industry = nodes + " waste biomass for industry"
         spatial.biomass.waste_industry_cc = nodes + " waste biomass for industry CC"
     else:
-        spatial.biomass.solid_biomass = ["EU solid biomass"]
+        spatial.biomass.forest_res_biomass = ["EU forest residues biomass"]
+        spatial.biomass.rest_product_biomass = ["EU rest product biomass"]
         spatial.biomass.waste_biomass = ["EU waste biomass"]
         spatial.biomass.locations = ["EU"]
-        spatial.biomass.industry = ["solid biomass for industry"]
-        spatial.biomass.industry_cc = ["solid biomass for industry CC"]
+        spatial.biomass.forest_res_industry = ["forest residues biomass for industry"]        
+        spatial.biomass.forest_res_industry_cc = ["forest residues biomass for industry CC"]
+        spatial.biomass.rest_product_industry = ["rest product biomass for industry"]
+        spatial.biomass.rest_product_industry_cc = ["rest product biomass for industry CC"]
         spatial.biomass.waste_industry = ["waste biomass for industry"]
         spatial.biomass.waste_industry_cc = ["waste biomass for industry CC"]
 
@@ -2246,18 +2252,24 @@ def add_biomass(n, costs):
         biogas_potentials_spatial = biomass_potentials["biogas"].sum()
 
     if options.get("biomass_spatial", options["biomass_transport"]):
-        solid_biomass_potentials_spatial = biomass_potentials["solid biomass"].rename(
-            index=lambda x: x + " solid biomass"
+        forest_res_biomass_potentials_spatial = biomass_potentials["forest residues biomass"].rename(
+            index=lambda x: x + " forest residues biomass"
+        )
+        rest_biomass_potentials_spatial = biomass_potentials["rest biomass"].rename(
+            index=lambda x: x + " rest biomass"
         )
         waste_biomass_potentials_spatial = biomass_potentials["waste biomass"].rename(
             index=lambda x: x + " waste biomass"
         )
     else:
-        solid_biomass_potentials_spatial = biomass_potentials["solid biomass"].sum()
+        forest_res_biomass_potentials_spatial = biomass_potentials["forest residues biomass"].sum()
+        rest_biomass_potentials_spatial = biomass_potentials["rest biomass"].sum()
         waste_biomass_potentials_spatial = biomass_potentials["waste biomass"].sum()
 
+
     n.add("Carrier", "biogas")
-    n.add("Carrier", "solid biomass")
+    n.add("Carrier", "forest residues biomass")
+    n.add("Carrier", "rest biomass")
     n.add("Carrier", "waste biomass")
 
     n.madd(
@@ -2270,9 +2282,17 @@ def add_biomass(n, costs):
 
     n.madd(
         "Bus",
-        spatial.biomass.solid_biomass,
+        spatial.biomass.forest_res_biomass,
         location=spatial.biomass.locations,
-        carrier="solid biomass",
+        carrier="forest residues biomass",
+        unit="MWh_LHV",
+    )
+
+    n.madd(
+        "Bus",
+        spatial.biomass.rest_biomass,
+        location=spatial.biomass.locations,
+        carrier="rest biomass",
         unit="MWh_LHV",
     )
 
@@ -2296,12 +2316,22 @@ def add_biomass(n, costs):
 
     n.madd(
         "Store",
-        spatial.biomass.solid_biomass,
-        bus=spatial.biomass.solid_biomass,
-        carrier="solid biomass",
-        e_nom=solid_biomass_potentials_spatial,
+        spatial.biomass.forest_res_biomass,
+        bus=spatial.biomass.forest_res_biomass,
+        carrier="forest residues biomass",
+        e_nom=forest_res_biomass_potentials_spatial,
         marginal_cost=costs.at["solid biomass", "fuel"],
-        e_initial=solid_biomass_potentials_spatial,
+        e_initial=forest_res_biomass_potentials_spatial,
+    )
+
+    n.madd(
+        "Store",
+        spatial.biomass.rest_biomass,
+        bus=spatial.biomass.rest_biomass,
+        carrier="rest biomass",
+        e_nom=rest_biomass_potentials_spatial,
+        marginal_cost=costs.at["solid biomass", "fuel"],
+        e_initial=rest_biomass_potentials_spatial,
     )
 
     n.madd(
@@ -2377,14 +2407,26 @@ def add_biomass(n, costs):
         n.madd(
             "Link",
             biomass_transport.index,
-            bus0=biomass_transport.bus0 + " solid biomass",
-            bus1=biomass_transport.bus1 + " solid biomass",
+            bus0=biomass_transport.bus0 + " forest residues biomass",
+            bus1=biomass_transport.bus1 + " forest residues biomass",
             p_nom_extendable=False,
             p_nom=5e4,
             length=biomass_transport.length.values,
             marginal_cost=biomass_transport.costs * biomass_transport.length.values,
-            carrier="solid biomass transport",
+            carrier="forest residues biomass transport",
         )
+        n.madd(
+            "Link",
+            biomass_transport.index,
+            bus0=biomass_transport.bus0 + " rest biomass",
+            bus1=biomass_transport.bus1 + " rest biomass",
+            p_nom_extendable=False,
+            p_nom=5e4,
+            length=biomass_transport.length.values,
+            marginal_cost=biomass_transport.costs * biomass_transport.length.values,
+            carrier="rest biomass transport",
+        )
+
         n.madd(
             "Link",
             biomass_transport.index,
@@ -2403,20 +2445,30 @@ def add_biomass(n, costs):
             snakemake.input.biomass_transport_costs, index_col=0
         )
         transport_costs = transport_costs.squeeze()
-        bus_transport_costs = spatial.biomass.solid_biomass.to_series().apply(
+        bus_transport_costs = spatial.biomass.forest_res_biomass.to_series().apply(
             lambda x: transport_costs[x[:2]]
         )
         average_distance = 200  # km #TODO: validate this assumption
 
         n.madd(
             "Generator",
-            spatial.biomass.solid_biomass,
-            bus=spatial.biomass.solid_biomass,
-            carrier="solid biomass",
+            spatial.biomass.forest_res_biomass,
+            bus=spatial.biomass.forest_res_biomass,
+            carrier="forest residues biomass",
             p_nom=10000,
             marginal_cost=costs.at["solid biomass", "fuel"]
             + bus_transport_costs * average_distance,
         )
+
+        n.madd(
+            "Generator",
+            spatial.biomass.rest_biomass,
+            bus=spatial.biomass.rest_biomass,
+            carrier="rest biomass",
+            p_nom=10000,
+            marginal_cost=costs.at["solid biomass", "fuel"]
+            + bus_transport_costs * average_distance,
+        )   
 
         n.madd(
             "Generator",
@@ -2430,12 +2482,22 @@ def add_biomass(n, costs):
 
         n.add(
             "GlobalConstraint",
-            "solid biomass limit",
-            carrier_attribute="solid biomass",
+            "forest residues biomass limit",
+            carrier_attribute="forest residues biomass",
             sense="<=",
-            constant=biomass_potentials["solid biomass"].sum(),
+            constant=biomass_potentials["forest residues biomass"].sum(),
             type="operational_limit",
         )
+
+        n.add(
+            "GlobalConstraint",
+            "rest biomass limit",
+            carrier_attribute="rest biomass",
+            sense="<=",
+            constant=biomass_potentials["rest biomass"].sum(),
+            type="operational_limit",
+        )
+
         n.add(
             "GlobalConstraint",
             "waste biomass limit",
@@ -2450,24 +2512,42 @@ def add_biomass(n, costs):
     if not urban_central.empty and options["chp"]:
         urban_central = urban_central.str[: -len(" urban central heat")]
 
-        key = "central solid biomass CHP"
+        key = "central forest residues biomass CHP"
 
         n.madd(
             "Link",
-            urban_central + " urban central solid biomass CHP",
-            bus0=spatial.biomass.df.loc[urban_central, "solid_biomass"].values,
+            urban_central + " urban central forest residues biomass CHP",
+            bus0=spatial.biomass.df.loc[urban_central, "forest_res_biomass"].values,
             bus1=urban_central,
             bus2=urban_central + " urban central heat",
             bus3="co2 atmosphere",
-            carrier="urban central solid biomass CHP",
+            carrier="urban central forest residues biomass CHP",
             p_nom_extendable=True,
             capital_cost=costs.at[key, "fixed"] * costs.at[key, "efficiency"],
             marginal_cost=costs.at[key, "VOM"],
             efficiency=costs.at[key, "efficiency"],
             efficiency2=costs.at[key, "efficiency-heat"],
-            efficiency3= biomass_ef.get("solid biomass"),
+            efficiency3= biomass_ef.get("forest residues biomass"),
             lifetime=costs.at[key, "lifetime"],
         )
+
+        n.madd(
+            "Link",
+            urban_central + " urban central rest biomass CHP",
+            bus0=spatial.biomass.df.loc[urban_central, "rest_biomass"].values,
+            bus1=urban_central,
+            bus2=urban_central + " urban central heat",
+            bus3="co2 atmosphere",
+            carrier="urban central rest biomass CHP",
+            p_nom_extendable=True,
+            capital_cost=costs.at[key, "fixed"] * costs.at[key, "efficiency"],
+            marginal_cost=costs.at[key, "VOM"],
+            efficiency=costs.at[key, "efficiency"],
+            efficiency2=costs.at[key, "efficiency-heat"],
+            efficiency3= biomass_ef.get("rest biomass"),
+            lifetime=costs.at[key, "lifetime"],
+        )
+
 
         n.madd(
             "Link",
@@ -2488,13 +2568,13 @@ def add_biomass(n, costs):
 
         n.madd(
             "Link",
-            urban_central + " urban central solid biomass CHP CC",
-            bus0=spatial.biomass.df.loc[urban_central, "solid_biomass"].values,
+            urban_central + " urban central forest residues biomass CHP CC",
+            bus0=spatial.biomass.df.loc[urban_central, "forest_res_biomass"].values,
             bus1=urban_central,
             bus2=urban_central + " urban central heat",
             bus3="co2 atmosphere",
             bus4=spatial.co2.df.loc[urban_central, "nodes"].values,
-            carrier="urban central solid biomass CHP CC",
+            carrier="urban central forest residues biomass CHP CC",
             p_nom_extendable=True,
             capital_cost=costs.at[key, "fixed"] * costs.at[key, "efficiency"]
             + costs.at["biomass CHP capture", "fixed"]
@@ -2514,11 +2594,46 @@ def add_biomass(n, costs):
                 - costs.at["biomass CHP capture", "heat-input"]
             ),
             efficiency3=-costs.at["solid biomass", "CO2 intensity"]
-            * costs.at["biomass CHP capture", "capture_rate"] + biomass_ef.get("solid biomass"),
+            * costs.at["biomass CHP capture", "capture_rate"] + biomass_ef.get("forest residues biomass"),
             efficiency4=costs.at["solid biomass", "CO2 intensity"]
             * costs.at["biomass CHP capture", "capture_rate"],
             lifetime=costs.at[key, "lifetime"],
         )
+
+        n.madd(
+            "Link",
+            urban_central + " urban central rest biomass CHP CC",
+            bus0=spatial.biomass.df.loc[urban_central, "rest_biomass"].values,
+            bus1=urban_central,
+            bus2=urban_central + " urban central heat",
+            bus3="co2 atmosphere",
+            bus4=spatial.co2.df.loc[urban_central, "nodes"].values,
+            carrier="urban central rest biomass CHP CC",
+            p_nom_extendable=True,
+            capital_cost=costs.at[key, "fixed"] * costs.at[key, "efficiency"]
+            + costs.at["biomass CHP capture ", "fixed"]
+            * costs.at["solid biomass", "CO2 intensity"],
+            marginal_cost=costs.at[key, "VOM"],
+            efficiency=costs.at[key, "efficiency"]
+            - costs.at["solid biomass", "CO2 intensity"]
+            * (
+                costs.at["biomass CHP capture", "electricity-input"]
+                + costs.at["biomass CHP capture", "compression-electricity-input"]
+            ),
+             efficiency2=costs.at[key, "efficiency-heat"]
+            + costs.at["solid biomass", "CO2 intensity"]
+            * (
+                costs.at["biomass CHP capture", "heat-output"]
+                + costs.at["biomass CHP capture", "compression-heat-output"]
+                - costs.at["biomass CHP capture", "heat-input"]
+            ),
+            efficiency3=-costs.at["solid biomass", "CO2 intensity"]
+            * costs.at["biomass CHP capture", "capture_rate"] + biomass_ef.get("rest biomass"),
+            efficiency4=costs.at["solid biomass", "CO2 intensity"]
+            * costs.at["biomass CHP capture", "capture_rate"],
+            lifetime=costs.at[key, "lifetime"],
+        )
+        
 
         n.madd(
             "Link",
@@ -2565,20 +2680,38 @@ def add_biomass(n, costs):
         ]:
             n.madd(
                 "Link",
-                nodes + f" {name} solid biomass boiler",
+                nodes + f" {name} forest residues biomass boiler",
                 p_nom_extendable=True,
-                bus0=spatial.biomass.df.loc[nodes, "solid_biomass"].values,
+                bus0=spatial.biomass.df.loc[nodes, "forest_res_biomass"].values,
                 bus1=nodes + f" {name} heat",
                 bus2="co2 atmosphere",
-                carrier=name + " solid biomass boiler",
+                carrier=name + " forest residues biomass boiler",
                 efficiency=costs.at["biomass boiler", "efficiency"],
-                efficiency2=biomass_ef.get("solid biomass"),
+                efficiency2=biomass_ef.get("forest residues biomass"),
                 capital_cost=costs.at["biomass boiler", "efficiency"]
                 * costs.at["biomass boiler", "fixed"]
                 * options["overdimension_individual_heating"],
                 marginal_cost=costs.at["biomass boiler", "pelletizing cost"],
                 lifetime=costs.at["biomass boiler", "lifetime"],
             )
+
+            n.madd(
+                "Link",
+                nodes + f" {name} rest biomass boiler",
+                p_nom_extendable=True,
+                bus0=spatial.biomass.df.loc[nodes, "rest_biomass"].values,
+                bus1=nodes + f" {name} heat",
+                bus2="co2 atmosphere",
+                carrier=name + " rest biomass boiler",
+                efficiency=costs.at["biomass boiler", "efficiency"],
+                efficiency2=biomass_ef.get("rest biomass"),
+                capital_cost=costs.at["biomass boiler", "efficiency"]
+                * costs.at["biomass boiler", "fixed"]
+                * options["overdimension_individual_heating"],
+                marginal_cost=costs.at["biomass boiler", "pelletizing cost"],
+                lifetime=costs.at["biomass boiler", "lifetime"],
+            )
+
             n.madd(
                 "Link",
                 nodes + f" {name} waste biomass boiler",
@@ -2659,6 +2792,7 @@ def add_biomass(n, costs):
         )
 
         # TODO: Update with energy penalty for CC
+        # not included in my testing
         n.madd(
             "Link",
             spatial.biomass.solid_biomass,
@@ -2699,19 +2833,19 @@ def add_industry(n, costs):
         "Bus",
         spatial.biomass.industry,
         location=spatial.biomass.locations,
-        carrier="solid biomass for industry",
+        carrier="forest residues biomass for industry",
         unit="MWh_LHV",
     )
 
     if options.get("biomass_spatial", options["biomass_transport"]):
         p_set = (
-            industrial_demand.loc[spatial.biomass.locations, "solid biomass"].rename(
-                index=lambda x: x + " solid biomass for industry"
+            industrial_demand.loc[spatial.biomass.locations, "forest residues biomass"].rename(
+                index=lambda x: x + " forest residues biomass for industry"
             )
             / nhours
         )
     else:
-        p_set = industrial_demand["solid biomass"].sum() / nhours
+        p_set = industrial_demand["forest residues biomass"].sum() / nhours
 
     n.madd(
         "Load",
@@ -2724,14 +2858,27 @@ def add_industry(n, costs):
     n.madd(
         "Link",
         spatial.biomass.industry,
-        bus0=spatial.biomass.solid_biomass,
+        bus0=spatial.biomass.forest_res_biomass,
         bus1=spatial.biomass.industry,
         bus2="co2 atmosphere",
-        efficiency2= biomass_ef.get("solid biomass"),
-        carrier="solid biomass for industry",
+        efficiency2= biomass_ef.get("forest residues biomass"),
+        carrier="forest residues biomass for industry",
         p_nom_extendable=True,
         efficiency=1.0,
     )
+
+    n.madd(
+        "Link" ,
+        spatial.biomass.industry,
+        bus0=spatial.biomass.rest_biomass,
+        bus1=spatial.biomass.industry,
+        bus2="co2 atmosphere",
+        efficiency2= biomass_ef.get("rest biomass"),
+        carrier="rest biomass for industry",
+        p_nom_extendable=True,
+        efficiency=1.0,
+    )
+
     n.madd(
         "Link",
         spatial.biomass.waste_industry,
@@ -2752,17 +2899,36 @@ def add_industry(n, costs):
     n.madd(
         "Link",
         link_names,
-        bus0=spatial.biomass.solid_biomass,
+        bus0=spatial.biomass.forest_res_biomass,
         bus1=spatial.biomass.industry,
         bus2="co2 atmosphere",
         bus3=spatial.co2.nodes,
-        carrier="solid biomass for industry CC",
+        carrier="forest residues biomass for industry CC",
         p_nom_extendable=True,
         capital_cost=costs.at["cement capture", "fixed"]
         * costs.at["solid biomass", "CO2 intensity"],
         efficiency=0.9,  # TODO: make config option
         efficiency2=-costs.at["solid biomass", "CO2 intensity"]
-        * costs.at["cement capture", "capture_rate"] + biomass_ef.get("solid biomass"),
+        * costs.at["cement capture", "capture_rate"] + biomass_ef.get("forest residues biomass"),
+        efficiency3=costs.at["solid biomass", "CO2 intensity"]
+        * costs.at["cement capture", "capture_rate"],
+        lifetime=costs.at["cement capture", "lifetime"],
+    )
+
+    n.madd(
+        "Link",
+        link_names,
+        bus0=spatial.biomass.rest_biomass,
+        bus1=spatial.biomass.industry,
+        bus2="co2 atmosphere",
+        bus3=spatial.co2.nodes,
+        carrier="rest biomass for industry CC",
+        p_nom_extendable=True,
+        capital_cost=costs.at["cement capture", "fixed"]
+        * costs.at["solid biomass", "CO2 intensity"],
+        efficiency=0.9,  # TODO: make config option
+        efficiency2=-costs.at["solid biomass", "CO2 intensity"]
+        * costs.at["cement capture", "capture_rate"] + biomass_ef.get("rest biomass"),
         efficiency3=costs.at["solid biomass", "CO2 intensity"]
         * costs.at["cement capture", "capture_rate"],
         lifetime=costs.at["cement capture", "lifetime"],
