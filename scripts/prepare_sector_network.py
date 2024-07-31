@@ -2234,6 +2234,13 @@ def add_heat(n, costs):
 def add_biomass(n, costs):
     logger.info("Add biomass")
 
+    biomass_types = ["forest residues biomass", "rest product biomass", "waste biomass"]
+    spatial_dict = {
+        "forest residues biomass": spatial.biomass.forest_res_biomass,
+        "rest product biomass": spatial.biomass.rest_product_biomass,
+        "waste biomass": spatial.biomass.waste_biomass,
+    }
+   
     biomass_potentials = pd.read_csv(snakemake.input.biomass_potentials, index_col=0)
 
     # need to aggregate potentials if gas not nodally resolved
@@ -2259,17 +2266,11 @@ def add_biomass(n, costs):
         rest_product_biomass_potentials_spatial = biomass_potentials["rest product biomass"].sum()
         waste_biomass_potentials_spatial = biomass_potentials["waste biomass"].sum()
 
-    biomass_types = ["forest residues biomass", "rest product biomass", "waste biomass"]
-    spatial_dict = {
-        "forest residues biomass": spatial.biomass.forest_res_biomass,
-        "rest product biomass": spatial.biomass.rest_product_biomass,
-        "waste biomass": spatial.biomass.waste_biomass,
-    }
     potentials_dict = {
-        "forest residues biomass": forest_res_biomass_potentials_spatial,
-        "rest product biomass": rest_product_biomass_potentials_spatial,
-        "waste biomass": waste_biomass_potentials_spatial,
-    }
+            "forest residues biomass": forest_res_biomass_potentials_spatial,
+            "rest product biomass": rest_product_biomass_potentials_spatial,
+            "waste biomass": waste_biomass_potentials_spatial,
+        }
 
     for carrier in biomass_types:
         n.add("Carrier", carrier)
@@ -2420,6 +2421,11 @@ def add_biomass(n, costs):
 
     # AC buses with district heating
     urban_central = n.buses.index[n.buses.carrier == "urban central heat"]
+    columns_dict = {
+        "forest residues biomass": "forest_res_biomass",
+        "rest product biomass": "rest_product_biomass",
+        "waste biomass": "waste_biomass",
+    }
     if not urban_central.empty and options["chp"]:
         urban_central = urban_central.str[: -len(" urban central heat")]
 
@@ -2428,7 +2434,7 @@ def add_biomass(n, costs):
             n.madd(
                 "Link",
                 urban_central + f" urban central {carrier} CHP",
-                bus0=spatial.biomass.df.loc[urban_central, carrier].values,
+                bus0=spatial.biomass.df.loc[urban_central, columns_dict[carrier]].values,
                 bus1=urban_central,
                 bus2=urban_central + " urban central heat",
                 bus3="co2 atmosphere",
@@ -2444,7 +2450,7 @@ def add_biomass(n, costs):
             n.madd(
                 "Link",
                 urban_central + f" urban central {carrier} CHP CC",
-                bus0=spatial.biomass.df.loc[urban_central, carrier].values,
+                bus0=spatial.biomass.df.loc[urban_central, columns_dict[carrier]].values,
                 bus1=urban_central,
                 bus2=urban_central + " urban central heat",
                 bus3="co2 atmosphere",
@@ -2489,7 +2495,7 @@ def add_biomass(n, costs):
                     "Link",
                     nodes + f" {name} {carrier} biomass boiler",
                     p_nom_extendable=True,
-                    bus0=spatial.biomass.df.loc[nodes, carrier].values,
+                    bus0=spatial.biomass.df.loc[nodes, columns_dict[carrier]].values,
                     bus1=nodes + f" {name} heat",
                     bus2="co2 atmosphere",
                     carrier=name + f" {carrier} biomass boiler",
@@ -2618,14 +2624,14 @@ def add_industry(n, costs):
     )
 
     if options.get("biomass_spatial", options["biomass_transport"]):
-       p_set = sum(
-            industrial_demand.loc[spatial.biomass.locations, biomass_type].rename(
-                index=lambda x: x + f" {biomass_type} for industry"
+        p_set = (
+            industrial_demand.loc[spatial.biomass.locations, "solid biomass"].rename(
+                index=lambda x: x + " solid biomass for industry"
             )
-            for biomass_type in biomass_types
-        ) / nhours
+            / nhours
+        )
     else:
-        p_set = sum(industrial_demand[biomass_type].sum() for biomass_type in biomass_types) / nhours
+        p_set = industrial_demand["solid biomass"].sum() / nhours
 
     n.madd(
         "Load",
