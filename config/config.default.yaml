@@ -43,8 +43,8 @@ scenario:
   - vopt
   clusters:
   - 37
-  - 128
-  - 256
+  # - 128
+  # - 256
   opts:
   - ''
   sector_opts:
