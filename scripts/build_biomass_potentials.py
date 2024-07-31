@@ -267,6 +267,7 @@ if __name__ == "__main__":
     df.to_csv(snakemake.output.biomass_potentials_all)
 
     grouper = {v: k for k, vv in params["classes"].items() for v in vv}
+    logger.info(f"Grouping biomass potentials by {grouper}.")
     df = df.T.groupby(grouper).sum().T
 
     df *= 1e6  # TWh/a to MWh/a
