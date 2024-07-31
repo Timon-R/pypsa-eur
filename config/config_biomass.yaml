@@ -43,8 +43,8 @@ scenario:
   - vopt
   clusters:
   - 37
-  # - 128
-  # - 256
+  #- 128
+  #- 256
   opts:
   - ''
   sector_opts:
@@ -68,10 +68,10 @@ snapshots:
 enable:
   retrieve: auto
   prepare_links_p_nom: false
-  retrieve_databundle: false # true in default
+  retrieve_databundle: false
   retrieve_cost_data: true
   build_cutout: false
-  retrieve_cutout: true # true in default
+  retrieve_cutout: true
   custom_busmap: false
   drop_leap_day: true
 
@@ -134,25 +134,35 @@ electricity:
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#atlite
 atlite:
-  default_cutout: europe-2013-sarah3-era5
+  default_cutout: europe-2013-era5
   nprocesses: 4
   show_progress: false
   cutouts:
     # use 'base' to determine geographical bounds and time span from config
     # base:
       # module: era5
-    europe-2013-sarah3-era5:
-      module: [sarah, era5] # in priority order
+    europe-2013-era5:
+      module: era5 # in priority order
       x: [-12., 42.]
-      y: [33., 72.]
+      y: [33., 72]
       dx: 0.3
       dy: 0.3
       time: ['2013', '2013']
+    europe-2013-sarah:
+      module: [sarah, era5] # in priority order
+      x: [-12., 42.]
+      y: [33., 65]
+      dx: 0.2
+      dy: 0.2
+      time: ['2013', '2013']
+      sarah_interpolate: false
+      sarah_dir:
+      features: [influx, temperature]
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#renewable
 renewable:
   onwind:
-    cutout: europe-2013-sarah3-era5
+    cutout: europe-2013-era5
     resource:
       method: wind
       turbine: Vestas_V112_3MW
@@ -171,7 +181,7 @@ renewable:
     excluder_resolution: 100
     clip_p_max_pu: 1.e-2
   offwind-ac:
-    cutout: europe-2013-sarah3-era5
+    cutout: europe-2013-era5
     resource:
       method: wind
       turbine: NREL_ReferenceTurbine_2020ATB_5.5MW
@@ -187,7 +197,7 @@ renewable:
     excluder_resolution: 200
     clip_p_max_pu: 1.e-2
   offwind-dc:
-    cutout: europe-2013-sarah3-era5
+    cutout: europe-2013-era5
     resource:
       method: wind
       turbine: NREL_ReferenceTurbine_2020ATB_5.5MW
@@ -203,7 +213,7 @@ renewable:
     excluder_resolution: 200
     clip_p_max_pu: 1.e-2
   offwind-float:
-    cutout: europe-2013-sarah3-era5
+    cutout: europe-2013-era5
     resource:
       method: wind
       turbine: NREL_ReferenceTurbine_5MW_offshore
@@ -221,7 +231,7 @@ renewable:
     max_depth: 1000
     clip_p_max_pu: 1.e-2
   solar:
-    cutout: europe-2013-sarah3-era5
+    cutout: europe-2013-sarah
     resource:
       method: pv
       panel: CSi
@@ -236,7 +246,7 @@ renewable:
     excluder_resolution: 100
     clip_p_max_pu: 1.e-2
   solar-hsat:
-    cutout: europe-2013-sarah3-era5
+    cutout: europe-2013-sarah
     resource:
       method: pv
       panel: CSi
@@ -251,7 +261,7 @@ renewable:
     excluder_resolution: 100
     clip_p_max_pu: 1.e-2
   hydro:
-    cutout: europe-2013-sarah3-era5
+    cutout: europe-2013-era5
     carriers: [ror, PHS, hydro]
     PHS_max_hours: 6
     hydro_max_hours: "energy_capacity_totals_by_country" # one of energy_capacity_totals_by_country, estimate_by_large_installations or a float
@@ -285,7 +295,7 @@ lines:
   under_construction: 'keep' # 'zero': set capacity to zero, 'remove': remove, 'keep': with full capacity
   dynamic_line_rating:
     activate: false
-    cutout: europe-2013-sarah3-era5
+    cutout: europe-2013-era5
     correction_factor: 0.95
     max_voltage_difference: false
     max_line_rating: false
@@ -345,16 +355,20 @@ energy:
   emissions: CO2
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#biomass
+# I can just put the biomass types into new classes and the script will take care of the rest
+# pay attention to the naming because it might mess things up (I can look into Markus' code to see how it is done)
 biomass:
   year: 2030
   scenario: ENS_Med
   classes:
-    solid biomass:
-    - Agricultural waste
+    forest residues biomass:
     - Fuelwood residues
     - Secondary Forestry residues - woodchips
+    rest product biomass:
     - Sawdust
     - Residues from landscape care
+    waste biomass:
+    - Agricultural waste
     - Municipal waste
     not included:
     - Sugar from sugar beet
@@ -369,6 +383,11 @@ biomass:
     biogas:
     - Manure solid, liquid
     - Sludge
+  emission_factors:
+    forest residues biomass: 0.18 # tCO2/MWh
+    rest product biomass: 0.036 # tCO2//MWh
+    waste biomass: 0 # tCO2/MWh
+    biogas: 0 # tCO2/MWh
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#solar-thermal
 solar_thermal:
@@ -561,12 +580,12 @@ sector:
   min_part_load_fischer_tropsch: 0.5
   min_part_load_methanolisation: 0.3
   min_part_load_methanation: 0.3
-  use_fischer_tropsch_waste_heat: 0.25
-  use_haber_bosch_waste_heat: 0.25
-  use_methanolisation_waste_heat: 0.25
-  use_methanation_waste_heat: 0.25
-  use_fuel_cell_waste_heat: 0.25
-  use_electrolysis_waste_heat: 0.25
+  use_fischer_tropsch_waste_heat: true
+  use_haber_bosch_waste_heat: true
+  use_methanolisation_waste_heat: true
+  use_methanation_waste_heat: true
+  use_fuel_cell_waste_heat: true
+  use_electrolysis_waste_heat: true
   electricity_transmission_grid: true
   electricity_distribution_grid: true
   electricity_distribution_grid_cost_factor: 1.0
@@ -763,7 +782,7 @@ clustering:
       ramp_limit_down: max
   temporal:
     resolution_elec: false
-    resolution_sector: false
+    resolution_sector: 6H #false or nH with n being the number of hours
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#adjustments
 adjustments:
@@ -776,7 +795,6 @@ solving:
   options:
     clip_p_max_pu: 1.e-2
     load_shedding: false
-    curtailment_mode: false
     noisy_costs: true
     skip_iterations: true
     rolling_horizon: false
@@ -821,7 +839,7 @@ solving:
   solver_options:
     highs-default:
       # refer to https://ergo-code.github.io/HiGHS/dev/options/definitions/
-      threads: 1
+      threads: 4
       solver: "ipm"
       run_crossover: "off"
       small_matrix_value: 1e-6
@@ -832,7 +850,7 @@ solving:
       parallel: "on"
       random_seed: 123
     gurobi-default:
-      threads: 8
+      threads: 4
       method: 2 # barrier
       crossover: 0
       BarConvTol: 1.e-6
@@ -869,13 +887,6 @@ solving:
     copt-default:
       Threads: 8
       LpMethod: 2
-      Crossover: 0
-      RelGap: 1.e-6
-      Dualize: 0
-    copt-gpu:
-      LpMethod: 6
-      GPUMode: 1
-      PDLPTol: 1.e-5
       Crossover: 0
     cbc-default: {} # Used in CI
     glpk-default: {} # Used in CI
@@ -1015,18 +1026,58 @@ plotting:
     biogas: '#e3d37d'
     biomass: '#baa741'
     solid biomass: '#baa741'
+    forest residues biomass: '#baa741'
+    rest product biomass: '#baa741'
+    waste biomass: '#baa741'
     solid biomass transport: '#baa741'
+    forest residues biomass transport: '#baa741'
+    rest product biomass transport: '#baa741'
+    waste biomass transport: '#baa741'
     solid biomass for industry: '#7a6d26'
+    forest residues biomass for industry: '#7a6d26'
+    rest product biomass for industry: '#7a6d26'
+    waste biomass for industry: '#7a6d26'
     solid biomass for industry CC: '#47411c'
+    forest residues biomass for industry CC: '#47411c'
+    rest product biomass for industry CC: '#47411c'
+    waste biomass for industry CC: '#47411c'
     solid biomass for industry co2 from atmosphere: '#736412'
+    forest residues biomass for industry co2 from atmosphere: '#736412'
+    rest product biomass for industry co2 from atmosphere: '#736412'
+    waste biomass for industry co2 from atmosphere: '#736412'
     solid biomass for industry co2 to stored: '#47411c'
+    forest residues biomass for industry co2 to stored: '#47411c'
+    rest product biomass for industry co2 to stored: '#47411c'
+    waste biomass for industry co2 to stored: '#47411c'
     urban central solid biomass CHP: '#9d9042'
+    urban central forest residues biomass CHP: '#9d9042'
+    urban central rest product biomass CHP: '#9d9042'
+    urban central waste biomass CHP: '#9d9042'
     urban central solid biomass CHP CC: '#6c5d28'
+    urban central forest residues biomass CHP CC: '#6c5d28'
+    urban central rest product biomass CHP CC: '#6c5d28'
+    urban central waste biomass CHP CC: '#6c5d28'
     biomass boiler: '#8A9A5B'
-    residential rural biomass boiler: '#a1a066'
-    residential urban decentral biomass boiler: '#b0b87b'
-    services rural biomass boiler: '#c6cf98'
-    services urban decentral biomass boiler: '#dde5b5'
+    solid biomass boiler: '#8A9A5B'
+    forest residues biomass boiler: '#8A9A5B'
+    rest product biomass boiler: '#8A9A5B'
+    waste biomass boiler: '#8A9A5B'
+    residential rural solid biomass boiler: '#a1a066'
+    residential rural forest residues biomass boiler: '#a1a066'
+    residential rural rest product biomass boiler: '#a1a066'
+    residential rural waste biomass boiler: '#a1a066'
+    residential urban decentral solid biomass boiler: '#b0b87b'
+    residential urban decentral forest residues biomass boiler: '#b0b87b'
+    residential urban decentral rest product biomass boiler: '#b0b87b'
+    residential urban decentral waste biomass boiler: '#b0b87b'
+    services rural solid biomass boiler: '#c6cf98'
+    services rural forest residues biomass boiler: '#c6cf98'
+    services rural rest product biomass boiler: '#c6cf98'
+    services rural waste biomass boiler: '#c6cf98'
+    services urban decentral solid biomass boiler: '#dde5b5'
+    services urban decentral forest residues biomass boiler: '#dde5b5'
+    services urban decentral rest product biomass boiler: '#dde5b5'
+    services urban decentral waste biomass boiler: '#dde5b5'
     biomass to liquid: '#32CD32'
     BioSNG: '#123456'
     # power transmission
@@ -1054,7 +1105,7 @@ plotting:
     V2G: '#e5ffa8'
     land transport EV: '#baf238'
     land transport demand: '#38baf2'
-    EV battery: '#baf238'
+    Li ion: '#baf238'
     # hot water storage
     water tanks: '#e69487'
     residential rural water tanks: '#f7b7a3'
