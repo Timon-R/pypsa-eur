@@ -517,8 +517,44 @@ def prepare_network(
     if n.stores.carrier.eq("co2 sequestered").any():
         limit = co2_sequestration_potential
         add_co2_sequestration_limit(n, limit=limit)
-
+  
     return n
+
+ # Function to update the marginal cost for gas generators
+def update_gas_marginal_cost(network, gas_price):
+    gas_generators = network.generators[network.generators.carrier == "gas"]
+    network.generators.loc[gas_generators.index, "marginal_cost"] = gas_price
+
+
+def prepare_stochastic_networks(n):
+    """
+    Prepares a stochastic model for a PyPSA network by adding stochasticity
+    in gas prices for different scenarios.
+
+    Parameters:
+    n : pypsa.Network
+        
+    Returns: scenario_networks : list 
+     
+     """
+    # in EUR/MWh_th
+    
+    gas_prices = {"low": 15, "med": 24.568, "high": 60}
+    probabilities = {"low": 0.3, "med": 0.4, "high": 0.3}
+
+    # Create a list to store the modified networks and their probabilities
+    
+    scenario_networks = []
+
+    for scenario, gas_price in gas_prices.items():
+        # Copy the network to avoid modifying the original
+        scenario_network = n.copy()
+        
+        # Update the marginal cost for gas generators
+        update_gas_marginal_cost(scenario_network, gas_price)
+        
+        # Store the modified network and its probability
+        scenario_networks.append((scenario_network, probabilities[scenario]))
 
 
 def add_CCL_constraints(n, config):
@@ -1056,6 +1092,18 @@ def extra_functionality(n, snapshots):
         custom_extra_functionality = getattr(module, module_name)
         custom_extra_functionality(n, snapshots, snakemake)
 
+    # Stochastic optimization modification
+    scenario_networks = prepare_stochastic_networks(n)
+    total_cost = 0
+
+    for scenario_network, probability in scenario_networks:
+        m = scenario_network.model
+        # Assuming 'objective_costs' is the objective expression
+        total_cost += probability * m.objective_costs
+
+    # Set the new objective function
+    n.model.objective = total_cost
+
 
 def solve_network(n, config, solving, **kwargs):
     set_of_options = solving["solver"]["options"]
@@ -1141,7 +1189,7 @@ if __name__ == "__main__":
 
     n = pypsa.Network(snakemake.input.network)
 
-    n = prepare_network(
+    n = prepare_network( #this needs to be modified to prepare network stochastically
         n,
         solve_opts,
         config=snakemake.config,
