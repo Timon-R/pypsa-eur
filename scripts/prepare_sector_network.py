@@ -2496,12 +2496,12 @@ def add_biomass(n, costs):
             for carrier in biomass_types:
                 n.madd(
                     "Link",
-                    nodes + f" {name} {carrier} biomass boiler",
+                    nodes + f" {name} {carrier} boiler",
                     p_nom_extendable=True,
                     bus0=spatial.biomass.df.loc[nodes, biomass_dict[carrier]].values,
                     bus1=nodes + f" {name} heat",
                     bus2="co2 atmosphere",
-                    carrier=name + f" {carrier} biomass boiler",
+                    carrier=name + f" {carrier} boiler",
                     efficiency=costs.at["biomass boiler", "efficiency"],
                     efficiency2=biomass_ef.get(carrier),
                     capital_cost=costs.at["biomass boiler", "efficiency"]
@@ -2636,7 +2636,6 @@ def add_industry(n, costs):
     else:
         p_set = industrial_demand["solid biomass"].sum() / nhours
 
-        
     n.madd(
         "Load",
         spatial.biomass.industry,
@@ -2648,14 +2647,14 @@ def add_industry(n, costs):
     for carrier in biomass_types:
         n.madd(
             "Link",
-            spatial.biomass.industry,
+            [industry + f" using {carrier}" for industry in spatial.biomass.industry],
             bus0=spatial_dict[carrier],
             bus1=spatial.biomass.industry,
-            bus2="co2 atmosphere",
-            carrier=f"{carrier} for industry",
+            bus2=["co2 atmosphere"] * len(spatial.biomass.industry),
+            carrier=[f"{carrier} for industry"] * len(spatial.biomass.industry),
             p_nom_extendable=True,
             efficiency=1.0,
-            efficiency2= biomass_ef.get(carrier),
+            efficiency2=biomass_ef.get(carrier),
         )
 
     if len(spatial.biomass.industry_cc) <= 1 and len(spatial.co2.nodes) > 1:
@@ -2666,7 +2665,7 @@ def add_industry(n, costs):
     for carrier in biomass_types:
         n.madd(
             "Link",
-            link_names,
+            [link_name + f" using {carrier}" for link_name in link_names],
             bus0=spatial_dict[carrier],
             bus1=spatial.biomass.industry,
             bus2="co2 atmosphere",
