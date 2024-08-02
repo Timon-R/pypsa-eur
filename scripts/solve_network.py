@@ -32,6 +32,9 @@ import os
 import re
 import sys
 
+import pyomo
+from pyomo.environ import value
+
 import numpy as np
 import pandas as pd
 import pypsa
@@ -524,6 +527,8 @@ def prepare_network(
 def update_gas_marginal_cost(network, gas_price):
     gas_generators = network.generators[network.generators.carrier == "gas"]
     network.generators.loc[gas_generators.index, "marginal_cost"] = gas_price
+    logger.info(f"Updated gas marginal cost to {gas_price} EUR/MWh_th for {len(gas_generators)} gas generators.")
+    logger.info(f"Gas generators: {gas_generators.index}")
 
 
 def prepare_stochastic_networks(n):
@@ -538,8 +543,9 @@ def prepare_stochastic_networks(n):
      
      """
     # in EUR/MWh_th
+    #1.36196948e+11 normal isn't changing atm
     
-    gas_prices = {"low": 15, "med": 24.568, "high": 60}
+    gas_prices = {"low": 80, "med": 100.568, "high": 160}
     probabilities = {"low": 0.3, "med": 0.4, "high": 0.3}
 
     # Create a list to store the modified networks and their probabilities
@@ -555,6 +561,8 @@ def prepare_stochastic_networks(n):
         
         # Store the modified network and its probability
         scenario_networks.append((scenario_network, probabilities[scenario]))
+
+    return scenario_networks
 
 
 def add_CCL_constraints(n, config):
@@ -1092,17 +1100,22 @@ def extra_functionality(n, snapshots):
         custom_extra_functionality = getattr(module, module_name)
         custom_extra_functionality(n, snapshots, snakemake)
 
-    # Stochastic optimization modification
+    n.model.add_objective(combined_objective(n), overwrite=True)
+    logger.info(f"Objective function is updated") 
+
+def combined_objective(n):
     scenario_networks = prepare_stochastic_networks(n)
-    total_cost = 0
+    objective_terms = []
 
     for scenario_network, probability in scenario_networks:
-        m = scenario_network.model
-        # Assuming 'objective_costs' is the objective expression
-        total_cost += probability * m.objective_costs
+        m = scenario_network.optimize.create_model()
+        objective_costs = m.objective.expression
+        weighted_objective = probability * (objective_costs)
+        objective_terms.append(weighted_objective)
 
-    # Set the new objective function
-    n.model.objective = total_cost
+    combined_objective = sum(objective_terms)
+ 
+    return combined_objective
 
 
 def solve_network(n, config, solving, **kwargs):
@@ -1135,13 +1148,16 @@ def solve_network(n, config, solving, **kwargs):
     n.config = config
 
     if rolling_horizon and snakemake.rule == "solve_operations_network":
+        logger.info("Optimize with rolling horizon.")
         kwargs["horizon"] = cf_solving.get("horizon", 365)
         kwargs["overlap"] = cf_solving.get("overlap", 0)
         n.optimize.optimize_with_rolling_horizon(**kwargs)
         status, condition = "", ""
     elif skip_iterations:
+        logger.info("Skip iterative solving.")
         status, condition = n.optimize(**kwargs)
     else:
+        logger.info("Optimize iteratively.")
         kwargs["track_iterations"] = cf_solving["track_iterations"]
         kwargs["min_iterations"] = cf_solving["min_iterations"]
         kwargs["max_iterations"] = cf_solving["max_iterations"]
