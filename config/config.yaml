@@ -21,9 +21,9 @@ remote:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
   prefix: ""
-  name: ""
+  name: all #name of scenarios being run or name of solution folder
   scenarios:
-    enable: false
+    enable: true
     file: config/scenarios.yaml
   disable_progressbar: false
   shared_resources:
@@ -42,9 +42,9 @@ scenario:
   ll:
   - vopt
   clusters:
-  - 37
-  - 128
-  - 256
+  - 37 #37
+  #- 128
+  #- 256
   opts:
   - ''
   sector_opts:
@@ -58,6 +58,7 @@ scenario:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#countries
 countries: ['AL', 'AT', 'BA', 'BE', 'BG', 'CH', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GB', 'GR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'ME', 'MK', 'NL', 'NO', 'PL', 'PT', 'RO', 'RS', 'SE', 'SI', 'SK']
 
+#countries: ['DE','DK']
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#snapshots
 snapshots:
   start: "2013-01-01"
@@ -68,10 +69,10 @@ snapshots:
 enable:
   retrieve: auto
   prepare_links_p_nom: false
-  retrieve_databundle: true
+  retrieve_databundle: ture # true
   retrieve_cost_data: true
   build_cutout: false
-  retrieve_cutout: true
+  retrieve_cutout: true # true
   custom_busmap: false
   drop_leap_day: true
 
@@ -148,6 +149,25 @@ atlite:
       dx: 0.3
       dy: 0.3
       time: ['2013', '2013']
+
+#added by me, undocumented - stochasticity of gas price
+#Only tested for overnight scenarios so far - has to be added to snakemake rules for other methods and tested if it also works there
+stochasticity: #gas price used in the standard model:  24.568 EUR/MWh_th
+  gas_price:
+    enable: false
+    distribution: uniform #options: scenarios, normal, uniform
+    scenarios: #add as many scenarios as you want, first the value of the gas price in  EUR/MWh_th, then the probability of that scenario 
+      - 20, 0.3
+      - 30, 0.4
+      - 40, 0.3
+    normal_distribution: 
+      mean: 50
+      std: 5
+    uniform_distribution: 
+      min: 20
+      max: 40
+    number_of_scenarios: 50 #number of scenarios to generate when using the normal or uniform distribution 
+    #TODO consider changing the sampling method, so far using np.random.normal and np.random.uniform
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#renewable
 renewable:
@@ -345,16 +365,20 @@ energy:
   emissions: CO2
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#biomass
+# I can just put the biomass types into new classes and the script will take care of the rest
+# pay attention to the naming because it might mess things up (I can look into Markus' code to see how it is done)
 biomass:
   year: 2030
   scenario: ENS_Med
   classes:
-    solid biomass:
-    - Agricultural waste
+    forest residues biomass:
     - Fuelwood residues
     - Secondary Forestry residues - woodchips
+    rest product biomass:
     - Sawdust
     - Residues from landscape care
+    waste biomass:
+    - Agricultural waste
     - Municipal waste
     not included:
     - Sugar from sugar beet
@@ -369,6 +393,11 @@ biomass:
     biogas:
     - Manure solid, liquid
     - Sludge
+  emission_factors:
+    forest residues biomass: 0.18 # tCO2/MWh
+    rest product biomass: 0.036 # tCO2//MWh
+    waste biomass: 0 # tCO2/MWh
+    biogas: 0 # tCO2/MWh
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#solar-thermal
 solar_thermal:
@@ -561,12 +590,12 @@ sector:
   min_part_load_fischer_tropsch: 0.5
   min_part_load_methanolisation: 0.3
   min_part_load_methanation: 0.3
-  use_fischer_tropsch_waste_heat: 0.25
-  use_haber_bosch_waste_heat: 0.25
-  use_methanolisation_waste_heat: 0.25
-  use_methanation_waste_heat: 0.25
-  use_fuel_cell_waste_heat: 0.25
-  use_electrolysis_waste_heat: 0.25
+  use_fischer_tropsch_waste_heat: true
+  use_haber_bosch_waste_heat: true
+  use_methanolisation_waste_heat: true
+  use_methanation_waste_heat: true
+  use_fuel_cell_waste_heat: true
+  use_electrolysis_waste_heat: true
   electricity_transmission_grid: true
   electricity_distribution_grid: true
   electricity_distribution_grid_cost_factor: 1.0
@@ -763,7 +792,7 @@ clustering:
       ramp_limit_down: max
   temporal:
     resolution_elec: false
-    resolution_sector: 6H
+    resolution_sector: 6H #false or nH with n being the number of hours
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#adjustments
 adjustments:
@@ -776,7 +805,6 @@ solving:
   options:
     clip_p_max_pu: 1.e-2
     load_shedding: false
-    curtailment_mode: false
     noisy_costs: true
     skip_iterations: true
     rolling_horizon: false
@@ -821,7 +849,7 @@ solving:
   solver_options:
     highs-default:
       # refer to https://ergo-code.github.io/HiGHS/dev/options/definitions/
-      threads: 1
+      threads: 4
       solver: "ipm"
       run_crossover: "off"
       small_matrix_value: 1e-6
@@ -832,7 +860,7 @@ solving:
       parallel: "on"
       random_seed: 123
     gurobi-default:
-      threads: 8
+      threads: 4
       method: 2 # barrier
       crossover: 0
       BarConvTol: 1.e-6
@@ -869,13 +897,6 @@ solving:
     copt-default:
       Threads: 8
       LpMethod: 2
-      Crossover: 0
-      RelGap: 1.e-6
-      Dualize: 0
-    copt-gpu:
-      LpMethod: 6
-      GPUMode: 1
-      PDLPTol: 1.e-5
       Crossover: 0
     cbc-default: {} # Used in CI
     glpk-default: {} # Used in CI
@@ -1015,20 +1036,76 @@ plotting:
     biogas: '#e3d37d'
     biomass: '#baa741'
     solid biomass: '#baa741'
+    forest residues biomass: '#4caf50'
+    rest product biomass: '#8bc34a'
+    waste biomass: '#cddc39'
     solid biomass transport: '#baa741'
+    forest residues biomass transport: '#4caf50'
+    rest product biomass transport: '#8bc34a'
+    waste biomass transport: '#cddc39'
     solid biomass for industry: '#7a6d26'
+    forest residues biomass for industry: '#4e9b45'
+    rest product biomass for industry: '#76b852'
+    waste biomass for industry: '#a0c95c'
     solid biomass for industry CC: '#47411c'
+    forest residues biomass for industry CC: '#3d7a36'
+    rest product biomass for industry CC: '#5c8e42'
+    waste biomass for industry CC: '#809a3d'
     solid biomass for industry co2 from atmosphere: '#736412'
+    forest residues biomass for industry co2 from atmosphere: '#577a26'
+    rest product biomass for industry co2 from atmosphere: '#739e34'
+    waste biomass for industry co2 from atmosphere: '#a1b63c'
     solid biomass for industry co2 to stored: '#47411c'
+    forest residues biomass for industry co2 to stored: '#3d7a36'
+    rest product biomass for industry co2 to stored: '#5c8e42'
+    waste biomass for industry co2 to stored: '#809a3d'
     urban central solid biomass CHP: '#9d9042'
+    urban central forest residues biomass CHP: '#4caf50'
+    urban central rest product biomass CHP: '#8bc34a'
+    urban central waste biomass CHP: '#cddc39'
     urban central solid biomass CHP CC: '#6c5d28'
+    urban central forest residues biomass CHP CC: '#3d7a36'
+    urban central rest product biomass CHP CC: '#5c8e42'
+    urban central waste biomass CHP CC: '#809a3d'
     biomass boiler: '#8A9A5B'
-    residential rural biomass boiler: '#a1a066'
-    residential urban decentral biomass boiler: '#b0b87b'
-    services rural biomass boiler: '#c6cf98'
-    services urban decentral biomass boiler: '#dde5b5'
+    solid biomass boiler: '#8A9A5B'
+    forest residues biomass boiler: '#4caf50'
+    rest product biomass boiler: '#8bc34a'
+    waste biomass boiler: '#cddc39'
+    residential rural solid biomass boiler: '#a1a066'
+    residential rural forest residues biomass boiler: '#4caf50'
+    residential rural rest product biomass boiler: '#8bc34a'
+    residential rural waste biomass boiler: '#cddc39'
+    residential urban decentral solid biomass boiler: '#b0b87b'
+    residential urban decentral forest residues biomass boiler: '#4caf50'
+    residential urban decentral rest product biomass boiler: '#8bc34a'
+    residential urban decentral waste biomass boiler: '#cddc39'
+    services rural solid biomass boiler: '#c6cf98'
+    services rural forest residues biomass boiler: '#4caf50'
+    services rural rest product biomass boiler: '#8bc34a'
+    services rural waste biomass boiler: '#cddc39'
+    services urban decentral solid biomass boiler: '#dde5b5'
+    services urban decentral forest residues biomass boiler: '#4caf50'
+    services urban decentral rest product biomass boiler: '#8bc34a'
+    services urban decentral waste biomass boiler: '#cddc39'
     biomass to liquid: '#32CD32'
+    biomass to liquid CC: '#228B22'
+    forest residues biomass to liquid: '#32CD32'
+    rest product biomass to liquid: '#32CD32'
+    waste biomass to liquid: '#32CD32'
+    forest residues biomass to liquid CC: '#228B22'
+    rest product biomass to liquid CC: '#228B22'
+    waste biomass to liquid CC: '#228B22'
     BioSNG: '#123456'
+    BioSNG from solid biomass: '#123456'
+    BioSNG from forest residues biomass: '#123456'
+    BioSNG from rest product biomass: '#123456'
+    BioSNG from waste biomass: '#123456'
+    BioSNG CC: '#654321'
+    BioSNG from solid biomass CC: '#654321'
+    BioSNG from forest residues biomass CC: '#654321'
+    BioSNG from rest product biomass CC: '#654321'
+    BioSNG from waste biomass CC: '#654321'
     # power transmission
     lines: '#6c9459'
     transmission lines: '#6c9459'
@@ -1054,7 +1131,7 @@ plotting:
     V2G: '#e5ffa8'
     land transport EV: '#baf238'
     land transport demand: '#38baf2'
-    EV battery: '#baf238'
+    Li ion: '#baf238'
     # hot water storage
     water tanks: '#e69487'
     residential rural water tanks: '#f7b7a3'

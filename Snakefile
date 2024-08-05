@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-#     snakemake -call all --configfile config/config_biomass.yaml --rerun-incomplete
+#     snakemake -call all --configfile config/config.yaml --rerun-incomplete
 #--rerun-triggers mtime 
 
 from pathlib import Path
@@ -20,7 +20,7 @@ copy_default_files(workflow)
 
 
 #configfile: "config/config.default.yaml"
-configfile: "config/config_biomass.yaml"
+configfile: "config/config.yaml"
 
 
 run = config["run"]

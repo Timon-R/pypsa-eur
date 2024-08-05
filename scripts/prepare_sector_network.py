@@ -2635,6 +2635,8 @@ def add_industry(n, costs):
     else:
         p_set = industrial_demand["solid biomass"].sum() / nhours
 
+    p_set = 0 # for testing
+
     n.madd(
         "Load",
         spatial.biomass.industry,
