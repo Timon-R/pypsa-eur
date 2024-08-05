@@ -21,9 +21,9 @@ remote:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
   prefix: ""
-  name: ""
+  name: all #name of scenarios being run or name of solution folder
   scenarios:
-    enable: false
+    enable: true
     file: config/scenarios.yaml
   disable_progressbar: false
   shared_resources:
@@ -153,7 +153,7 @@ atlite:
 #Only tested for overnight scenarios so far - has to be added to snakemake rules for other methods and tested if it also works there
 stochasticity: #gas price used in the standard model:  24.568 EUR/MWh_th
   gas_price:
-    enable: true
+    enable: false
     distribution: uniform #options: scenarios, normal, uniform
     scenarios: #add as many scenarios as you want, first the value of the gas price in  EUR/MWh_th, then the probability of that scenario 
       - 20, 0.3
