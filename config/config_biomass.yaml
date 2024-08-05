@@ -68,7 +68,7 @@ snapshots:
 enable:
   retrieve: auto
   prepare_links_p_nom: false
-  retrieve_databundle: false # true
+  retrieve_databundle: ture # true
   retrieve_cost_data: true
   build_cutout: false
   retrieve_cutout: true # true
@@ -148,6 +148,25 @@ atlite:
       dx: 0.3
       dy: 0.3
       time: ['2013', '2013']
+
+#added by me, undocumented - stochasticity of gas price
+#Only tested for overnight scenarios so far - has to be added to snakemake rules for other methods and tested if it also works there
+stochasticity: #gas price used in the standard model:  24.568 EUR/MWh_th
+  gas_price:
+    enable: true
+    distribution: uniform #options: scenarios, normal, uniform
+    scenarios: #add as many scenarios as you want, first the value of the gas price in  EUR/MWh_th, then the probability of that scenario 
+      - 20, 0.3
+      - 30, 0.4
+      - 40, 0.3
+    normal_distribution: 
+      mean: 50
+      std: 5
+    uniform_distribution: 
+      min: 20
+      max: 40
+    number_of_scenarios: 50 #number of scenarios to generate when using the normal or uniform distribution 
+    #TODO consider changing the sampling method, so far using np.random.normal and np.random.uniform
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#renewable
 renewable:

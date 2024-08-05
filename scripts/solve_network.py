@@ -527,32 +527,32 @@ def prepare_network(
 def update_gas_marginal_cost(network, gas_price):
     gas_generators = network.generators[network.generators.carrier == "gas"]
     network.generators.loc[gas_generators.index, "marginal_cost"] = gas_price
-    logger.info(f"Updated gas marginal cost to {gas_price} EUR/MWh_th for {len(gas_generators)} gas generators.")
-    logger.info(f"Gas generators: {gas_generators.index}")
 
-
-def prepare_stochastic_networks(n):
+def prepare_stochastic_networks(n, scenarios):
     """
-    Prepares a stochastic model for a PyPSA network by adding stochasticity
-    in gas prices for different scenarios.
+    Prepares a stochastic model by generating a list of modified networks for each scenario and their probabilites.
 
     Parameters:
     n : pypsa.Network
+    scenarios : list of tuples (float, float): (gas_price, probability)
         
-    Returns: scenario_networks : list 
+    Returns: scenario_networks : list of tuples (pypsa.Network, float): (scenario_network, probability)
      
      """
-    # in EUR/MWh_th
-    #1.36196948e+11 normal isn't changing atm
-    
-    gas_prices = {"low": 80, "med": 100.568, "high": 160}
-    probabilities = {"low": 0.3, "med": 0.4, "high": 0.3}
+    # Extract values from the list of scenarios
+    gas_prices = [value for value, _ in scenarios]
+
+    # Extract probabilities from the list of scenarios
+    probabilities = [probability for _, probability in scenarios]
 
     # Create a list to store the modified networks and their probabilities
     
     scenario_networks = []
 
-    for scenario, gas_price in gas_prices.items():
+    for i in range(len(gas_prices)):
+        gas_price = gas_prices[i]
+        probability = probabilities[i]
+        
         # Copy the network to avoid modifying the original
         scenario_network = n.copy()
         
@@ -560,7 +560,7 @@ def prepare_stochastic_networks(n):
         update_gas_marginal_cost(scenario_network, gas_price)
         
         # Store the modified network and its probability
-        scenario_networks.append((scenario_network, probabilities[scenario]))
+        scenario_networks.append((scenario_network, probability))
 
     return scenario_networks
 
@@ -1100,11 +1100,56 @@ def extra_functionality(n, snapshots):
         custom_extra_functionality = getattr(module, module_name)
         custom_extra_functionality(n, snapshots, snakemake)
 
-    n.model.add_objective(combined_objective(n), overwrite=True)
+    if stochasticity_gas_price['enable']:
+        distribution = stochasticity_gas_price['distribution']
+        if distribution == 'scenarios':
+            scenarios = stochasticity_gas_price['scenarios']
+            parsed_scenarios = parse_scenarios(scenarios)
+            n.model.add_objective(combined_objective(n, parsed_scenarios), overwrite=True)
+        elif distribution == 'normal':
+            mean = stochasticity_gas_price['normal_distribution']['mean']
+            std = stochasticity_gas_price['normal_distribution']['std']
+            number_of_scenarios = stochasticity_gas_price['number_of_scenarios']
+            scenarios = generate_scenarios_normal(mean, std, number_of_scenarios)
+            n.model.add_objective(combined_objective(n, scenarios), overwrite=True)
+        elif distribution == 'uniform':
+            min = stochasticity_gas_price['uniform_distribution']['min']
+            max = stochasticity_gas_price['uniform_distribution']['max']
+            number_of_scenarios = stochasticity_gas_price['number_of_scenarios']
+            scenarios = generate_scenarios_uniform(min, max, number_of_scenarios)            
+            n.model.add_objective(combined_objective(n, scenarios), overwrite=True)
+        else:
+            raise ValueError(f"Unknown distribution {distribution}")
+        
+    
     logger.info(f"Objective function is updated") 
 
-def combined_objective(n):
-    scenario_networks = prepare_stochastic_networks(n)
+def parse_scenarios(scenarios):
+    parsed_scenarios = []
+    for scenario in scenarios:
+        price, probability = map(float, scenario.split(','))
+        parsed_scenarios.append((price, probability))
+    return parsed_scenarios
+
+def generate_scenarios_normal(mean, std, number_of_scenarios):
+    values = np.random.normal(mean, std, number_of_scenarios)
+    probability = 1/number_of_scenarios
+    scenarios = [(value, probability) for value in values]
+    return scenarios
+
+def generate_scenarios_uniform(min, max, number_of_scenarios):
+    values = np.random.uniform(min, max, number_of_scenarios)
+    probability = 1/number_of_scenarios
+    scenarios = [(value, probability) for value in values]
+    return scenarios
+
+
+def combined_objective(n, scenarios):
+    '''
+    Takes a list of scenarios and their probabilities and returns a combined objective function.
+    '''
+    scenario_networks = prepare_stochastic_networks(n, scenarios)
+    logger.info(f"Prepared {len(scenario_networks)} scenario networks")
     objective_terms = []
 
     for scenario_network, probability in scenario_networks:
@@ -1118,7 +1163,8 @@ def combined_objective(n):
     return combined_objective
 
 
-def solve_network(n, config, solving, **kwargs):
+def solve_network(n, config, solving, stochasticity_gas_price, **kwargs):
+    stochasticity_gas_price = stochasticity_gas_price
     set_of_options = solving["solver"]["options"]
     cf_solving = solving["options"]
 
@@ -1200,12 +1246,13 @@ if __name__ == "__main__":
     update_config_from_wildcards(snakemake.config, snakemake.wildcards)
 
     solve_opts = snakemake.params.solving["options"]
+    stochasticity_gas_price = snakemake.params.stochasticity["gas_price"]
 
     np.random.seed(solve_opts.get("seed", 123))
 
     n = pypsa.Network(snakemake.input.network)
 
-    n = prepare_network( #this needs to be modified to prepare network stochastically
+    n = prepare_network(
         n,
         solve_opts,
         config=snakemake.config,
@@ -1221,7 +1268,8 @@ if __name__ == "__main__":
             n,
             config=snakemake.config,
             solving=snakemake.params.solving,
-            log_fn=snakemake.log.solver,
+            stochasticity_gas_price=stochasticity_gas_price,
+            log_fn=snakemake.log.solver,            
         )
 
     logger.info(f"Maximum memory usage: {mem.mem_usage}")
