@@ -2328,7 +2328,7 @@ def add_biomass(n, costs):
         + costs.at["biogas upgrading", "fixed"],
         marginal_cost=costs.at["biogas upgrading", "VOM"],
         efficiency=costs.at["biogas", "efficiency"],
-        efficiency2=-costs.at["gas", "CO2 intensity"]+biomass_ef.get("biogas"),
+        efficiency2=-costs.at["gas", "CO2 intensity"] + biomass_ef.get("biogas"),
         p_nom_extendable=True,
     )
 

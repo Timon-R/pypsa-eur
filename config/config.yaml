@@ -21,7 +21,7 @@ remote:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
   prefix: ""
-  name: all #name of scenarios being run or name of solution folder
+  name: all #name of scenarios being run or name of solution folder, name all for all scenarios
   scenarios:
     enable: true
     file: config/scenarios.yaml
@@ -50,15 +50,15 @@ scenario:
   sector_opts:
   - ''
   planning_horizons:
-  # - 2020
+  - 2020
   # - 2030
-  # - 2040
-  - 2050
+  - 2040
+  #- 2050
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#countries
-countries: ['AL', 'AT', 'BA', 'BE', 'BG', 'CH', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GB', 'GR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'ME', 'MK', 'NL', 'NO', 'PL', 'PT', 'RO', 'RS', 'SE', 'SI', 'SK']
+#countries: ['AL', 'AT', 'BA', 'BE', 'BG', 'CH', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GB', 'GR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'ME', 'MK', 'NL', 'NO', 'PL', 'PT', 'RO', 'RS', 'SE', 'SI', 'SK']
+countries: ['DE','DK']
 
-#countries: ['DE','DK']
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#snapshots
 snapshots:
   start: "2013-01-01"
@@ -69,7 +69,7 @@ snapshots:
 enable:
   retrieve: auto
   prepare_links_p_nom: false
-  retrieve_databundle: ture # true
+  retrieve_databundle: false # true
   retrieve_cost_data: true
   build_cutout: false
   retrieve_cutout: true # true
@@ -155,11 +155,11 @@ atlite:
 stochasticity: #gas price used in the standard model:  24.568 EUR/MWh_th
   gas_price:
     enable: false
-    distribution: uniform #options: scenarios, normal, uniform
+    distribution: scenarios #options: scenarios, normal, uniform
     scenarios: #add as many scenarios as you want, first the value of the gas price in  EUR/MWh_th, then the probability of that scenario 
-      - 20, 0.3
-      - 30, 0.4
-      - 40, 0.3
+      - 300, 0.3
+      - 300, 0.4
+      - 300, 0.3
     normal_distribution: 
       mean: 50
       std: 5
@@ -394,8 +394,8 @@ biomass:
     - Manure solid, liquid
     - Sludge
   emission_factors:
-    forest residues biomass: 0.18 # tCO2/MWh
-    rest product biomass: 0.036 # tCO2//MWh
+    forest residues biomass: 0 # tCO2/MWh 0.1
+    rest product biomass: 0 # tCO2//MWh 0.02
     waste biomass: 0 # tCO2/MWh
     biogas: 0 # tCO2/MWh
 
