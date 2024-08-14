@@ -11,34 +11,48 @@
 #   electricity:
 #       renewable_carriers: [wind, solar] # override the list of renewable carriers
 
-no_emissions:
-  biomass:
-    emission_factors:
-      forest residues biomass: 0 # tCO2/MWh
-      rest product biomass: 0 # tCO2//MWh
-      waste biomass: 0 # tCO2/MWh
-      biogas: 0 # tCO2/MWh
 
-sensible_emissions:
-    biomass:
-      emission_factors:
-        forest residues biomass: 0.1 # tCO2/MWh
-        rest product biomass: 0.02 # tCO2//MWh
-        waste biomass: 0.0 # tCO2/MWh
-        biogas: 0.1 # tCO2/MWh
+stochastic:
+  stochasticity: #gas price used in the standard model:  24.568 EUR/MWh_th
+    gas_price:
+      enable: true
+      distribution: scenarios #options: scenarios, normal, uniform
+      scenarios: #add as many scenarios as you want, first the value of the gas price in  EUR/MWh_th, then the probability of that scenario 
+        - 20, 0.5
+        - 40, 0.5
 
-high_emissions:
-  biomass:
-    emission_factors:
-      forest residues biomass:  0.2 # tCO2/MWh 100% more than sensible
-      rest product biomass: 0.1 # tCO2//MWh
-      waste biomass: 0 # tCO2/MWh
-      biogas: 0.2 # tCO2/MWh
+low_price:
+  stochasticity: #gas price used in the standard model:  24.568 EUR/MWh_th
+    gas_price:
+      enable: true
+      distribution: scenarios #options: scenarios, normal, uniform
+      scenarios: #add as many scenarios as you want, first the value of the gas price in  EUR/MWh_th, then the probability of that scenario 
+        - 20, 1
 
-very_high_emissions:
-  biomass:
-    emission_factors:
-      forest residues biomass:  0.4 # tCO2/MWh 100% more than sensible
-      rest product biomass: 0.1 # tCO2//MWh
-      waste biomass: 0 # tCO2/MWh
-      biogas: 0.2 # tCO2/MWh
+high_price:
+  stochasticity: #gas price used in the standard model:  24.568 EUR/MWh_th
+    gas_price:
+      enable: true
+      distribution: scenarios #options: scenarios, normal, uniform
+      scenarios: #add as many scenarios as you want, first the value of the gas price in  EUR/MWh_th, then the probability of that scenario 
+        - 40, 1
+
+stochastic_normal:
+  stochasticity: #gas price used in the standard model:  24.568 EUR/MWh_th
+    gas_price:
+      enable: true
+      distribution: normal #options: scenarios, normal, uniform
+      normal_distribution: 
+        mean: 30
+        std: 5
+      number_of_scenarios: 10
+
+stochastic_uniform:
+  stochasticity: #gas price used in the standard model:  24.568 EUR/MWh_th
+    gas_price:
+      enable: true
+      distribution: uniform #options: scenarios, normal, uniform
+      uniform_distribution: 
+        min: 20
+        max: 40
+      number_of_scenarios: 10

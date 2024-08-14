@@ -50,14 +50,14 @@ scenario:
   sector_opts:
   - ''
   planning_horizons:
-  - 2020
+  # - 2020
   # - 2030
   - 2040
   #- 2050
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#countries
-#countries: ['AL', 'AT', 'BA', 'BE', 'BG', 'CH', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GB', 'GR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'ME', 'MK', 'NL', 'NO', 'PL', 'PT', 'RO', 'RS', 'SE', 'SI', 'SK']
-countries: ['DE','DK']
+countries: ['AL', 'AT', 'BA', 'BE', 'BG', 'CH', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GB', 'GR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'ME', 'MK', 'NL', 'NO', 'PL', 'PT', 'RO', 'RS', 'SE', 'SI', 'SK']
+#countries: ['DE','DK']
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#snapshots
 snapshots:
@@ -166,7 +166,7 @@ stochasticity: #gas price used in the standard model:  24.568 EUR/MWh_th
     uniform_distribution: 
       min: 20
       max: 40
-    number_of_scenarios: 50 #number of scenarios to generate when using the normal or uniform distribution 
+    number_of_scenarios: 10 #number of scenarios to generate when using the normal or uniform distribution 
     #TODO consider changing the sampling method, so far using np.random.normal and np.random.uniform
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#renewable
@@ -371,11 +371,11 @@ biomass:
   year: 2030
   scenario: ENS_Med
   classes:
-    forest residues biomass:
-    - Fuelwood residues
+    forest residues biomass: # impact on LUC, emissions from transport and harvest
     - Secondary Forestry residues - woodchips
-    rest product biomass:
+    - Fuelwood residues
     - Sawdust
+    rest product biomass: # no impact on LUC, emissions from transport and harvest
     - Residues from landscape care
     waste biomass:
     - Agricultural waste
@@ -792,7 +792,7 @@ clustering:
       ramp_limit_down: max
   temporal:
     resolution_elec: false
-    resolution_sector: 6H #false or nH with n being the number of hours
+    resolution_sector: 5H #false or nH with n being the number of hours, odd number is better to avoid repeated patterns
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#adjustments
 adjustments:
@@ -849,7 +849,7 @@ solving:
   solver_options:
     highs-default:
       # refer to https://ergo-code.github.io/HiGHS/dev/options/definitions/
-      threads: 4
+      threads: 8
       solver: "ipm"
       run_crossover: "off"
       small_matrix_value: 1e-6
@@ -860,7 +860,7 @@ solving:
       parallel: "on"
       random_seed: 123
     gurobi-default:
-      threads: 4
+      threads: 8
       method: 2 # barrier
       crossover: 0
       BarConvTol: 1.e-6
