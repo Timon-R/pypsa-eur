@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: MIT
 
-#snakemake -call all --configfile config/config.yaml --rerun-incomplete --cores 8
+#snakemake -call all --configfile config/config.yaml --rerun-incomplete --cores 8 --use-conda
+#--rerun-triggers mtime 
 
 from pathlib import Path
 import yaml
