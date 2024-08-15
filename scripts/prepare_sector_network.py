@@ -2330,7 +2330,6 @@ def add_biomass(n, costs):
         ].sum()
 
     n.add("Carrier", "biogas")
-    n.add("Carrier", "solid biomass")
 
     if (
         options["municipal_solid_waste"]
@@ -2396,15 +2395,16 @@ def add_biomass(n, costs):
         e_initial=biogas_potentials_spatial,
     )
 
-    n.madd(
-        "Store",
-        spatial.biomass.nodes,
-        bus=spatial.biomass.nodes,
-        carrier="solid biomass",
-        e_nom=solid_biomass_potentials_spatial,
-        marginal_cost=costs.at["solid biomass", "fuel"],
-        e_initial=solid_biomass_potentials_spatial,
-    )
+    for carrier in biomass_types:
+        n.madd(
+            "Store",
+            spatial_dict[carrier],
+            bus=spatial_dict[carrier],
+            carrier=carrier,
+            e_nom=potentials_dict[carrier],
+            marginal_cost=costs.at["solid biomass", "fuel"],
+            e_initial=potentials_dict[carrier],
+        )
 
     if options["solid_biomass_import"].get("enable", False):
         biomass_import_price = options["solid_biomass_import"]["price"]
@@ -2716,73 +2716,24 @@ def add_biomass(n, costs):
                 bus4=spatial.co2.df.loc[urban_central, "nodes"].values,
                 carrier=f"urban central {carrier} CHP CC",
                 p_nom_extendable=True,
-                capital_cost=costs.at[key, "fixed"] * costs.at[key, "efficiency"]
+                capital_cost=costs.at[key + " CC", "fixed"]
+                * costs.at[key + " CC", "efficiency"]
                 + costs.at["biomass CHP capture", "fixed"]
                 * costs.at["solid biomass", "CO2 intensity"],
-                marginal_cost=costs.at[key, "VOM"],
-                efficiency=costs.at[key, "efficiency"]
+                marginal_cost=costs.at[key + " CC", "VOM"],
+                efficiency=costs.at[key + " CC", "efficiency"]
                 - costs.at["solid biomass", "CO2 intensity"]
                 * (
                     costs.at["biomass CHP capture", "electricity-input"]
                     + costs.at["biomass CHP capture", "compression-electricity-input"]
                 ),
-                efficiency2=costs.at[key, "efficiency-heat"]
-                + costs.at["solid biomass", "CO2 intensity"]
-                * (
-                    costs.at["biomass CHP capture", "heat-output"]
-                    + costs.at["biomass CHP capture", "compression-heat-output"]
-                    - costs.at["biomass CHP capture", "heat-input"]
-                ),
+                efficiency2=costs.at[key + " CC", "efficiency-heat"],
                 efficiency3=-costs.at["solid biomass", "CO2 intensity"]
                 * costs.at["biomass CHP capture", "capture_rate"] + biomass_ef.get(carrier),
                 efficiency4=costs.at["solid biomass", "CO2 intensity"]
                 * costs.at["biomass CHP capture", "capture_rate"],
                 lifetime=costs.at[key, "lifetime"],
             )
-
-        n.madd(
-            "Link",
-            urban_central + " urban central solid biomass CHP",
-            bus0=spatial.biomass.df.loc[urban_central, "nodes"].values,
-            bus1=urban_central,
-            bus2=urban_central + " urban central heat",
-            carrier="urban central solid biomass CHP",
-            p_nom_extendable=True,
-            capital_cost=costs.at[key, "fixed"] * costs.at[key, "efficiency"],
-            marginal_cost=costs.at[key, "VOM"],
-            efficiency=costs.at[key, "efficiency"],
-            efficiency2=costs.at[key, "efficiency-heat"],
-            lifetime=costs.at[key, "lifetime"],
-        )
-
-        n.madd(
-            "Link",
-            urban_central + " urban central solid biomass CHP CC",
-            bus0=spatial.biomass.df.loc[urban_central, "nodes"].values,
-            bus1=urban_central,
-            bus2=urban_central + " urban central heat",
-            bus3="co2 atmosphere",
-            bus4=spatial.co2.df.loc[urban_central, "nodes"].values,
-            carrier="urban central solid biomass CHP CC",
-            p_nom_extendable=True,
-            capital_cost=costs.at[key + " CC", "fixed"]
-            * costs.at[key + " CC", "efficiency"]
-            + costs.at["biomass CHP capture", "fixed"]
-            * costs.at["solid biomass", "CO2 intensity"],
-            marginal_cost=costs.at[key + " CC", "VOM"],
-            efficiency=costs.at[key + " CC", "efficiency"]
-            - costs.at["solid biomass", "CO2 intensity"]
-            * (
-                costs.at["biomass CHP capture", "electricity-input"]
-                + costs.at["biomass CHP capture", "compression-electricity-input"]
-            ),
-            efficiency2=costs.at[key + " CC", "efficiency-heat"],
-            efficiency3=-costs.at["solid biomass", "CO2 intensity"]
-            * costs.at["biomass CHP capture", "capture_rate"],
-            efficiency4=costs.at["solid biomass", "CO2 intensity"]
-            * costs.at["biomass CHP capture", "capture_rate"],
-            lifetime=costs.at[key + " CC", "lifetime"],
-        )
 
     if options["biomass_boiler"]:
         # TODO: Add surcharge for pellets
@@ -2859,6 +2810,7 @@ def add_biomass(n, costs):
     # Electrobiofuels (BtL with hydrogen addition to make more use of biogenic carbon).
     # Combination of efuels and biomass to liquid, both based on Fischer-Tropsch.
     # Experimental version - use with caution
+    #TODO modify for different biomass types
     if options["electrobiofuels"]:
 
         efuel_scale_factor = costs.at["BtL", "C stored"]
