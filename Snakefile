@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: MIT
 
+#snakemake -call all --configfile config/config.yaml --rerun-incomplete --cores 8
+
 from pathlib import Path
 import yaml
 from os.path import normpath, exists
