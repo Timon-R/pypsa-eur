@@ -1120,9 +1120,7 @@ def extra_functionality(n, snapshots):
             n.model.add_objective(combined_objective(n, scenarios), overwrite=True)
         else:
             raise ValueError(f"Unknown distribution {distribution}")
-        
-    
-    logger.info(f"Objective function is updated") 
+        logger.info(f"Objective function is updated") 
 
 def parse_scenarios(scenarios):
     parsed_scenarios = []

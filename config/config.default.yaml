@@ -391,6 +391,11 @@ biomass:
     - Sludge
     municipal solid waste:
     - Municipal waste
+  emission_factors:
+    forest residues biomass: 0 # tCO2/MWh 0.1
+    rest product biomass: 0 # tCO2//MWh 0.02
+    waste biomass: 0 # tCO2/MWh
+    biogas: 0 # tCO2/MWh
   share_unsustainable_use_retained:
     2020: 1
     2025: 0.66
