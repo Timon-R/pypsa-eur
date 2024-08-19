@@ -306,6 +306,9 @@ def simplify_links(
 
         seen = set()
 
+        if added_supernodes is None:
+            added_supernodes = set()
+
         # Supernodes are endpoints of links, identified by having lass then two neighbours or being an AC Bus
         # An example for the latter is if two different links are connected to the same AC bus.
         supernodes = {

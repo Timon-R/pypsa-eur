@@ -56,8 +56,8 @@ dependencies:
 - descartes
 - rasterio!=1.2.10
 
-
 - pip:
+  - gurobipy
   - tsam>=2.3.1
   - snakemake-storage-plugin-http
   - snakemake-executor-plugin-slurm
