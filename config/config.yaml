@@ -21,7 +21,7 @@ remote:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
   prefix: ""
-  name: test
+  name: ""
   scenarios:
     enable: false
     file: config/scenarios.yaml
@@ -42,7 +42,7 @@ scenario:
   ll:
   - vopt
   clusters:
-  - 37
+  - 38
   # - 128
   # - 256
   opts:
@@ -286,7 +286,7 @@ lines:
   max_extension: 20000 #MW
   length_factor: 1.25
   reconnect_crimea: true
-  under_construction: 'keep' # 'zero': set capacity to zero, 'remove': remove, 'keep': with full capacity
+  under_construction: 'keep' # 'zero': set capacity to zero, 'remove': remove, 'keep': with full capacity for lines in grid extract
   dynamic_line_rating:
     activate: false
     cutout: europe-2013-sarah3-era5
@@ -299,8 +299,25 @@ links:
   p_max_pu: 1.0
   p_nom_max: .inf
   max_extension: 30000 #MW
-  include_tyndp: true
-  under_construction: 'zero' # 'zero': set capacity to zero, 'remove': remove, 'keep': with full capacity
+  under_construction: 'keep' # 'zero': set capacity to zero, 'remove': remove, 'keep': with full capacity for lines in grid extract
+
+# docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#transmission_projects
+transmission_projects:
+  enable: true
+  include:
+    tyndp2020: true
+    nep: true
+    manual: true
+  skip:
+  - upgraded_lines
+  - upgraded_links
+  status:
+  - under_construction
+  - in_permitting
+  - confirmed
+    #- planned_not_yet_permitted
+    #- under_consideration
+  new_link_capacity: zero #keep or zero
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#transformers
 transformers:
@@ -431,8 +448,19 @@ sector:
       2045: 0.8
       2050: 1.0
     district_heating_loss: 0.15
-    forward_temperature: 90 #C
-    return_temperature: 50 #C
+    # check these numbers!
+    forward_temperature:
+      default: 90
+      DK: 70
+      SE: 70
+      NO: 70
+      FI: 70
+    return_temperature:
+      default: 50
+      DK: 40
+      SE: 40
+      NO: 40
+      FI: 40
     heat_source_cooling: 6 #K
     heat_pump_cop_approximation:
       refrigerant: ammonia
@@ -637,6 +665,7 @@ sector:
   biomass_to_liquid: false
   electrobiofuels: false
   biosng: false
+  bioH2: false
   municipal_solid_waste: false
   limit_max_growth:
     enable: false
@@ -810,7 +839,7 @@ clustering:
       ramp_limit_down: max
   temporal:
     resolution_elec: false
-    resolution_sector: 5H #false,nH, use odd integers for n
+    resolution_sector: 5H
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#adjustments
 adjustments:
@@ -1080,6 +1109,7 @@ plotting:
     unsustainable bioliquids: '#32CD32'
     electrobiofuels: 'red'
     BioSNG: '#123456'
+    solid biomass to hydrogen: '#654321'
     # power transmission
     lines: '#6c9459'
     transmission lines: '#6c9459'
