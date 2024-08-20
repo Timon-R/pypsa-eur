@@ -105,12 +105,6 @@ def build_industry_sector_ratios_intermediate():
         snakemake.input.industry_sector_ratios, index_col=0
     )
 
-    if np.isinf(demand.div(production, axis=1)).values.any():
-        print("Infinity values found in today_sector_ratios. They will be replaced with 0.")
-        print("They were found in the following sectors: ")
-        inf_sectors = np.isinf(demand.div(production, axis=1))
-        print(demand.div(production, axis=1).columns[inf_sectors.any()])
-
     today_sector_ratios = demand.div(production, axis=1).replace([np.inf, -np.inf], 0)
 
     today_sector_ratios.dropna(how="all", axis=1, inplace=True)

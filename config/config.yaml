@@ -42,7 +42,7 @@ scenario:
   ll:
   - vopt
   clusters:
-  - 38
+  - 38 #38
   # - 128
   # - 256
   opts:
@@ -57,6 +57,8 @@ scenario:
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#countries
 countries: ['AL', 'AT', 'BA', 'BE', 'BG', 'CH', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GB', 'GR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'ME', 'MK', 'NL', 'NO', 'PL', 'PT', 'RO', 'RS', 'SE', 'SI', 'SK']
+#countries: ['DE', 'DK']
+
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#snapshots
 snapshots:
@@ -152,12 +154,10 @@ atlite:
 #Only tested for overnight scenarios so far - has to be added to snakemake rules for other methods and tested if it also works there
 stochasticity: #gas price used in the standard model:  24.568 EUR/MWh_th
   gas_price:
-    enable: false
+    enable: true
     distribution: scenarios #options: scenarios, normal, uniform
     scenarios: #add as many scenarios as you want, first the value of the gas price in  EUR/MWh_th, then the probability of that scenario 
-      - 300, 0.3
-      - 300, 0.4
-      - 300, 0.3
+      - 20, 1
     normal_distribution: 
       mean: 50
       std: 5
@@ -415,7 +415,6 @@ biomass:
   emission_factors:
     forest residues biomass: 0 # tCO2/MWh 0.1
     rest product biomass: 0 # tCO2//MWh 0.02
-    waste biomass: 0 # tCO2/MWh
     biogas: 0 # tCO2/MWh
   share_unsustainable_use_retained:
     2020: 1

@@ -32,7 +32,7 @@ import os
 import re
 import sys
 
-import pyomo
+import linopy
 from pyomo.environ import value
 
 import numpy as np
@@ -523,48 +523,6 @@ def prepare_network(
   
     return n
 
- # Function to update the marginal cost for gas generators
-def update_gas_marginal_cost(network, gas_price):
-    gas_generators = network.generators[network.generators.carrier == "gas"]
-    network.generators.loc[gas_generators.index, "marginal_cost"] = gas_price
-
-def prepare_stochastic_networks(n, scenarios):
-    """
-    Prepares a stochastic model by generating a list of modified networks for each scenario and their probabilites.
-
-    Parameters:
-    n : pypsa.Network
-    scenarios : list of tuples (float, float): (gas_price, probability)
-        
-    Returns: scenario_networks : list of tuples (pypsa.Network, float): (scenario_network, probability)
-     
-     """
-    # Extract values from the list of scenarios
-    gas_prices = [value for value, _ in scenarios]
-
-    # Extract probabilities from the list of scenarios
-    probabilities = [probability for _, probability in scenarios]
-
-    # Create a list to store the modified networks and their probabilities
-    
-    scenario_networks = []
-
-    for i in range(len(gas_prices)):
-        gas_price = gas_prices[i]
-        probability = probabilities[i]
-        
-        # Copy the network to avoid modifying the original
-        scenario_network = n.copy()
-        
-        # Update the marginal cost for gas generators
-        update_gas_marginal_cost(scenario_network, gas_price)
-        
-        # Store the modified network and its probability
-        scenario_networks.append((scenario_network, probability))
-
-    return scenario_networks
-
-
 def add_CCL_constraints(n, config):
     """
     Add CCL (country & carrier limit) constraint to the network.
@@ -677,7 +635,7 @@ def add_EQ_constraints(n, o, scaling=1e-1):
     each node to produce on average at least 70% of its consumption.
     """
     # TODO: Generalize to cover myopic and other sectors?
-    float_regex = "[0-9]*\.?[0-9]+"
+    float_regex = r"[0-9]*\.?[0-9]+"
     level = float(re.findall(float_regex, o)[0])
     if o[-1] == "c":
         ggrouper = n.generators.bus.map(n.buses.country)
@@ -1105,7 +1063,11 @@ def extra_functionality(n, snapshots):
         if distribution == 'scenarios':
             scenarios = stochasticity_gas_price['scenarios']
             parsed_scenarios = parse_scenarios(scenarios)
-            n.model.add_objective(combined_objective(n, parsed_scenarios), overwrite=True)
+            if isinstance(combined_objective(n, parsed_scenarios,False), linopy.expressions.LinearExpression):
+                n.model.add_objective(combined_objective(n, parsed_scenarios,True), overwrite=True)
+                logger.info("Objective function updated with stochastic scenarios.")
+            else:
+                raise TypeError("The combined objective is not a valid Linopy Expression.")            
         elif distribution == 'normal':
             mean = stochasticity_gas_price['normal_distribution']['mean']
             std = stochasticity_gas_price['normal_distribution']['std']
@@ -1127,6 +1089,7 @@ def parse_scenarios(scenarios):
     for scenario in scenarios:
         price, probability = map(float, scenario.split(','))
         parsed_scenarios.append((price, probability))
+    logger.info(f"Parsed scenarios: {parsed_scenarios}")
     return parsed_scenarios
 
 def generate_scenarios_normal(mean, std, number_of_scenarios):
@@ -1141,22 +1104,35 @@ def generate_scenarios_uniform(min, max, number_of_scenarios):
     scenarios = [(value, probability) for value in values]
     return scenarios
 
+ # Function to update the marginal cost for gas generators
+def update_gas_marginal_cost(network, gas_price):
+    gas_generators = network.generators[network.generators.carrier == "gas"]
+    network.generators.loc[gas_generators.index, "marginal_cost"] = gas_price
 
-def combined_objective(n, scenarios):
+def combined_objective(n, scenarios, is_used = True):
     '''
     Takes a list of scenarios and their probabilities and returns a combined objective function.
     '''
-    scenario_networks = prepare_stochastic_networks(n, scenarios)
-    logger.info(f"Prepared {len(scenario_networks)} scenario networks")
-    objective_terms = []
+    # Extract values from the list of scenarios
+    gas_prices = [value for value, _ in scenarios]
 
-    for scenario_network, probability in scenario_networks:
-        m = scenario_network.optimize.create_model()
-        objective_costs = m.objective.expression
-        weighted_objective = probability * (objective_costs)
-        objective_terms.append(weighted_objective)
+    # Extract probabilities from the list of scenarios
+    probabilities = [probability for _, probability in scenarios]
 
-    combined_objective = sum(objective_terms)
+    combined_objective = 0
+
+    for gas_price, probability in zip(gas_prices, probabilities):
+        # Update the gas marginal cost for the current scenario
+        update_gas_marginal_cost(n, gas_price)
+
+        # Access the current objective costs directly from the existing model
+        objective_costs = n.model.objective.expression
+
+        # Accumulate the weighted objective
+        combined_objective += probability * objective_costs
+
+        if is_used:
+            logger.info(f"Objective function for gas price {gas_price} updated in combined objective.")
  
     return combined_objective
 
@@ -1200,6 +1176,7 @@ def solve_network(n, config, solving, stochasticity_gas_price, **kwargs):
     elif skip_iterations:
         logger.info("Skip iterative solving.")
         status, condition = n.optimize(**kwargs)
+        logger.info(f"Solving status '{status}' with termination condition '{condition}'")
     else:
         logger.info("Optimize iteratively.")
         kwargs["track_iterations"] = cf_solving["track_iterations"]

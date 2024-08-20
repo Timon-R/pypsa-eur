@@ -3687,14 +3687,6 @@ def add_industry(n, costs):
         if not options["regional_coal_demand"]:
             p_set = p_set.sum()
 
-        logger.info(f"Coal demand for industry: {p_set.sum()} MWh")
-        logger.info(f"Hours: {nhours}")
-        logger.info(f"industrial_demand coal: {industrial_demand['coal']}")
-        logger.info(f"mwh_coal_per_mwh_coke: {mwh_coal_per_mwh_coke}")
-        logger.info(f"industrial_demand['coke']: {industrial_demand['coke']}")
-
-        #p_set = 0 # for testing because of error
-
         n.madd(
             "Bus",
             spatial.coal.industry,
