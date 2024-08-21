@@ -26,7 +26,7 @@ high_price_no_em:
       enable: true
       distribution: scenarios #options: scenarios, normal, uniform
       scenarios: #add as many scenarios as you want, first the value of the gas price in  EUR/MWh_th, then the probability of that scenario 
-        - 100, 1
+        - 40, 1
 
 stochastic_price_no_em:
   stochasticity: #gas price used in the standard model:  24.568 EUR/MWh_th
@@ -35,4 +35,4 @@ stochastic_price_no_em:
       distribution: scenarios #options: scenarios, normal, uniform
       scenarios: #add as many scenarios as you want, first the value of the gas price in  EUR/MWh_th, then the probability of that scenario 
         - 20, 0.5
-        - 100, 0.5
+        - 40, 0.5

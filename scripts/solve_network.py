@@ -32,6 +32,7 @@ import os
 import re
 import sys
 import copy
+import pyproj
 
 import linopy
 from pyomo.environ import value
@@ -1150,7 +1151,7 @@ def prepare_stochastic_networks(network, scenarios):
         probability = probabilities[i]
         
         # Copy the network to avoid modifying the original
-        scenario_network = deep_copy_network(network)
+        scenario_network = network.copy()
         
         # Update the marginal cost for gas generators
         update_gas_marginal_cost(scenario_network, gas_price)
@@ -1159,76 +1160,7 @@ def prepare_stochastic_networks(network, scenarios):
         scenario_networks.append((scenario_network, probability))
 
     return scenario_networks
-    
-def deep_copy_network(n):
-    """
-    Manually create a deep copy of the network object to avoid recursion errors.
-    """
-    new_network = pypsa.Network()
-    
-    # Attributes to exclude from deep copy
-    # Use memo dictionary to handle circular references
-    memo = {}
-    
-    for attr in n.__dict__:     
-        try:
-            setattr(new_network, attr, custom_deepcopy(getattr(n, attr), memo))
-        except RecursionError as e:
-            logging.info(f"Recursion error copying attribute {attr} - {e}")
-            raise e
-    
-    # Manually copy the network's dataframes
-    for component in n.iterate_components():
-        new_network.df(component.name)[:] = component.df.copy()
-    
-    return new_network
 
-def custom_deepcopy(obj, memo):
-    """
-    Custom deep copy function to handle circular references.
-    """
-    if id(obj) in memo:
-        return memo[id(obj)]
-    
-    if isinstance(obj, (int, float, str, bool, type(None))):
-        return obj
-    
-    if isinstance(obj, dict):
-        copy_obj = obj.__class__()
-        memo[id(obj)] = copy_obj
-        for k, v in obj.items():
-            copy_obj[custom_deepcopy(k, memo)] = custom_deepcopy(v, memo)
-        return copy_obj
-    
-    if isinstance(obj, list):
-        copy_obj = obj.__class__()
-        memo[id(obj)] = copy_obj
-        copy_obj.extend(custom_deepcopy(i, memo) for i in obj)
-        return copy_obj
-    
-    if isinstance(obj, tuple):
-        copy_obj = obj.__class__(custom_deepcopy(i, memo) for i in obj)
-        memo[id(obj)] = copy_obj
-        return copy_obj
-    
-    # Handle pandas objects
-    if isinstance(obj, (pd.DataFrame, pd.Series, pd.Index, pd.DatetimeIndex)):
-        copy_obj = obj.copy(deep=True)
-        memo[id(obj)] = copy_obj
-        return copy_obj
-        
-    if isinstance(obj, set):
-        copy_obj = obj.__class__()
-        memo[id(obj)] = copy_obj
-        copy_obj.update(custom_deepcopy(i, memo) for i in obj)
-        return copy_obj
-    
-    if hasattr(obj, '__dict__'):
-        copy_obj = obj.__class__.__new__(obj.__class__)
-        memo[id(obj)] = copy_obj
-        for k, v in obj.__dict__.items():
-            setattr(copy_obj, k, custom_deepcopy(v, memo))
-        return copy_obj
 
 def solve_network(n, config, solving, stochasticity_gas_price, **kwargs):
     stochasticity_gas_price = stochasticity_gas_price
