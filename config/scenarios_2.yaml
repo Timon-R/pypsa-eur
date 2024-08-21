@@ -1,0 +1,38 @@
+# -*- coding: utf-8 -*-
+# SPDX-FileCopyrightText: : 2017-2023 The PyPSA-Eur Authors
+#
+# SPDX-License-Identifier: MIT
+
+# This file is used to define the scenarios that are run by snakemake. Each entry on the first level is a scenario. Each scenario can contain configuration overrides with respect to the config/config.yaml settings.
+#
+# Example
+#
+# custom-scenario: # name of the scenario
+#   electricity:
+#       renewable_carriers: [wind, solar] # override the list of renewable carriers
+
+
+low_price_no_em:
+  stochasticity: #gas price used in the standard model:  24.568 EUR/MWh_th
+    gas_price:
+      enable: true
+      distribution: scenarios #options: scenarios, normal, uniform
+      scenarios: #add as many scenarios as you want, first the value of the gas price in  EUR/MWh_th, then the probability of that scenario 
+        - 20, 1
+
+high_price_no_em:
+  stochasticity: #gas price used in the standard model:  24.568 EUR/MWh_th
+    gas_price:
+      enable: true
+      distribution: scenarios #options: scenarios, normal, uniform
+      scenarios: #add as many scenarios as you want, first the value of the gas price in  EUR/MWh_th, then the probability of that scenario 
+        - 100, 1
+
+stochastic_price_no_em:
+  stochasticity: #gas price used in the standard model:  24.568 EUR/MWh_th
+    gas_price:
+      enable: true
+      distribution: scenarios #options: scenarios, normal, uniform
+      scenarios: #add as many scenarios as you want, first the value of the gas price in  EUR/MWh_th, then the probability of that scenario 
+        - 20, 0.5
+        - 100, 0.5

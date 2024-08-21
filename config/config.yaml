@@ -21,9 +21,9 @@ remote:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
   prefix: ""
-  name: test #name of scenarios being run or name of solution folder, name all for all scenarios
+  name: all #name of scenarios being run or name of solution folder, name all for all scenarios
   scenarios:
-    enable: false
+    enable: true
     file: config/scenarios.yaml
   disable_progressbar: false
   shared_resources:

@@ -31,6 +31,7 @@ import logging
 import os
 import re
 import sys
+import copy
 
 import linopy
 from pyomo.environ import value
@@ -1063,11 +1064,7 @@ def extra_functionality(n, snapshots):
         if distribution == 'scenarios':
             scenarios = stochasticity_gas_price['scenarios']
             parsed_scenarios = parse_scenarios(scenarios)
-            if isinstance(combined_objective(n, parsed_scenarios,False), linopy.expressions.LinearExpression):
-                n.model.add_objective(combined_objective(n, parsed_scenarios,True), overwrite=True)
-                logger.info("Objective function updated with stochastic scenarios.")
-            else:
-                raise TypeError("The combined objective is not a valid Linopy Expression.")            
+            n.model.add_objective(combined_objective(n, parsed_scenarios), overwrite=True)
         elif distribution == 'normal':
             mean = stochasticity_gas_price['normal_distribution']['mean']
             std = stochasticity_gas_price['normal_distribution']['std']
@@ -1109,33 +1106,129 @@ def update_gas_marginal_cost(network, gas_price):
     gas_generators = network.generators[network.generators.carrier == "gas"]
     network.generators.loc[gas_generators.index, "marginal_cost"] = gas_price
 
-def combined_objective(n, scenarios, is_used = True):
+def combined_objective(n, scenarios):
     '''
     Takes a list of scenarios and their probabilities and returns a combined objective function.
     '''
+    # Prepare the stochastic networks
+    scenario_networks = prepare_stochastic_networks(n, scenarios)
+
+    objective_terms = []
+    for scenario_network, probability in scenario_networks:
+        m = scenario_network.optimize.create_model()    
+        objective_costs = m.objective.expression
+        weighted_objective = probability * (objective_costs)
+        # Accumulate the weighted objective
+        objective_terms.append(weighted_objective)
+
+    combined_objective = sum(objective_terms)
+    n.model.remove_objective()
+ 
+    return combined_objective
+
+def prepare_stochastic_networks(network, scenarios):
+    """
+    Prepares a stochastic model by generating a list of modified networks for each scenario and their probabilities.
+
+    Parameters:
+    n : pypsa.Network
+    scenarios : list of tuples (float, float): (gas_price, probability)
+        
+    Returns: scenario_networks : list of tuples (pypsa.Network, float): (scenario_network, probability)
+    """
     # Extract values from the list of scenarios
     gas_prices = [value for value, _ in scenarios]
 
     # Extract probabilities from the list of scenarios
     probabilities = [probability for _, probability in scenarios]
 
-    combined_objective = 0
+    # Create a list to store the modified networks and their probabilities
+    scenario_networks = []
 
-    for gas_price, probability in zip(gas_prices, probabilities):
-        # Update the gas marginal cost for the current scenario
-        update_gas_marginal_cost(n, gas_price)
+    for i in range(len(gas_prices)):
+        gas_price = gas_prices[i]
+        probability = probabilities[i]
+        
+        # Copy the network to avoid modifying the original
+        scenario_network = deep_copy_network(network)
+        
+        # Update the marginal cost for gas generators
+        update_gas_marginal_cost(scenario_network, gas_price)
+        
+        # Store the modified network and its probability
+        scenario_networks.append((scenario_network, probability))
 
-        # Access the current objective costs directly from the existing model
-        objective_costs = n.model.objective.expression
+    return scenario_networks
+    
+def deep_copy_network(n):
+    """
+    Manually create a deep copy of the network object to avoid recursion errors.
+    """
+    new_network = pypsa.Network()
+    
+    # Attributes to exclude from deep copy
+    # Use memo dictionary to handle circular references
+    memo = {}
+    
+    for attr in n.__dict__:     
+        try:
+            setattr(new_network, attr, custom_deepcopy(getattr(n, attr), memo))
+        except RecursionError as e:
+            logging.info(f"Recursion error copying attribute {attr} - {e}")
+            raise e
+    
+    # Manually copy the network's dataframes
+    for component in n.iterate_components():
+        new_network.df(component.name)[:] = component.df.copy()
+    
+    return new_network
 
-        # Accumulate the weighted objective
-        combined_objective += probability * objective_costs
-
-        if is_used:
-            logger.info(f"Objective function for gas price {gas_price} updated in combined objective.")
- 
-    return combined_objective
-
+def custom_deepcopy(obj, memo):
+    """
+    Custom deep copy function to handle circular references.
+    """
+    if id(obj) in memo:
+        return memo[id(obj)]
+    
+    if isinstance(obj, (int, float, str, bool, type(None))):
+        return obj
+    
+    if isinstance(obj, dict):
+        copy_obj = obj.__class__()
+        memo[id(obj)] = copy_obj
+        for k, v in obj.items():
+            copy_obj[custom_deepcopy(k, memo)] = custom_deepcopy(v, memo)
+        return copy_obj
+    
+    if isinstance(obj, list):
+        copy_obj = obj.__class__()
+        memo[id(obj)] = copy_obj
+        copy_obj.extend(custom_deepcopy(i, memo) for i in obj)
+        return copy_obj
+    
+    if isinstance(obj, tuple):
+        copy_obj = obj.__class__(custom_deepcopy(i, memo) for i in obj)
+        memo[id(obj)] = copy_obj
+        return copy_obj
+    
+    # Handle pandas objects
+    if isinstance(obj, (pd.DataFrame, pd.Series, pd.Index, pd.DatetimeIndex)):
+        copy_obj = obj.copy(deep=True)
+        memo[id(obj)] = copy_obj
+        return copy_obj
+        
+    if isinstance(obj, set):
+        copy_obj = obj.__class__()
+        memo[id(obj)] = copy_obj
+        copy_obj.update(custom_deepcopy(i, memo) for i in obj)
+        return copy_obj
+    
+    if hasattr(obj, '__dict__'):
+        copy_obj = obj.__class__.__new__(obj.__class__)
+        memo[id(obj)] = copy_obj
+        for k, v in obj.__dict__.items():
+            setattr(copy_obj, k, custom_deepcopy(v, memo))
+        return copy_obj
 
 def solve_network(n, config, solving, stochasticity_gas_price, **kwargs):
     stochasticity_gas_price = stochasticity_gas_price

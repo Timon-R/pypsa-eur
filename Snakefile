@@ -2,8 +2,10 @@
 #
 # SPDX-License-Identifier: MIT
 
-#    snakemake -call all --configfile config/config.yaml --rerun-incomplete --cores 8 --use-conda
+#    snakemake -call all --configfile config/config.yaml --rerun-incomplete --cores 8 
 #--rerun-triggers mtime 
+# Remove the quarantine attribute from all files in the Conda environment:
+# sudo xattr -r -d com.apple.quarantine /Users/timonr/miniconda3/envs/pypsa-eur or use sudo spctl --master-enable and sudo spctl --master-disable
 
 from pathlib import Path
 import yaml
