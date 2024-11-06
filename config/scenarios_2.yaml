@@ -12,15 +12,7 @@
 #       renewable_carriers: [wind, solar] # override the list of renewable carriers
 
 
-low_price_no_em:
-  stochasticity: #gas price used in the standard model:  24.568 EUR/MWh_th
-    gas_price:
-      enable: true
-      distribution: scenarios #options: scenarios, normal, uniform
-      scenarios: #add as many scenarios as you want, first the value of the gas price in  EUR/MWh_th, then the probability of that scenario 
-        - 20, 1
-
-high_price_no_em:
+certain_price:
   stochasticity: #gas price used in the standard model:  24.568 EUR/MWh_th
     gas_price:
       enable: true
@@ -28,11 +20,11 @@ high_price_no_em:
       scenarios: #add as many scenarios as you want, first the value of the gas price in  EUR/MWh_th, then the probability of that scenario 
         - 40, 1
 
-stochastic_price_no_em:
+stochastic_price:
   stochasticity: #gas price used in the standard model:  24.568 EUR/MWh_th
     gas_price:
       enable: true
       distribution: scenarios #options: scenarios, normal, uniform
       scenarios: #add as many scenarios as you want, first the value of the gas price in  EUR/MWh_th, then the probability of that scenario 
         - 20, 0.5
-        - 40, 0.5
+        - 60, 0.5
