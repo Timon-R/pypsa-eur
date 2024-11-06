@@ -282,6 +282,38 @@ def aggregate_p(n):
     )
 
 
+def get(item, investment_year=None):
+    """
+    Check whether item depends on investment year.
+    """
+    if not isinstance(item, dict):
+        return item
+    elif investment_year in item.keys():
+        return item[investment_year]
+    else:
+        logger.warning(
+            f"Investment key {investment_year} not found in dictionary {item}."
+        )
+        keys = sorted(item.keys())
+        if investment_year < keys[0]:
+            logger.warning(f"Lower than minimum key. Taking minimum key {keys[0]}")
+            return item[keys[0]]
+        elif investment_year > keys[-1]:
+            logger.warning(f"Higher than maximum key. Taking maximum key {keys[0]}")
+            return item[keys[-1]]
+        else:
+            logger.warning(
+                "Interpolate linearly between the next lower and next higher year."
+            )
+            lower_key = max(k for k in keys if k < investment_year)
+            higher_key = min(k for k in keys if k > investment_year)
+            lower = item[lower_key]
+            higher = item[higher_key]
+            return lower + (higher - lower) * (investment_year - lower_key) / (
+                higher_key - lower_key
+            )
+
+
 def aggregate_e_nom(n):
     return pd.concat(
         [
@@ -357,17 +389,28 @@ def aggregate_costs(n, flatten=False, opts=None, existing_only=False):
 
 
 def progress_retrieve(url, file, disable=False):
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+
     if disable:
-        urllib.request.urlretrieve(url, file)
+        response = requests.get(url, headers=headers, stream=True)
+        with open(file, "wb") as f:
+            f.write(response.content)
     else:
-        with tqdm(unit="B", unit_scale=True, unit_divisor=1024, miniters=1) as t:
+        response = requests.get(url, headers=headers, stream=True)
+        total_size = int(response.headers.get("content-length", 0))
+        chunk_size = 1024
 
-            def update_to(b=1, bsize=1, tsize=None):
-                if tsize is not None:
-                    t.total = tsize
-                t.update(b * bsize - t.n)
-
-            urllib.request.urlretrieve(url, file, reporthook=update_to)
+        with tqdm(
+            total=total_size,
+            unit="B",
+            unit_scale=True,
+            unit_divisor=1024,
+            desc=str(file),
+        ) as t:
+            with open(file, "wb") as f:
+                for data in response.iter_content(chunk_size=chunk_size):
+                    f.write(data)
+                    t.update(len(data))
 
 
 def mock_snakemake(
@@ -402,7 +445,7 @@ def mock_snakemake(
     import os
 
     import snakemake as sm
-    from pypsa.descriptors import Dict
+    from pypsa.definitions.structures import Dict
     from snakemake.api import Workflow
     from snakemake.common import SNAKEFILE_CHOICES
     from snakemake.script import Snakemake
@@ -507,7 +550,8 @@ def generate_periodic_profiles(dt_index, nodes, weekly_profile, localize=None):
     week_df = pd.DataFrame(index=dt_index, columns=nodes)
 
     for node in nodes:
-        timezone = pytz.timezone(pytz.country_timezones[node[:2]][0])
+        ct = node[:2] if node[:2] != "XK" else "RS"
+        timezone = pytz.timezone(pytz.country_timezones[ct][0])
         tz_dt_index = dt_index.tz_convert(timezone)
         week_df[node] = [24 * dt.weekday() + dt.hour for dt in tz_dt_index]
         week_df[node] = week_df[node].map(weekly_profile)
