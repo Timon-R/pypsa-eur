@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-#snakemake -call all --configfile config/config.yaml --rerun-incomplete --cores 8 --use-conda
+#snakemake -call all --configfile config/config.yaml --rerun-incomplete --cores 8 --use-conda or use 10 cores maybe
 #--rerun-triggers mtime 
 # conda config --set channel_priority strict
 

@@ -21,9 +21,9 @@ remote:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
   prefix: ""
-  name: "test_5"
+  name: all # all 
   scenarios:
-    enable: false
+    enable: true
     file: config/scenarios.yaml
   disable_progressbar: false
   shared_resources:
@@ -40,8 +40,8 @@ scenario:
   ll:
   - vopt
   clusters:
-  - 5
-  #- 39
+  #- 5
+  - 39
   #- 128
   #- 256
   opts:
@@ -55,8 +55,8 @@ scenario:
   - 2050
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#countries
-#countries: ['AL', 'AT', 'BA', 'BE', 'BG', 'CH', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GB', 'GR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'ME', 'MK', 'NL', 'NO', 'PL', 'PT', 'RO', 'RS', 'SE', 'SI', 'SK', 'XK']
-countries: ['SE','NO','DK']
+countries: ['AL', 'AT', 'BA', 'BE', 'BG', 'CH', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GB', 'GR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'ME', 'MK', 'NL', 'NO', 'PL', 'PT', 'RO', 'RS', 'SE', 'SI', 'SK', 'XK']
+#countries: ['SE','NO','DK']
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#snapshots
 snapshots:
@@ -424,18 +424,17 @@ biomass:
     2040: 1
     2045: 1
     2050: 1
-  emission_factors: #tCO2/MWh
-    agricultural waste: 1
+  emission_factors: #tCO2/MWh #municipal solid waste is not included in the emission factors
+    agricultural waste: 0
     fuelwood residues: 0
     secondary forestry residues: 0
-    sawdust: 0 
-    residues from landscape care: 0 
-    grasses: 20 
-    woody crops: 20
-    fuelwoodRW: 20
+    sawdust: 0
+    residues from landscape care: 0
+    grasses: 0 
+    woody crops: 0
+    fuelwoodRW: 0
     manure: 0
     sludge: 0
-    municipal solid waste: 0
 
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#solar-thermal
@@ -647,7 +646,7 @@ sector:
     min_size: 3
     max_size: 25
     years_of_storage: 25
-  co2_sequestration_potential:
+  co2_sequestration_potential: #Mt
     2020: 0
     2025: 0
     2030: 50
@@ -658,7 +657,7 @@ sector:
   co2_sequestration_cost: 10
   co2_sequestration_lifetime: 50
   co2_spatial: false
-  co2network: false
+  co2network: false #don't need this
   co2_network_cost_factor: 1
   cc_fraction: 0.9
   hydrogen_underground_storage: true
@@ -704,24 +703,24 @@ sector:
     electricity distribution grid:
       efficiency_static: 0.97
   H2_network: true
-  gas_network: false
+  gas_network: true
   H2_retrofit: false
   H2_retrofit_capacity_per_CH4: 0.6
   gas_network_connectivity_upgrade: 1
   gas_distribution_grid: true
   gas_distribution_grid_cost_factor: 1.0
-  biomass_spatial: false
-  biomass_transport: false
-  biogas_upgrading_cc: false
+  biomass_spatial: true 
+  biomass_transport: true
+  biogas_upgrading_cc: true
   conventional_generation:
     OCGT: gas
-  biomass_to_liquid: false
-  biomass_to_liquid_cc: false
-  electrobiofuels: false
-  biosng: false
-  biosng_cc: false
-  bioH2: false
-  municipal_solid_waste: false
+  biomass_to_liquid: true
+  biomass_to_liquid_cc: true
+  electrobiofuels: true
+  biosng: true
+  biosng_cc: true
+  bioH2: true
+  municipal_solid_waste: true #industry - waste to energy must be true
   limit_max_growth:
     enable: false
     # allowing 30% larger than max historic growth
@@ -744,7 +743,7 @@ sector:
     var_cf: true
     sustainability_factor: 0.0025
   solid_biomass_import:
-    enable: false
+    enable: true
     price: 54 #EUR/MWh
     max_amount: 1390 # TWh
     upstream_emissions_factor: .1 #share of solid biomass CO2 emissions at full combustion
@@ -816,8 +815,8 @@ industry:
     2045: 0.16
     2050: 0.20
   HVC_environment_sequestration_fraction: 0.
-  waste_to_energy: false
-  waste_to_energy_cc: false
+  waste_to_energy: true
+  waste_to_energy_cc: true
   sector_ratios_fraction_future:
     2020: 0.0
     2025: 0.1
@@ -895,7 +894,7 @@ clustering:
       ramp_limit_down: max
   temporal:
     resolution_elec: false
-    resolution_sector: 5H
+    resolution_sector: 3H
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#adjustments
 adjustments: #this is absolutely vital for SA
@@ -907,6 +906,9 @@ adjustments: #this is absolutely vital for SA
           capital_cost: 1.0
       Generator:
         gas:
+          marginal_cost: 1.0
+      Store:
+        fuelwood_residues:
           marginal_cost: 1.0
     absolute: false
 
@@ -1166,10 +1168,10 @@ plotting:
     grasses: '#d4e05b'
     woody crops: '#967a2e'
     fuelwoodRW: '#ba9447'
-    not included: '#805f29'
     manure: '#d2ad5e'
     sludge: '#9a7c33'
     municipal solid waste: '#68a437'
+    municipal solid waste transport: '#68a437'
     solid biomass import: '#d5ca8d'
     solid biomass transport: '#baa741'
     solid biomass for industry: '#7a6d26'
@@ -1184,10 +1186,12 @@ plotting:
     services rural biomass boiler: '#c6cf98'
     services urban decentral biomass boiler: '#dde5b5'
     biomass to liquid: '#32CD32'
+    biomass to liquid CC: '#228B22'
     unsustainable solid biomass: '#998622'
     unsustainable bioliquids: '#32CD32'
     electrobiofuels: 'red'
     BioSNG: '#123456'
+    BioSNG CC: '#234567'
     solid biomass to hydrogen: '#654321'
     # power transmission
     lines: '#6c9459'

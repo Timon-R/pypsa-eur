@@ -2505,6 +2505,7 @@ def add_biomass(n, costs):
     biomass_potentials = pd.read_csv(snakemake.input.biomass_potentials, index_col=0)
     biomass_types = list(snakemake.params["biomass"]["classes"].keys())
     biomass_types.remove("not included")
+    biomass_types.remove("municipal solid waste")
     logger.info(f"biomass_types: {biomass_types}")
 
     # need to aggregate potentials if gas not nodally resolved
@@ -2513,7 +2514,7 @@ def add_biomass(n, costs):
         for biogas_type in biomass_types:
             if biogas_type in ["manure","sludge"]:
                 biogas_potentials_spatial[biogas_type] = biomass_potentials[biogas_type].rename(
-                    index=lambda x: x + " " + biomass_type
+                    index=lambda x: x + " biogas " + biogas_type
                 )
         unsustainable_biogas_potentials_spatial = biomass_potentials[
             "unsustainable biogas"
@@ -2522,9 +2523,7 @@ def add_biomass(n, costs):
         biogas_potentials_spatial = {}
         for biogas_type in biomass_types:
             if biogas_type in ["manure","sludge"]:
-                biogas_potentials_spatial[biogas_type] = biomass_potentials[biogas_type].rename(
-                    index=lambda x: x + " " + biogas_type
-        )
+                biogas_potentials_spatial[biogas_type] = biomass_potentials[biogas_type].sum()
         unsustainable_biogas_potentials_spatial = biomass_potentials[
             "unsustainable biogas"
         ].sum()
@@ -2533,9 +2532,12 @@ def add_biomass(n, costs):
         biomass_potentials_spatial = {}
         for biomass_type in biomass_types:
             if biomass_type not in ["manure","sludge"]:
-                biomass_potentials_spatial[biomass_type] = biomass_potentials[biomass_type].rename(
-                    index=lambda x: x + " " + biomass_type
-                )
+                biomass_potentials_spatial[biomass_type] = biomass_potentials[
+                    biomass_type
+                ].rename(index=lambda x: x + " solid biomass " + biomass_type)
+        msw_biomass_potentials_spatial = biomass_potentials[
+            "municipal solid waste"
+        ].rename(index=lambda x: x + " municipal solid waste")
         unsustainable_solid_biomass_potentials_spatial = biomass_potentials[
             "unsustainable solid biomass"
         ].rename(index=lambda x: x + " unsustainable solid biomass")
@@ -2546,7 +2548,11 @@ def add_biomass(n, costs):
     else:
         biomass_potentials_spatial = {}
         for biomass_type in biomass_types:
-            biomass_potentials_spatial[biomass_type] = biomass_potentials[biomass_type].sum()
+            if biomass_type not in ["manure","sludge"]:
+                biomass_potentials_spatial[biomass_type] = biomass_potentials[biomass_type].sum()
+        msw_biomass_potentials_spatial = biomass_potentials[
+            "municipal solid waste"
+        ].sum()
         unsustainable_solid_biomass_potentials_spatial = biomass_potentials[
             "unsustainable solid biomass"
         ].sum()
@@ -2586,10 +2592,10 @@ def add_biomass(n, costs):
             spatial.msw.nodes,
             bus=spatial.msw.nodes,
             carrier="municipal solid waste",
-            p_nom=biomass_potentials_spatial["municipal solid waste"],
+            p_nom=msw_biomass_potentials_spatial,
             marginal_cost=0,  # costs.at["municipal solid waste", "fuel"],
-            e_sum_min=biomass_potentials_spatial["municipal solid waste"],
-            e_sum_max=biomass_potentials_spatial["municipal solid waste"],
+            e_sum_min=msw_biomass_potentials_spatial,
+            e_sum_max=msw_biomass_potentials_spatial,
         )
 
     n.add(
@@ -2608,9 +2614,9 @@ def add_biomass(n, costs):
         unit="MWh_LHV",
     )
 
-    #Add different generators for different types of biomass and biogas
+    #Add extraction components for different types of biomass onto the biomass and biogas busses
     for biomass_type in biomass_types:
-        if biomass_type not in ["grasses", "woody crops","fuelwoodRW"]:
+        if biomass_type not in ["grasses", "woody crops","fuelwoodRW","manure","sludge"]:
                 n.add(
                     "Bus",
                     [node + " " + biomass_type for node in spatial.biomass.nodes],
@@ -2667,11 +2673,12 @@ def add_biomass(n, costs):
                     efficiency2= snakemake.config["biomass"]["emission_factors"][biomass_type],
                     p_nom_extendable=True,
                 )  
+
         elif biomass_type in ["manure","sludge"]:
                 n.add(
                     "Bus",
-                    [node + " " + biomass_type for node in spatial.biogas.nodes],
-                    location=spatial.biogas.locations,
+                    [node + " " + biomass_type for node in spatial.gas.biogas],
+                    location=spatial.gas.locations,
                     carrier=biomass_type,
                     unit="MWh_LHV",
                 )
@@ -2682,14 +2689,13 @@ def add_biomass(n, costs):
                     carrier= biomass_type,
                     e_nom=biogas_potentials_spatial[biomass_type],
                     marginal_cost=costs.at["biogas", "fuel"], #TODO change to specific costs
-                    e_sum_min=0,
-                    e_sum_max=biogas_potentials_spatial[biomass_type],
+                    e_initial=biogas_potentials_spatial[biomass_type],
                 )
                 n.add(
                     "Link",
-                    [node + " " + biomass_type for node in spatial.biogas.nodes],
-                    bus0=[node + " " + biomass_type for node in spatial.biogas.nodes],
-                    bus1=spatial.biogas.nodes,
+                    [node + " " + biomass_type for node in spatial.gas.biogas],
+                    bus0=[node + " " + biomass_type for node in spatial.gas.biogas],
+                    bus1=spatial.gas.biogas,
                     bus2="co2 atmosphere",
                     carrier=biomass_type,
                     efficiency=1.0,
