@@ -558,6 +558,20 @@ def calculate_weighted_prices(n, label, weighted_prices):
         price = n.buses_t.marginal_price.loc[:, n.buses.carrier == carrier]
         price = price.reindex(columns=load.columns, fill_value=1)
 
+        # try:
+        #     # Ensure the boolean indexer aligns with the columns of n.buses_t.marginal_price
+        #     carrier_buses = n.buses.index[n.buses.carrier == carrier]
+        #     price = n.buses_t.marginal_price[carrier_buses]
+        #     price = price.reindex(columns=load.columns, fill_value=1)
+        # except Exception as e:
+        #     logger.error(f"Error occurred for carrier: {carrier}")
+        #     logger.error(f"n.buses_t.marginal_price index: {n.buses_t.marginal_price.index}")
+        #     logger.error(f"n.buses.carrier: {n.buses.carrier}")
+        #     logger.error(f"Boolean indexer: {n.buses.carrier == carrier}")
+        #     logger.error(f"carrier_buses: {carrier_buses}")
+        #     logger.error(f"Exception: {e}")
+        #     raise
+
         weighted_prices.loc[carrier, label] = (
             load * price
         ).sum().sum() / load.sum().sum()

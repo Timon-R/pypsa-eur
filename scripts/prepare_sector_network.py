@@ -2600,8 +2600,15 @@ def add_biomass(n, costs):
     biomass_potentials = pd.read_csv(snakemake.input.biomass_potentials, index_col=0)
     biomass_types = list(snakemake.params["biomass"]["classes"].keys())
     biomass_types.remove("not included")
+    #Creates a costs dictionary for the biomass carriers, if a carrier consists of multiple biomass types, a (unweighted!) cost average is calculated
+    biomass_costs = {
+        carrier: sum(costs.at[biomass, "fuel"] for biomass in snakemake.config["biomass"]["classes"][carrier])
+        / len(snakemake.config["biomass"]["classes"][carrier])
+        for carrier in biomass_types
+    }
     biomass_types.remove("municipal solid waste")
     logger.info(f"biomass_types: {biomass_types}")
+    logger.info(f"biomass_costs: {biomass_costs}")
 
     # need to aggregate potentials if gas not nodally resolved
     if options["gas_network"]:
@@ -2688,7 +2695,7 @@ def add_biomass(n, costs):
             bus=spatial.msw.nodes,
             carrier="municipal solid waste",
             p_nom=msw_biomass_potentials_spatial,
-            marginal_cost=0,  # costs.at["municipal solid waste", "fuel"],
+            marginal_cost= 0,  # costs.at["municipal solid waste", "fuel"],
             e_sum_min=msw_biomass_potentials_spatial,
             e_sum_max=msw_biomass_potentials_spatial,
         )
@@ -2725,7 +2732,7 @@ def add_biomass(n, costs):
                     bus=[node + " " + biomass_type for node in spatial.biomass.nodes],
                     carrier=biomass_type,
                     e_nom=biomass_potentials_spatial[biomass_type],
-                    marginal_cost=costs.at["solid biomass", "fuel"], #TODO change
+                    marginal_cost=biomass_costs[biomass_type], 
                     e_initial=biomass_potentials_spatial[biomass_type],
                 )
                 n.add(
@@ -2754,7 +2761,7 @@ def add_biomass(n, costs):
                     bus=[node + " " + biomass_type for node in spatial.biomass.nodes],
                     carrier=biomass_type,
                     e_nom=biomass_potentials_spatial[biomass_type],
-                    marginal_cost=costs.at["solid biomass", "fuel"], #TODO change
+                    marginal_cost=biomass_costs[biomass_type],
                     e_initial=biomass_potentials_spatial[biomass_type],
                 )
                 n.add(
@@ -2783,7 +2790,7 @@ def add_biomass(n, costs):
                     bus=[node + " " + biomass_type for node in spatial.gas.biogas],
                     carrier= biomass_type,
                     e_nom=biogas_potentials_spatial[biomass_type],
-                    marginal_cost=costs.at["biogas", "fuel"], #TODO change to specific costs
+                    marginal_cost=biomass_costs[biomass_type], #TODO change to specific costs
                     e_initial=biogas_potentials_spatial[biomass_type],
                 )
                 n.add(
@@ -3021,7 +3028,7 @@ def add_biomass(n, costs):
             "biomass limit",
             carrier_attribute="solid biomass",
             sense="<=",
-            constant=biomass_potentials["solid biomass"].sum(),
+            constant=biomass_potentials["solid biomass"].sum(), #doesn't work for differentiated biomass types
             type="operational_limit",
         )
         if biomass_potentials["unsustainable solid biomass"].sum() > 0:

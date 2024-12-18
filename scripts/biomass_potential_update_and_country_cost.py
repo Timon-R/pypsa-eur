@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 import yaml
 
+#This is not part of the snakemake workflow
+
 # Scenarios: ENS_Low, ENS_Med, ENS_High
 # Years: 2010, 2020, ... , 2050
 

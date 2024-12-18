@@ -41,8 +41,8 @@ scenario:
   - vopt
   clusters:
   - 39
-  - 128
-  - 256
+  #- 128
+  #- 256
   opts:
   - ''
   sector_opts:
@@ -378,24 +378,32 @@ biomass:
   year: 2030
   scenario: ENS_Med
   classes:
-    solid biomass:
+    agricultural waste:
     - Agricultural waste
+    fuelwood residues:
     - Fuelwood residues
+    secondary forestry residues:
     - Secondary Forestry residues - woodchips
+    sawdust:
     - Sawdust
+    residues from landscape care:
     - Residues from landscape care
+    grasses:
+    - Miscanthus, switchgrass, RCG
+    woody crops:
+    - Willow
+    - Poplar
+    fuelwoodRW:
+    - FuelwoodRW
     not included:
     - Sugar from sugar beet
     - Rape seed
     - "Sunflower, soya seed "
     - Bioethanol barley, wheat, grain maize, oats, other cereals and rye
-    - Miscanthus, switchgrass, RCG
-    - Willow
-    - Poplar
-    - FuelwoodRW
     - C&P_RW
-    biogas:
+    manure:
     - Manure solid, liquid
+    sludge:
     - Sludge
     municipal solid waste:
     - Municipal waste
@@ -415,6 +423,17 @@ biomass:
     2040: 1
     2045: 1
     2050: 1
+  emission_factors: #tCO2/MWh #municipal solid waste is not included in the emission factors
+    agricultural waste: 0
+    fuelwood residues: 0
+    secondary forestry residues: 0
+    sawdust: 0
+    residues from landscape care: 0
+    grasses: 0 
+    woody crops: 0
+    fuelwoodRW: 0
+    manure: 0
+    sludge: 0
 
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#solar-thermal
@@ -743,6 +762,7 @@ sector:
     price: 54 #EUR/MWh
     max_amount: 1390 # TWh
     upstream_emissions_factor: .1 #share of solid biomass CO2 emissions at full combustion
+  non-edible_crops: true 
 
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#industry
@@ -839,7 +859,7 @@ industry:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#costs
 costs:
   year: 2030
-  version: v0.10.0
+  version: Timon-R/technology-data/v0.0.3 #v0.10.0
   social_discountrate: 0.02
   fill_values:
     FOM: 0
@@ -889,7 +909,7 @@ clustering:
       ramp_limit_down: max
   temporal:
     resolution_elec: false
-    resolution_sector: false
+    resolution_sector: 6H
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#adjustments
 adjustments:
@@ -1149,7 +1169,18 @@ plotting:
     biogas: '#e3d37d'
     biomass: '#baa741'
     solid biomass: '#baa741'
-    municipal solid waste: '#91ba41'
+    agricultural waste: '#e0c769'
+    fuelwood residues: '#a68d34'
+    secondary forestry residues: '#f0d97c'
+    sawdust: '#cfb658'
+    residues from landscape care: '#b3993f'
+    grasses: '#d4e05b'
+    woody crops: '#967a2e'
+    fuelwoodRW: '#ba9447'
+    manure: '#d2ad5e'
+    sludge: '#9a7c33'
+    municipal solid waste: '#68a437'
+    municipal solid waste transport: '#68a437'
     solid biomass import: '#d5ca8d'
     solid biomass transport: '#baa741'
     solid biomass for industry: '#7a6d26'
