@@ -21,7 +21,7 @@ remote:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
   prefix: ""
-  name: "" # all 
+  name: ""
   scenarios:
     enable: false
     file: config/scenarios.yaml
@@ -720,24 +720,46 @@ sector:
     electricity distribution grid:
       efficiency_static: 0.97
   H2_network: true
-  gas_network: false 
+  gas_network: false
   H2_retrofit: false
   H2_retrofit_capacity_per_CH4: 0.6
   gas_network_connectivity_upgrade: 1
   gas_distribution_grid: true
   gas_distribution_grid_cost_factor: 1.0
-  biomass_spatial: false #there are artificial generators that have other costs - might need a second look if implemented regarding the costs
-  biomass_transport: true 
-  biogas_upgrading_cc: true
+  biomass_spatial: false
+  biomass_transport: false
+  biogas_upgrading_cc: false
   conventional_generation:
     OCGT: gas
-  biomass_to_liquid: true
-  biomass_to_liquid_cc: true
-  electrobiofuels: true
-  biosng: true #gas network and biomass spacial must both be the same
-  biosng_cc: true
-  bioH2: true
-  municipal_solid_waste: true #industry - waste to energy must be true
+    industry_t:  # heat supply industry
+    endogen: false  # if heat supply for industry should be endogenously optimised
+    must_run: 0.8 # NB: industrial heat demand is in reality supplied at site by discrete plants
+    # which follow the local demand and therefore cannot be dispatched too much.
+    # Thus, p_min_pu is set to must run to avoid too much dispatch behaviour. Improvements welcome!
+    # share of medium and high temperature for process heat based on EU27 Fig. 5 https://www.agora-industry.org/publications/direct-electrification-of-industrial-process-heat
+    # TODO: should be improved and split up by country and sector
+    share_medium: 0.42
+    share_high: 0.57
+    # Options in case of endogenous industry heat supply
+    low_T:
+      biomass: true
+      heat_pumps: true
+      electric_boiler: true
+      methane: true
+    medium_T:
+      biomass: true
+      methane: true
+      hydrogen: true
+    high_T:
+      hydrogen: true
+      methane: true
+  biomass_to_liquid: false
+  biomass_to_liquid_cc: false
+  electrobiofuels: false
+  biosng: false
+  biosng_cc: false
+  bioH2: false
+  municipal_solid_waste: false
   limit_max_growth:
     enable: false
     # allowing 30% larger than max historic growth
@@ -760,7 +782,7 @@ sector:
     var_cf: true
     sustainability_factor: 0.0025
   solid_biomass_import:
-    enable: true
+    enable: false
     price: 54 #EUR/MWh
     max_amount: 1390 # TWh
     upstream_emissions_factor: .1 #share of solid biomass CO2 emissions at full combustion
@@ -832,8 +854,8 @@ industry:
     2045: 0.16
     2050: 0.20
   HVC_environment_sequestration_fraction: 0.
-  waste_to_energy: true
-  waste_to_energy_cc: true
+  waste_to_energy: false
+  waste_to_energy_cc: false
   sector_ratios_fraction_future:
     2020: 0.0
     2025: 0.1
@@ -911,10 +933,10 @@ clustering:
       ramp_limit_down: max
   temporal:
     resolution_elec: false
-    resolution_sector: 3H
+    resolution_sector: 6H
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#adjustments
-adjustments: #this is absolutely vital for SA
+adjustments:
   electricity: false
   sector:
     factor:
@@ -1273,6 +1295,23 @@ plotting:
     low-temperature heat for industry: '#8f2727'
     process heat: '#ff0000'
     agriculture heat: '#d9a5a5'
+    lowT industry: '#8f2727'
+    lowT industry methane: '#853403'
+    lowT industry methane CC: '#692e0a'
+    lowT industry heat pump: '#2fb537'
+    lowT industry electricity: '#70af1d'
+    lowT industry solid biomass: '#baa741'
+    lowT industry solid biomass CC: '#47411c'
+    mediumT industry: '#8f2727'
+    solid biomass for mediumT industry: '#baa741'
+    solid biomass for mediumT industry CC: '#47411c'
+    gas for mediumT industry: '#853403'
+    gas for mediumT industry CC: '#692e0a'
+    hydrogen for mediumT industry: '#bf13a0'
+    highT industry: '#8f2727'
+    gas for highT industry: '#853403'
+    gas for highT industry CC: '#692e0a'
+    hydrogen for highT industry: '#bf13a0'
     # heat supply
     heat pumps: '#2fb537'
     heat pump: '#2fb537'
@@ -1285,7 +1324,7 @@ plotting:
     geothermal heat pump: '#4f2144'
     geothermal heat direct utilisation: '#ba91b1'
     ground heat pump: '#2fb537'
-    residential rural ground heat pump: '#48f74f'
+    residential rural ground heat pump: '#4f2144'
     residential rural air heat pump: '#48f74f'
     services rural ground heat pump: '#5af95d'
     Ambient: '#98eb9d'

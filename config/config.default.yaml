@@ -729,6 +729,28 @@ sector:
   biogas_upgrading_cc: false
   conventional_generation:
     OCGT: gas
+    industry_t:  # heat supply industry
+    endogen: false  # if heat supply for industry should be endogenously optimised
+    must_run: 0.8 # NB: industrial heat demand is in reality supplied at site by discrete plants
+    # which follow the local demand and therefore cannot be dispatched too much.
+    # Thus, p_min_pu is set to must run to avoid too much dispatch behaviour. Improvements welcome!
+    # share of medium and high temperature for process heat based on EU27 Fig. 5 https://www.agora-industry.org/publications/direct-electrification-of-industrial-process-heat
+    # TODO: should be improved and split up by country and sector
+    share_medium: 0.42
+    share_high: 0.57
+    # Options in case of endogenous industry heat supply
+    low_T:
+      biomass: true
+      heat_pumps: true
+      electric_boiler: true
+      methane: true
+    medium_T:
+      biomass: true
+      methane: true
+      hydrogen: true
+    high_T:
+      hydrogen: true
+      methane: true
   biomass_to_liquid: false
   biomass_to_liquid_cc: false
   electrobiofuels: false
@@ -919,6 +941,12 @@ adjustments:
       Link:
         electricity distribution grid:
           capital_cost: 1.0
+      Generator:
+        gas:
+          marginal_cost: 1.0
+      Store:
+        fuelwood_residues:
+          marginal_cost: 1.0
     absolute: false
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#solving
@@ -1195,10 +1223,12 @@ plotting:
     services rural biomass boiler: '#c6cf98'
     services urban decentral biomass boiler: '#dde5b5'
     biomass to liquid: '#32CD32'
+    biomass to liquid CC: '#228B22'
     unsustainable solid biomass: '#998622'
     unsustainable bioliquids: '#32CD32'
     electrobiofuels: 'red'
     BioSNG: '#123456'
+    BioSNG CC: '#234567'
     solid biomass to hydrogen: '#654321'
     # power transmission
     lines: '#6c9459'
@@ -1263,6 +1293,23 @@ plotting:
     low-temperature heat for industry: '#8f2727'
     process heat: '#ff0000'
     agriculture heat: '#d9a5a5'
+    lowT industry: '#8f2727'
+    lowT industry methane: '#853403'
+    lowT industry methane CC: '#692e0a'
+    lowT industry heat pump: '#2fb537'
+    lowT industry electricity: '#70af1d'
+    lowT industry solid biomass: '#baa741'
+    lowT industry solid biomass CC: '#47411c'
+    mediumT industry: '#8f2727'
+    solid biomass for mediumT industry: '#baa741'
+    solid biomass for mediumT industry CC: '#47411c'
+    gas for mediumT industry: '#853403'
+    gas for mediumT industry CC: '#692e0a'
+    hydrogen for mediumT industry: '#bf13a0'
+    highT industry: '#8f2727'
+    gas for highT industry: '#853403'
+    gas for highT industry CC: '#692e0a'
+    hydrogen for highT industry: '#bf13a0'
     # heat supply
     heat pumps: '#2fb537'
     heat pump: '#2fb537'
