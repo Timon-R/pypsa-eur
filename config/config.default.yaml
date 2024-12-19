@@ -729,7 +729,7 @@ sector:
   biogas_upgrading_cc: false
   conventional_generation:
     OCGT: gas
-    industry_t:  # heat supply industry
+  industry_t:  # heat supply industry
     endogen: false  # if heat supply for industry should be endogenously optimised
     must_run: 0.8 # NB: industrial heat demand is in reality supplied at site by discrete plants
     # which follow the local demand and therefore cannot be dispatched too much.
