@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-# SPDX-FileCopyrightText: : 2020-2024 The PyPSA-Eur Authors
+# SPDX-FileCopyrightText: Contributors to PyPSA-Eur <https://github.com/pypsa/pypsa-eur>
 #
 # SPDX-License-Identifier: MIT
 """
@@ -8,14 +7,14 @@ Build industrial energy demand per model region.
 Inputs
 ------
 
-- ``resources/industrial_energy_demand_today_elec_s{simpl}_{clusters}.csv``
+- ``resources/industrial_energy_demand_today_base_s_{clusters}.csv``
 - ``resources/industry_sector_ratios_{planning_horizons}.csv``
-- ``resources/industrial_production_elec_s{simpl}_{clusters}_{planning_horizons}.csv``
+- ``resources/industrial_production_base_s_{clusters}_{planning_horizons}.csv``
 
 Outputs
 -------
 
-- ``resources/industrial_energy_demand_elec_s{simpl}_{clusters}_{planning_horizons}.csv``
+- ``resources/industrial_energy_demand_base_s_{clusters}_{planning_horizons}.csv``
 
 Description
 -------
@@ -45,7 +44,6 @@ if __name__ == "__main__":
 
         snakemake = mock_snakemake(
             "build_industrial_energy_demand_per_node",
-            simpl="",
             clusters=48,
             planning_horizons=2030,
         )

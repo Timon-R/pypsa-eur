@@ -1,7 +1,4 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-# SPDX-FileCopyrightText: : 2017-2024 The PyPSA-Eur Authors
+# SPDX-FileCopyrightText: Contributors to PyPSA-Eur <https://github.com/pypsa/pypsa-eur>
 #
 # SPDX-License-Identifier: MIT
 """
@@ -82,7 +79,7 @@ def get_eia_annual_hydro_generation(fn, countries, capacities=False):
             countries=["Czechia", "Slovakia"], start=1980, end=1992
         ),
         "Former Serbia and Montenegro": dict(
-            countries=["Serbia", "Montenegro"], start=1992, end=2005
+            countries=["Serbia", "Montenegro", "Kosovo"], start=1992, end=2005
         ),
         "Former Yugoslavia": dict(
             countries=[
@@ -90,6 +87,7 @@ def get_eia_annual_hydro_generation(fn, countries, capacities=False):
                 "Croatia",
                 "Bosnia and Herzegovina",
                 "Serbia",
+                "Kosovo",
                 "Montenegro",
                 "North Macedonia",
             ],
@@ -111,9 +109,8 @@ def get_eia_annual_hydro_generation(fn, countries, capacities=False):
     )
 
     df.loc["Germany"] = df.filter(like="Germany", axis=0).sum()
-    df.loc["Serbia"] += df.loc["Kosovo"].fillna(0.0)
     df = df.loc[~df.index.str.contains("Former")]
-    df.drop(["Europe", "Germany, West", "Germany, East", "Kosovo"], inplace=True)
+    df.drop(["Europe", "Germany, West", "Germany, East"], inplace=True)
 
     df.index = cc.convert(df.index, to="iso2")
     df.index.name = "countries"
@@ -122,6 +119,8 @@ def get_eia_annual_hydro_generation(fn, countries, capacities=False):
     factor = 1e3 if capacities else 1e6
     df = df.T[countries] * factor
 
+    df.ffill(axis=0, inplace=True)
+
     return df
 
 
@@ -129,7 +128,7 @@ def correct_eia_stats_by_capacity(eia_stats, fn, countries, baseyear=2019):
     cap = get_eia_annual_hydro_generation(fn, countries, capacities=True)
     ratio = cap / cap.loc[baseyear]
     eia_stats_corrected = eia_stats / ratio
-    to_keep = ["AL", "AT", "CH", "DE", "GB", "NL", "RS", "RO", "SK"]
+    to_keep = ["AL", "AT", "CH", "DE", "GB", "NL", "RS", "XK", "RO", "SK"]
     to_correct = eia_stats_corrected.columns.difference(to_keep)
     eia_stats.loc[:, to_correct] = eia_stats_corrected.loc[:, to_correct]
 

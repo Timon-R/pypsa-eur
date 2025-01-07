@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-# SPDX-FileCopyrightText: : 2017-2024 The PyPSA-Eur Authors
+# SPDX-FileCopyrightText: Contributors to PyPSA-Eur <https://github.com/pypsa/pypsa-eur>
 #
 # SPDX-License-Identifier: MIT
 """
@@ -20,17 +19,17 @@ Relevant Settings
 Inputs
 ------
 
-- ``networks/elec_s{simpl}_{clusters}_ec_l{ll}_{opts}.nc``: the network whose
+- ``networks/base_s_{clusters}_elec_l{ll}_{opts}.nc``: the network whose
   snapshots are to be aggregated
-- ``resources/hourly_heat_demand_total_elec_s{simpl}_{clusters}.nc``: the total
+- ``resources/hourly_heat_demand_total_base_s_{clusters}.nc``: the total
   hourly heat demand
-- ``resources/solar_thermal_total_elec_s{simpl}_{clusters}.nc``: the total
+- ``resources/solar_thermal_total_base_s_{clusters}.nc``: the total
   hourly solar thermal generation
 
 Outputs
 -------
 
-- ``snapshot_weightings_elec_s{simpl}_{clusters}_ec_l{ll}_{opts}.csv``
+- ``snapshot_weightings_base_s_{clusters}_elec_l{ll}_{opts}.csv``
 
 Description
 -----------
@@ -39,7 +38,6 @@ file with the snapshot weightings, indexed by the new subset of snapshots. This
 rule only computes said aggregation scheme; aggregation of time-varying network
 data is done in ``prepare_sector_network.py``.
 """
-
 
 import logging
 
@@ -63,7 +61,6 @@ if __name__ == "__main__":
         snakemake = mock_snakemake(
             "time_aggregation",
             configfiles="test/config.overnight.yaml",
-            simpl="",
             opts="",
             clusters="37",
             ll="v1.0",

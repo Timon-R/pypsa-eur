@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: : 2017-2024 The PyPSA-Eur Authors
+# SPDX-FileCopyrightText: Contributors to PyPSA-Eur <https://github.com/pypsa/pypsa-eur>
 #
 # SPDX-License-Identifier: CC0-1.0
 
@@ -69,3 +69,7 @@ d1gam3xoknrgr2.cloudfront.net/
 #*.ipynb
 
 merger-todos.md
+
+*.html
+# private dev folder
+dev/*

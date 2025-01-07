@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-# SPDX-FileCopyrightText: : 2020-2024 The PyPSA-Eur Authors
+# SPDX-FileCopyrightText: Contributors to PyPSA-Eur <https://github.com/pypsa/pypsa-eur>
 #
 # SPDX-License-Identifier: MIT
 """
@@ -250,7 +249,13 @@ def industry_production_per_country(country, year, eurostat_dir, jrc_dir, snakem
     demand = pd.concat([get_sector_data(s, ct) for s in sect2sub])
 
     if country not in eu27:
-        demand *= get_energy_ratio(country, eurostat_dir, jrc_dir, year, snakemake)
+        demand *= get_energy_ratio(
+            country,
+            eurostat_dir,
+            jrc_dir,
+            year,
+            snakemake,
+        )
 
     demand.name = country
 
@@ -345,6 +350,8 @@ if __name__ == "__main__":
     demand = industry_production(countries, year, eurostat_dir, jrc_dir)
 
     separate_basic_chemicals(demand, year)
+
+    demand.fillna(0.0, inplace=True)
 
     fn = snakemake.output.industrial_production_per_country
     demand.to_csv(fn, float_format="%.2f")

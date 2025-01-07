@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-# SPDX-FileCopyrightText: : 2020 @JanFrederickUnnewehr, 2020-2024 The PyPSA-Eur Authors
+# SPDX-FileCopyrightText: Contributors to PyPSA-Eur <https://github.com/pypsa/pypsa-eur>
 #
 # SPDX-License-Identifier: MIT
 """
@@ -163,15 +162,15 @@ def manual_adjustment(load, fn_load, countries):
     electricity consumption data from Croatia (HR) for the year 2019, scaled by the
     factors derived from https://energy.at-site.be/eurostat-2021/
 
-     Parameters
-     ----------
+    Parameters
+    ----------
      load : pd.DataFrame
          Load time-series with UTC timestamps x ISO-2 countries
     load_fn: str
          File name or url location (file format .csv)
 
-     Returns
-     -------
+    Returns
+    -------
      load : pd.DataFrame
          Manual adjusted and interpolated load time-series with UTC
          timestamps x ISO-2 countries
@@ -192,9 +191,9 @@ def manual_adjustment(load, fn_load, countries):
         if "ME" in load:
             load["BA"] = load.HR * (11.0 / 16.2)
 
-    if ("KV" not in load or load.KV.isnull().values.all()) and "KV" in countries:
+    if "XK" not in load and "XK" in countries:
         if "RS" in load:
-            load["KV"] = load["RS"] * (4.8 / 27.0)
+            load["XK"] = load["RS"] * (4.8 / 27.0)
 
     copy_timeslice(load, "GR", "2015-08-11 21:00", "2015-08-15 20:00", Delta(weeks=1))
     copy_timeslice(load, "AT", "2018-12-31 22:00", "2019-01-01 22:00", Delta(days=2))
@@ -311,8 +310,8 @@ if __name__ == "__main__":
         logger.info("Supplement missing data with synthetic data.")
         fn = snakemake.input.synthetic
         synthetic_load = pd.read_csv(fn, index_col=0, parse_dates=True)
-        # "UA" does not appear in synthetic load data
-        countries = list(set(countries) - set(["UA", "MD"]))
+        # UA, MD, XK do not appear in synthetic load data
+        countries = list(set(countries) - set(["UA", "MD", "XK"]))
         synthetic_load = synthetic_load.loc[snapshots, countries]
         load = load.combine_first(synthetic_load)
 

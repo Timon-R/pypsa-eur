@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-# SPDX-FileCopyrightText: : 2020-2024 The PyPSA-Eur Authors
+# SPDX-FileCopyrightText: Contributors to PyPSA-Eur <https://github.com/pypsa/pypsa-eur>
 #
 # SPDX-License-Identifier: MIT
 """
@@ -79,12 +78,12 @@ with the following carriers are considered:
 Unit of the output file is MWh/t.
 """
 
+import numpy as np
 import pandas as pd
 from prepare_sector_network import get
 
 
 def build_industry_sector_ratios_intermediate():
-
     # in TWh/a
     demand = pd.read_csv(
         snakemake.input.industrial_energy_demand_per_country_today,
@@ -104,7 +103,7 @@ def build_industry_sector_ratios_intermediate():
         snakemake.input.industry_sector_ratios, index_col=0
     )
 
-    today_sector_ratios = demand.div(production, axis=1)
+    today_sector_ratios = demand.div(production, axis=1).replace([np.inf, -np.inf], 0)
 
     today_sector_ratios.dropna(how="all", axis=1, inplace=True)
 
@@ -149,7 +148,7 @@ if __name__ == "__main__":
             planning_horizons="2030",
         )
 
-    year = int(snakemake.wildcards.planning_horizons[-4:])
+    year = int(snakemake.wildcards.planning_horizons)
 
     params = snakemake.params.industry
 

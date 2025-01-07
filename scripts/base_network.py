@@ -1,11 +1,14 @@
-# -*- coding: utf-8 -*-
-# SPDX-FileCopyrightText: : 2017-2024 The PyPSA-Eur Authors
+# SPDX-FileCopyrightText: Contributors to PyPSA-Eur <https://github.com/pypsa/pypsa-eur>
 #
 # SPDX-License-Identifier: MIT
 
 # coding: utf-8
 """
-Creates the network topology from an `ENTSO-E map extract <https://github.com/PyPSA/GridKit/tree/master/entsoe>`_ (March 2022) as a PyPSA network.
+Creates the network topology from a `ENTSO-E map extract.
+<https://github.com/PyPSA/GridKit/tree/master/entsoe>`_ (March 2022)
+or `OpenStreetMap data <https://www.openstreetmap.org/>`_ (Aug 2024)
+as a PyPSA
+network.
 
 Relevant Settings
 -----------------
@@ -86,7 +89,7 @@ from _helpers import REGION_COLS, configure_logging, get_snapshots, set_scenario
 from packaging.version import Version, parse
 from scipy.sparse import csgraph
 from scipy.spatial import KDTree
-from shapely.geometry import LineString, Point
+from shapely.geometry import Point
 
 PD_GE_2_2 = parse(pd.__version__) >= Version("2.2")
 
@@ -95,7 +98,7 @@ logger = logging.getLogger(__name__)
 
 def _get_oid(df):
     if "tags" in df.columns:
-        return df.tags.str.extract('"oid"=>"(\d+)"', expand=False)
+        return df.tags.str.extract(r'"oid"=>"(\d+)"', expand=False)
     else:
         return pd.Series(np.nan, df.index)
 
@@ -131,45 +134,58 @@ def _find_closest_links(links, new_links, distance_upper_bound=1.5):
     )
 
 
-def _load_buses_from_eg(eg_buses, europe_shape, config_elec):
+def _load_buses(buses, europe_shape, countries, config):
     buses = (
         pd.read_csv(
-            eg_buses,
+            buses,
             quotechar="'",
             true_values=["t"],
             false_values=["f"],
             dtype=dict(bus_id="str"),
         )
         .set_index("bus_id")
-        .drop(["station_id"], axis=1)
         .rename(columns=dict(voltage="v_nom"))
     )
+
+    if "station_id" in buses.columns:
+        buses.drop("station_id", axis=1, inplace=True)
 
     buses["carrier"] = buses.pop("dc").map({True: "DC", False: "AC"})
     buses["under_construction"] = buses.under_construction.where(
         lambda s: s.notnull(), False
     ).astype(bool)
-
-    # remove all buses outside of all countries including exclusive economic zones (offshore)
     europe_shape = gpd.read_file(europe_shape).loc[0, "geometry"]
     europe_shape_prepped = shapely.prepared.prep(europe_shape)
     buses_in_europe_b = buses[["x", "y"]].apply(
         lambda p: europe_shape_prepped.contains(Point(p)), axis=1
     )
 
+    buses_in_countries_b = (
+        buses.country.isin(countries)
+        if "country" in buses
+        else pd.Series(True, buses.index)
+    )
+
+    v_nom_min = min(config["electricity"]["voltages"])
+    v_nom_max = max(config["electricity"]["voltages"])
+
     buses_with_v_nom_to_keep_b = (
-        buses.v_nom.isin(config_elec["voltages"]) | buses.v_nom.isnull()
+        (v_nom_min <= buses.v_nom) & (buses.v_nom <= v_nom_max)
+        | (buses.v_nom.isnull())
+        | (
+            buses.carrier == "DC"
+        )  # Keeping all DC buses from the input dataset independent of voltage (e.g. 150 kV connections)
     )
-    logger.info(
-        f'Removing buses with voltages {pd.Index(buses.v_nom.unique()).dropna().difference(config_elec["voltages"])}'
+
+    logger.info(f"Removing buses outside of range AC {v_nom_min} - {v_nom_max} V")
+    return pd.DataFrame(
+        buses.loc[buses_in_europe_b & buses_in_countries_b & buses_with_v_nom_to_keep_b]
     )
 
-    return pd.DataFrame(buses.loc[buses_in_europe_b & buses_with_v_nom_to_keep_b])
 
-
-def _load_transformers_from_eg(buses, eg_transformers):
+def _load_transformers(buses, transformers):
     transformers = pd.read_csv(
-        eg_transformers,
+        transformers,
         quotechar="'",
         true_values=["t"],
         false_values=["f"],
@@ -181,9 +197,9 @@ def _load_transformers_from_eg(buses, eg_transformers):
     return transformers
 
 
-def _load_converters_from_eg(buses, eg_converters):
+def _load_converters_from_eg(buses, converters):
     converters = pd.read_csv(
-        eg_converters,
+        converters,
         quotechar="'",
         true_values=["t"],
         false_values=["f"],
@@ -197,9 +213,25 @@ def _load_converters_from_eg(buses, eg_converters):
     return converters
 
 
-def _load_links_from_eg(buses, eg_links):
+def _load_converters_from_osm(buses, converters):
+    converters = pd.read_csv(
+        converters,
+        quotechar="'",
+        true_values=["t"],
+        false_values=["f"],
+        dtype=dict(converter_id="str", bus0="str", bus1="str"),
+    ).set_index("converter_id")
+
+    converters = _remove_dangling_branches(converters, buses)
+
+    converters["carrier"] = ""
+
+    return converters
+
+
+def _load_links_from_eg(buses, links):
     links = pd.read_csv(
-        eg_links,
+        links,
         quotechar="'",
         true_values=["t"],
         false_values=["f"],
@@ -208,7 +240,7 @@ def _load_links_from_eg(buses, eg_links):
 
     links["length"] /= 1e3
 
-    # Skagerrak Link is connected to 132kV bus which is removed in _load_buses_from_eg.
+    # Skagerrak Link is connected to 132kV bus which is removed in _load_buses.
     # Connect to neighboring 380kV bus
     links.loc[links.bus1 == "6396", "bus1"] = "6398"
 
@@ -220,10 +252,35 @@ def _load_links_from_eg(buses, eg_links):
     return links
 
 
-def _load_lines_from_eg(buses, eg_lines):
+def _load_links_from_osm(buses, links):
+    links = pd.read_csv(
+        links,
+        quotechar="'",
+        true_values=["t"],
+        false_values=["f"],
+        dtype=dict(
+            link_id="str",
+            bus0="str",
+            bus1="str",
+            voltage="int",
+            p_nom="float",
+        ),
+    ).set_index("link_id")
+
+    links["length"] /= 1e3
+
+    links = _remove_dangling_branches(links, buses)
+
+    # Add DC line parameters
+    links["carrier"] = "DC"
+
+    return links
+
+
+def _load_lines(buses, lines):
     lines = (
         pd.read_csv(
-            eg_lines,
+            lines,
             quotechar="'",
             true_values=["t"],
             false_values=["f"],
@@ -240,6 +297,7 @@ def _load_lines_from_eg(buses, eg_lines):
     )
 
     lines["length"] /= 1e3
+
     lines["carrier"] = "AC"
     lines = _remove_dangling_branches(lines, buses)
 
@@ -290,7 +348,7 @@ def _reconnect_crimea(lines):
     return pd.concat([lines, lines_to_crimea])
 
 
-def _set_electrical_parameters_lines(lines, config):
+def _set_electrical_parameters_lines_eg(lines, config):
     v_noms = config["electricity"]["voltages"]
     linetypes = config["lines"]["types"]
 
@@ -302,16 +360,36 @@ def _set_electrical_parameters_lines(lines, config):
     return lines
 
 
+def _set_electrical_parameters_lines_osm(lines, config):
+    if lines.empty:
+        lines["type"] = []
+        return lines
+
+    v_noms = config["electricity"]["voltages"]
+    linetypes = _get_linetypes_config(config["lines"]["types"], v_noms)
+
+    lines["carrier"] = "AC"
+    lines["dc"] = False
+
+    lines.loc[:, "type"] = lines.v_nom.apply(
+        lambda x: _get_linetype_by_voltage(x, linetypes)
+    )
+
+    lines["s_max_pu"] = config["lines"]["s_max_pu"]
+
+    return lines
+
+
 def _set_lines_s_nom_from_linetypes(n):
     n.lines["s_nom"] = (
         np.sqrt(3)
         * n.lines["type"].map(n.line_types.i_nom)
         * n.lines["v_nom"]
-        * n.lines.num_parallel
+        * n.lines["num_parallel"]
     )
 
 
-def _set_electrical_parameters_links(links, config, links_p_nom):
+def _set_electrical_parameters_links_eg(links, config, links_p_nom):
     if links.empty:
         return links
 
@@ -343,12 +421,27 @@ def _set_electrical_parameters_links(links, config, links_p_nom):
     return links
 
 
+def _set_electrical_parameters_links_osm(links, config):
+    if links.empty:
+        return links
+
+    p_max_pu = config["links"].get("p_max_pu", 1.0)
+    links["p_max_pu"] = p_max_pu
+    links["p_min_pu"] = -p_max_pu
+    links["carrier"] = "DC"
+    links["dc"] = True
+
+    return links
+
+
 def _set_electrical_parameters_converters(converters, config):
     p_max_pu = config["links"].get("p_max_pu", 1.0)
     converters["p_max_pu"] = p_max_pu
     converters["p_min_pu"] = -p_max_pu
 
-    converters["p_nom"] = 2000
+    # if column "p_nom" does not exist, set to 2000
+    if "p_nom" not in converters:
+        converters["p_nom"] = 2000
 
     # Converters are combined with links
     converters["under_construction"] = False
@@ -362,7 +455,8 @@ def _set_electrical_parameters_transformers(transformers, config):
 
     ## Add transformer parameters
     transformers["x"] = config.get("x", 0.1)
-    transformers["s_nom"] = config.get("s_nom", 2000)
+    if "s_nom" not in transformers:
+        transformers["s_nom"] = config.get("s_nom", 2000)
     transformers["type"] = config.get("type", "")
 
     return transformers
@@ -463,7 +557,7 @@ def _set_countries_and_substations(n, config, country_shapes, offshore_shapes):
     buses["substation_lv"] = (
         lv_b & onshore_b & (~buses["under_construction"]) & has_connections_b
     )
-    buses["substation_off"] = ((hv_b & offshore_b) | (hv_b & onshore_b)) & (
+    buses["substation_off"] = (offshore_b | (hv_b & onshore_b)) & (
         ~buses["under_construction"]
     )
 
@@ -495,15 +589,13 @@ def _set_countries_and_substations(n, config, country_shapes, offshore_shapes):
             )
             assert (
                 not df.empty
-            ), "No buses with defined country within 200km of bus `{}`".format(b)
+            ), f"No buses with defined country within 200km of bus `{b}`"
             n.buses.at[b, "country"] = df.loc[df.pathlength.idxmin(), "country"]
 
         logger.warning(
-            "{} buses are not in any country or offshore shape,"
-            " {} have been assigned from the tag of the entsoe map,"
-            " the rest from the next bus in terms of pathlength.".format(
-                c_nan_b.sum(), c_nan_b.sum() - c_tag_nan_b.sum()
-            )
+            f"{c_nan_b.sum()} buses are not in any country or offshore shape,"
+            f" {c_nan_b.sum() - c_tag_nan_b.sum()} have been assigned from the tag of the entsoe map,"
+            " the rest from the next bus in terms of pathlength."
         )
 
     return buses
@@ -533,9 +625,7 @@ def _replace_b2b_converter_at_country_border_by_link(n):
             comp, line = next(iter(G[b0][b1]))
             if comp != "Line":
                 logger.warning(
-                    "Unable to replace B2B `{}` expected a Line, but found a {}".format(
-                        i, comp
-                    )
+                    f"Unable to replace B2B `{i}` expected a Line, but found a {comp}"
                 )
                 continue
 
@@ -551,9 +641,7 @@ def _replace_b2b_converter_at_country_border_by_link(n):
             n.remove("Bus", b0)
 
             logger.info(
-                "Replacing B2B converter `{}` together with bus `{}` and line `{}` by an HVDC tie-line {}-{}".format(
-                    i, b0, line, linkcntry.at[i], buscntry.at[b1]
-                )
+                f"Replacing B2B converter `{i}` together with bus `{b0}` and line `{line}` by an HVDC tie-line {linkcntry.at[i]}-{buscntry.at[b1]}"
             )
 
 
@@ -577,7 +665,7 @@ def _adjust_capacities_of_under_construction_branches(n, config):
         n.lines.loc[n.lines.under_construction, "num_parallel"] = 0.0
         n.lines.loc[n.lines.under_construction, "s_nom"] = 0.0
     elif lines_mode == "remove":
-        n.mremove("Line", n.lines.index[n.lines.under_construction])
+        n.remove("Line", n.lines.index[n.lines.under_construction])
     elif lines_mode != "keep":
         logger.warning(
             "Unrecognized configuration for `lines: under_construction` = `{}`. Keeping under construction lines."
@@ -587,7 +675,7 @@ def _adjust_capacities_of_under_construction_branches(n, config):
     if links_mode == "zero":
         n.links.loc[n.links.under_construction, "p_nom"] = 0.0
     elif links_mode == "remove":
-        n.mremove("Link", n.links.index[n.links.under_construction])
+        n.remove("Link", n.links.index[n.links.under_construction])
     elif links_mode != "keep":
         logger.warning(
             "Unrecognized configuration for `links: under_construction` = `{}`. Keeping under construction links."
@@ -607,7 +695,7 @@ def _set_shapes(n, country_shapes, offshore_shapes):
     offshore_shapes = gpd.read_file(offshore_shapes).rename(columns={"name": "idx"})
     offshore_shapes["type"] = "offshore"
     all_shapes = pd.concat([country_shapes, offshore_shapes], ignore_index=True)
-    n.madd(
+    n.add(
         "Shape",
         all_shapes.index,
         geometry=all_shapes.geometry,
@@ -617,51 +705,94 @@ def _set_shapes(n, country_shapes, offshore_shapes):
 
 
 def base_network(
-    eg_buses,
-    eg_converters,
-    eg_transformers,
-    eg_lines,
-    eg_links,
+    buses,
+    converters,
+    transformers,
+    lines,
+    links,
     links_p_nom,
     europe_shape,
     country_shapes,
     offshore_shapes,
+    countries,
     parameter_corrections,
     config,
 ):
-    buses = _load_buses_from_eg(eg_buses, europe_shape, config["electricity"])
+    base_network = config["electricity"].get("base_network")
+    osm_prebuilt_version = config["electricity"].get("osm-prebuilt-version")
+    assert (
+        base_network
+        in {
+            "entsoegridkit",
+            "osm-raw",
+            "osm-prebuilt",
+        }
+    ), f"base_network must be either 'entsoegridkit', 'osm-raw' or 'osm-prebuilt', but got '{base_network}'"
+    if base_network == "entsoegridkit":
+        warnings.warn(
+            "The 'entsoegridkit' base network is deprecated and will be removed in future versions. Please use 'osm-raw' or 'osm-prebuilt' instead.",
+            DeprecationWarning,
+        )
 
-    links = _load_links_from_eg(buses, eg_links)
+    logger_str = (
+        f"Creating base network using {base_network}"
+        + (f" v{osm_prebuilt_version}" if base_network == "osm-prebuilt" else "")
+        + "."
+    )
+    logger.info(logger_str)
 
-    converters = _load_converters_from_eg(buses, eg_converters)
+    buses = _load_buses(buses, europe_shape, countries, config)
+    transformers = _load_transformers(buses, transformers)
+    lines = _load_lines(buses, lines)
 
-    lines = _load_lines_from_eg(buses, eg_lines)
-    transformers = _load_transformers_from_eg(buses, eg_transformers)
+    if base_network == "entsoegridkit":
+        links = _load_links_from_eg(buses, links)
+        converters = _load_converters_from_eg(buses, converters)
 
-    if config["lines"].get("reconnect_crimea", True) and "UA" in config["countries"]:
-        lines = _reconnect_crimea(lines)
+        # Optionally reconnect Crimea
+        if (config["lines"].get("reconnect_crimea", True)) & (
+            "UA" in config["countries"]
+        ):
+            lines = _reconnect_crimea(lines)
 
-    lines = _set_electrical_parameters_lines(lines, config)
+        # Set electrical parameters of lines and links
+        lines = _set_electrical_parameters_lines_eg(lines, config)
+        links = _set_electrical_parameters_links_eg(links, config, links_p_nom)
+    elif base_network in {"osm-prebuilt", "osm-raw"}:
+        links = _load_links_from_osm(buses, links)
+        converters = _load_converters_from_osm(buses, converters)
+
+        # Set electrical parameters of lines and links
+        lines = _set_electrical_parameters_lines_osm(lines, config)
+        links = _set_electrical_parameters_links_osm(links, config)
+    else:
+        raise ValueError(
+            "base_network must be either 'entsoegridkit', 'osm-raw', or 'osm-prebuilt'"
+        )
+
+    # Set electrical parameters of transformers and converters
     transformers = _set_electrical_parameters_transformers(transformers, config)
-    links = _set_electrical_parameters_links(links, config, links_p_nom)
     converters = _set_electrical_parameters_converters(converters, config)
 
     n = pypsa.Network()
-    n.name = "PyPSA-Eur"
+    n.name = (
+        f"PyPSA-Eur ({base_network}"
+        + (f" v{osm_prebuilt_version}" if base_network == "osm-prebuilt" else "")
+        + ")"
+    )
 
     time = get_snapshots(snakemake.params.snapshots, snakemake.params.drop_leap_day)
     n.set_snapshots(time)
-    n.madd("Carrier", ["AC", "DC"])
 
-    n.import_components_from_dataframe(buses, "Bus")
-    n.import_components_from_dataframe(lines, "Line")
-    n.import_components_from_dataframe(transformers, "Transformer")
-    n.import_components_from_dataframe(links, "Link")
-    n.import_components_from_dataframe(converters, "Link")
+    n.add("Bus", buses.index, **buses)
+    n.add("Line", lines.index, **lines)
+    n.add("Transformer", transformers.index, **transformers)
+    n.add("Link", links.index, **links)
+    n.add("Link", converters.index, **converters)
 
     _set_lines_s_nom_from_linetypes(n)
-
-    _apply_parameter_corrections(n, parameter_corrections)
+    if config["electricity"].get("base_network") == "entsoegridkit":
+        _apply_parameter_corrections(n, parameter_corrections)
 
     n = _remove_unconnected_components(n)
 
@@ -675,7 +806,62 @@ def base_network(
 
     _set_shapes(n, country_shapes, offshore_shapes)
 
+    # Add carriers if they are present in buses.carriers
+    carriers_in_buses = set(n.buses.carrier.dropna().unique())
+    carriers = carriers_in_buses.intersection({"AC", "DC"})
+
+    if carriers:
+        n.add("Carrier", carriers)
+
     return n
+
+
+def _get_linetypes_config(line_types, voltages):
+    """
+    Return the dictionary of linetypes for selected voltages. The dictionary is
+    a subset of the dictionary line_types, whose keys match the selected
+    voltages.
+
+    Parameters
+    ----------
+    line_types : dict
+        Dictionary of linetypes: keys are nominal voltages and values are linetypes.
+    voltages : list
+        List of selected voltages.
+
+    Returns
+    -------
+        Dictionary of linetypes for selected voltages.
+    """
+    # get voltages value that are not available in the line types
+    vnoms_diff = set(voltages).symmetric_difference(set(line_types.keys()))
+    if vnoms_diff:
+        logger.warning(
+            f"Voltages {vnoms_diff} not in the {line_types} or {voltages} list."
+        )
+    return {k: v for k, v in line_types.items() if k in voltages}
+
+
+def _get_linetype_by_voltage(v_nom, d_linetypes):
+    """
+    Return the linetype of a specific line based on its voltage v_nom.
+
+    Parameters
+    ----------
+    v_nom : float
+        The voltage of the line.
+    d_linetypes : dict
+        Dictionary of linetypes: keys are nominal voltages and values are linetypes.
+
+    Returns
+    -------
+        The linetype of the line whose nominal voltage is closest to the line voltage.
+    """
+    v_nom_min, line_type_min = min(
+        d_linetypes.items(),
+        key=lambda x: abs(x[0] - v_nom),
+    )
+    return line_type_min
 
 
 def voronoi(points, outline, crs=4326):
@@ -762,20 +948,22 @@ def append_bus_shapes(n, shapes, type):
     Append shapes to the network. If shapes with the same component and type
     already exist, they will be removed.
 
-    Parameters:
+    Parameters
+    ----------
         n (pypsa.Network): The network to which the shapes will be appended.
         shapes (geopandas.GeoDataFrame): The shapes to be appended.
-        **kwargs: Additional keyword arguments used in `n.madd`.
+        **kwargs: Additional keyword arguments used in `n.add`.
 
-    Returns:
+    Returns
+    -------
         None
     """
     remove = n.shapes.query("component == 'Bus' and type == @type").index
-    n.mremove("Shape", remove)
+    n.remove("Shape", remove)
 
     offset = n.shapes.index.astype(int).max() + 1 if not n.shapes.empty else 0
     shapes = shapes.rename(lambda x: int(x) + offset)
-    n.madd(
+    n.add(
         "Shape",
         shapes.index,
         geometry=shapes.geometry,
@@ -793,34 +981,57 @@ if __name__ == "__main__":
     configure_logging(snakemake)
     set_scenario_config(snakemake)
 
+    countries = snakemake.params.countries
+
+    buses = snakemake.input.buses
+    converters = snakemake.input.converters
+    transformers = snakemake.input.transformers
+    lines = snakemake.input.lines
+    links = snakemake.input.links
+    europe_shape = snakemake.input.europe_shape
+    country_shapes = snakemake.input.country_shapes
+    offshore_shapes = snakemake.input.offshore_shapes
+    config = snakemake.config
+
+    if "links_p_nom" in snakemake.input.keys():
+        links_p_nom = snakemake.input.links_p_nom
+    else:
+        links_p_nom = None
+
+    if "parameter_corrections" in snakemake.input.keys():
+        parameter_corrections = snakemake.input.parameter_corrections
+    else:
+        parameter_corrections = None
+
     n = base_network(
-        snakemake.input.eg_buses,
-        snakemake.input.eg_converters,
-        snakemake.input.eg_transformers,
-        snakemake.input.eg_lines,
-        snakemake.input.eg_links,
-        snakemake.input.links_p_nom,
-        snakemake.input.europe_shape,
-        snakemake.input.country_shapes,
-        snakemake.input.offshore_shapes,
-        snakemake.input.parameter_corrections,
-        snakemake.config,
+        buses,
+        converters,
+        transformers,
+        lines,
+        links,
+        links_p_nom,
+        europe_shape,
+        country_shapes,
+        offshore_shapes,
+        countries,
+        parameter_corrections,
+        config,
     )
 
     onshore_regions, offshore_regions, shapes, offshore_shapes = build_bus_shapes(
         n,
-        snakemake.input.country_shapes,
-        snakemake.input.offshore_shapes,
-        snakemake.params.countries,
+        country_shapes,
+        offshore_shapes,
+        countries,
     )
 
     shapes.to_file(snakemake.output.regions_onshore)
-    append_bus_shapes(n, shapes, "onshore")
+    # append_bus_shapes(n, shapes, "onshore")
 
     if offshore_regions:
         shapes = pd.concat(offshore_regions, ignore_index=True)
         shapes.to_file(snakemake.output.regions_offshore)
-        append_bus_shapes(n, shapes, "offshore")
+        # append_bus_shapes(n, shapes, "offshore")
     else:
         offshore_shapes.to_frame().to_file(snakemake.output.regions_offshore)
 

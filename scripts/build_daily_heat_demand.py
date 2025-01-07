@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-# SPDX-FileCopyrightText: : 2020-2024 The PyPSA-Eur Authors
+# SPDX-FileCopyrightText: Contributors to PyPSA-Eur <https://github.com/pypsa/pypsa-eur>
 #
 # SPDX-License-Identifier: MIT
 """
@@ -27,13 +26,13 @@ Inputs
 ------
 
 - ``resources/<run_name>/pop_layout_<scope>.nc``: Population layout (spatial population distribution).
-- ``resources/<run_name>/regions_onshore_elec_s<simpl>_<clusters>.geojson``: Onshore region shapes.
+- ``resources/<run_name>/regions_onshore_base_s<simpl>_<clusters>.geojson``: Onshore region shapes.
 - ``cutout``: Weather data cutout, as specified in config
 
 Outputs
 -------
 
-- ``resources/daily_heat_demand_<scope>_elec_s<simpl>_<clusters>.nc``:
+- ``resources/daily_heat_demand_<scope>_base_s<simpl>_<clusters>.nc``:
 
 Relevant settings
 -----------------
@@ -58,7 +57,6 @@ if __name__ == "__main__":
         snakemake = mock_snakemake(
             "build_daily_heat_demands",
             scope="total",
-            simpl="",
             clusters=48,
         )
     set_scenario_config(snakemake)

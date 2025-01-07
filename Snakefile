@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: : 2017-2024 The PyPSA-Eur Authors
+# SPDX-FileCopyrightText: Contributors to PyPSA-Eur <https://github.com/pypsa/pypsa-eur>
 #
 # SPDX-License-Identifier: MIT
 
@@ -42,7 +42,6 @@ localrules:
 
 
 wildcard_constraints:
-    simpl="[a-zA-Z0-9]*",
     clusters="[0-9]+(m|c)?|all",
     ll=r"(v|c)([0-9\.]+|opt)",
     opts=r"[-+a-zA-Z0-9\.]*",
@@ -57,6 +56,7 @@ include: "rules/build_sector.smk"
 include: "rules/solve_electricity.smk"
 include: "rules/postprocess.smk"
 include: "rules/validate.smk"
+include: "rules/development.smk"
 
 
 if config["foresight"] == "overnight":
@@ -140,4 +140,16 @@ rule sync:
         rsync -uvarh --no-g {params.cluster}/resources . || echo "No resources directory, skipping rsync"
         rsync -uvarh --no-g {params.cluster}/results . || echo "No results directory, skipping rsync"
         rsync -uvarh --no-g {params.cluster}/logs . || echo "No logs directory, skipping rsync"
+        """
+
+
+rule sync_dry:
+    params:
+        cluster=f"{config['remote']['ssh']}:{config['remote']['path']}",
+    shell:
+        """
+        rsync -uvarh --ignore-missing-args --files-from=.sync-send . {params.cluster} -n
+        rsync -uvarh --no-g {params.cluster}/resources . -n || echo "No resources directory, skipping rsync"
+        rsync -uvarh --no-g {params.cluster}/results . -n || echo "No results directory, skipping rsync"
+        rsync -uvarh --no-g {params.cluster}/logs . -n || echo "No logs directory, skipping rsync"
         """

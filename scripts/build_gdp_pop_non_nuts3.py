@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-# SPDX-FileCopyrightText: : 2017-2024 The PyPSA-Eur Authors
+# SPDX-FileCopyrightText: Contributors to PyPSA-Eur <https://github.com/pypsa/pypsa-eur>
 #
 # SPDX-License-Identifier: MIT
 """
@@ -29,7 +28,8 @@ def calc_gdp_pop(country, regions, gdp_non_nuts3, pop_non_nuts3):
     """
     Calculate the GDP p.c. and population values for non NUTS3 regions.
 
-    Parameters:
+    Parameters
+    ----------
     country (str): The two-letter country code of the non-NUTS3 region.
     regions (GeoDataFrame): A GeoDataFrame containing the regions.
     gdp_non_nuts3 (str): The file path to the dataset containing the GDP p.c values
@@ -37,16 +37,13 @@ def calc_gdp_pop(country, regions, gdp_non_nuts3, pop_non_nuts3):
     pop_non_nuts3 (str): The file path to the dataset containing the POP values
     for non NUTS3 countries (e.g. MD, UA)
 
-    Returns:
+    Returns
+    -------
     tuple: A tuple containing two GeoDataFrames:
         - gdp: A GeoDataFrame with the mean GDP p.c. values mapped to each bus.
         - pop: A GeoDataFrame with the summed POP values mapped to each bus.
     """
-    regions = (
-        regions.rename(columns={"name": "Bus"})
-        .drop(columns=["x", "y"])
-        .set_index("Bus")
-    )
+    regions = regions.rename(columns={"name": "Bus"}).set_index("Bus")
     regions = regions[regions.country == country]
     # Create a bounding box for UA, MD from region shape, including a buffer of 10000 metres
     bounding_box = (
@@ -127,7 +124,9 @@ if __name__ == "__main__":
     if "snakemake" not in globals():
         from _helpers import mock_snakemake
 
-        snakemake = mock_snakemake("build_gdp_pop_non_nuts3")
+        snakemake = mock_snakemake(
+            "build_gdp_pop_non_nuts3", configfiles=["config/config.osm-raw.yaml"]
+        )
     configure_logging(snakemake)
     set_scenario_config(snakemake)
 
@@ -150,4 +149,4 @@ if __name__ == "__main__":
     logger.info(
         f"Exporting GDP and POP values for non-NUTS3 regions {snakemake.output}"
     )
-    gdp_pop.reset_index().to_file(snakemake.output, driver="GeoJSON")
+    gdp_pop.reset_index().to_file(snakemake.output[0], driver="GeoJSON")

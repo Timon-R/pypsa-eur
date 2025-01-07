@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-# SPDX-FileCopyrightText: : 2020-2024 The PyPSA-Eur Authors
+# SPDX-FileCopyrightText: Contributors to PyPSA-Eur <https://github.com/pypsa/pypsa-eur>
 #
 # SPDX-License-Identifier: MIT
 """
@@ -26,13 +25,13 @@ Inputs
 ------
 
 - ``resources/<run_name/pop_layout_<scope>.nc``:
-- ``resources/<run_name/regions_onshore_elec_s<simpl>_<clusters>.geojson``:
+- ``resources/<run_name/regions_onshore_base_s<simpl>_<clusters>.geojson``:
 - ``cutout``: Weather data cutout, as specified in config
 
 Outputs
 -------
 
-- ``resources/solar_thermal_<scope>_elec_s<simpl>_<clusters>.nc``:
+- ``resources/solar_thermal_<scope>_base_s<simpl>_<clusters>.nc``:
 """
 
 import atlite
@@ -46,11 +45,7 @@ if __name__ == "__main__":
     if "snakemake" not in globals():
         from _helpers import mock_snakemake
 
-        snakemake = mock_snakemake(
-            "build_solar_thermal_profiles",
-            simpl="",
-            clusters=48,
-        )
+        snakemake = mock_snakemake("build_solar_thermal_profiles", clusters=48)
     set_scenario_config(snakemake)
 
     nprocesses = int(snakemake.threads)
@@ -84,7 +79,7 @@ if __name__ == "__main__":
         matrix=M_tilde.T,
         index=clustered_regions.index,
         dask_kwargs=dict(scheduler=client),
-        show_progress=False
+        show_progress=False,
     )
 
     solar_thermal.to_netcdf(snakemake.output.solar_thermal)

@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-# SPDX-FileCopyrightText: : 2020-2024 The PyPSA-Eur Authors
+# SPDX-FileCopyrightText: Contributors to PyPSA-Eur <https://github.com/pypsa/pypsa-eur>
 #
 # SPDX-License-Identifier: MIT
 """
@@ -14,11 +13,11 @@ Inputs:
 - Existing heating generators: `data/existing_heating_raw.csv` per country
 - Population layout: `resources/{run_name}/pop_layout_s<simpl>_<clusters>.csv`. Output of `scripts/build_clustered_population_layout.py`
 - Population layout with energy demands: `resources/<run_name>/pop_weighted_energy_totals_s<simpl>_<clusters>.csv`
-- District heating share: `resources/<run_name>/district_heat_share_elec_s<simpl>_<clusters>_<planning_horizons>.csv`
+- District heating share: `resources/<run_name>/district_heat_share_base_s<simpl>_<clusters>_<planning_horizons>.csv`
 
 Outputs:
 --------
-- Existing heat generation capacities distributed to nodes: `resources/{run_name}/existing_heating_distribution_elec_s{simpl}_{clusters}_{planning_horizons}.csv`
+- Existing heat generation capacities distributed to nodes: `resources/{run_name}/existing_heating_distribution_base_s_{clusters}_{planning_horizons}.csv`
 
 Relevant settings:
 ------------------
@@ -28,16 +27,17 @@ Relevant settings:
     sector:
     existing_capacities:
 
-Notes:
-------
+Notes
+-----
 - Data for Albania, Montenegro and Macedonia is not included in input database and assumed 0.
 - Coal and oil boilers are assimilated to oil boilers.
 - All ground-source heat pumps are assumed in rural areas and all air-source heat pumps are assumed to be in urban areas.
 
-References:
------------
+References
+----------
 - "Mapping and analyses of the current and future (2020 - 2030) heating/cooling fuel deployment (fossil/renewables)" (https://energy.ec.europa.eu/publications/mapping-and-analyses-current-and-future-2020-2030-heatingcooling-fuel-deployment-fossilrenewables-1_en)
 """
+
 import country_converter as coco
 import numpy as np
 import pandas as pd
@@ -138,9 +138,9 @@ def build_existing_heating():
         )
         nodal_heat_name_tech[(f"{sector} urban decentral", "ground heat pump")] = 0.0
 
-        nodal_heat_name_tech[
-            (f"{sector} urban decentral", "air heat pump")
-        ] += nodal_heat_name_tech[(f"{sector} rural", "air heat pump")]
+        nodal_heat_name_tech[(f"{sector} urban decentral", "air heat pump")] += (
+            nodal_heat_name_tech[(f"{sector} rural", "air heat pump")]
+        )
         nodal_heat_name_tech[(f"{sector} rural", "air heat pump")] = 0.0
 
     nodal_heat_name_tech[("urban central", "ground heat pump")] = 0.0
@@ -154,7 +154,6 @@ if __name__ == "__main__":
 
         snakemake = mock_snakemake(
             "build_existing_heating_distribution",
-            simpl="",
             clusters=48,
             planning_horizons=2050,
         )

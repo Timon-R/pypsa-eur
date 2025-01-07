@@ -1,10 +1,9 @@
-# -*- coding: utf-8 -*-
-# SPDX-FileCopyrightText: : 2020-2024 The PyPSA-Eur Authors
+# SPDX-FileCopyrightText: Contributors to PyPSA-Eur <https://github.com/pypsa/pypsa-eur>
 #
 # SPDX-License-Identifier: MIT
 """
 Approximate heat pump coefficient-of-performance (COP) profiles for different
-heat sources and systems.
+heat sources and systems. Returns zero where source temperature higher than sink temperature.
 
 For central heating, this is based on Jensen et al. (2018) (c.f. `CentralHeatingCopApproximator <CentralHeatingCopApproximator.py>`_) and for decentral heating, the approximation is based on Staffell et al. (2012) (c.f. `DecentralHeatingCopApproximator <DecentralHeatingCopApproximator.py>`_).
 
@@ -27,11 +26,8 @@ Relevant Settings
                 urban central:
                 urban decentral:
                 rural:
-    snapshots:
-
 Inputs
 ------
-- `resources/<run_name>/regions_onshore.geojson`: Onshore regions
 - `resources/<run_name>/temp_soil_total`: Ground temperature
 - `resources/<run_name>/temp_air_total`: Air temperature
 
@@ -40,10 +36,6 @@ Outputs
 - `resources/<run_name>/cop_profiles.nc`: Heat pump coefficient-of-performance (COP) profiles
 """
 
-import sys
-
-import geopandas as gpd
-import numpy as np
 import pandas as pd
 import xarray as xr
 from _helpers import set_scenario_config
@@ -51,47 +43,6 @@ from CentralHeatingCopApproximator import CentralHeatingCopApproximator
 from DecentralHeatingCopApproximator import DecentralHeatingCopApproximator
 
 from scripts.definitions.heat_system_type import HeatSystemType
-
-
-def map_temperature_dict_to_onshore_regions(
-    supply_temperature_by_country: dict,
-    regions_onshore: pd.Index,
-    snapshots: pd.DatetimeIndex,
-) -> xr.DataArray:
-    """
-    Map dictionary of temperatures to onshore regions.
-
-    Parameters:
-    ----------
-    supply_temperature_by_country : dictionary
-        Dictionary with temperatures as values and country keys as keys. One key must be named "default"
-    regions_onshore : pd.Index
-        Names of onshore regions
-    snapshots : pd.DatetimeIndex
-        Time stamps
-
-    Returns:
-    -------
-    xr.DataArray
-        The dictionary values mapped to onshore regions with onshore regions as coordinates.
-    """
-    return xr.DataArray(
-        [
-            [
-                (
-                    supply_temperature_by_country[get_country_from_node_name(node_name)]
-                    if get_country_from_node_name(node_name)
-                    in supply_temperature_by_country.keys()
-                    else supply_temperature_by_country["default"]
-                )
-                for node_name in regions_onshore.values
-            ]
-            # pass both nodes and snapshots as dimensions to preserve correct data structure
-            for _ in snapshots
-        ],
-        dims=["time", "name"],
-        coords={"time": snapshots, "name": regions_onshore},
-    )
 
 
 def get_cop(
@@ -135,52 +86,51 @@ def get_cop(
         ).approximate_cop()
 
 
-def get_country_from_node_name(node_name: str) -> str:
-    return node_name[:2]
-
-
 if __name__ == "__main__":
     if "snakemake" not in globals():
         from _helpers import mock_snakemake
 
         snakemake = mock_snakemake(
             "build_cop_profiles",
-            simpl="",
             clusters=48,
         )
 
     set_scenario_config(snakemake)
 
-    # map forward and return temperatures specified on country-level to onshore regions
-    regions_onshore = gpd.read_file(snakemake.input.regions_onshore)["name"]
-    snapshots = pd.date_range(freq="h", **snakemake.params.snapshots)
-    forward_temperature_central_heating_by_node_and_time: xr.DataArray = (
-        map_temperature_dict_to_onshore_regions(
-            supply_temperature_by_country=snakemake.params.forward_temperature_central_heating,
-            regions_onshore=regions_onshore,
-            snapshots=snapshots,
-        )
+    central_heating_forward_temperature: xr.DataArray = xr.open_dataarray(
+        snakemake.input.central_heating_forward_temperature_profiles
     )
-    return_temperature_central_heating_by_node_and_time: xr.DataArray = (
-        map_temperature_dict_to_onshore_regions(
-            supply_temperature_by_country=snakemake.params.return_temperature_central_heating,
-            regions_onshore=regions_onshore,
-            snapshots=snapshots,
-        )
+    central_heating_return_temperature: xr.DataArray = xr.open_dataarray(
+        snakemake.input.central_heating_return_temperature_profiles
     )
+
     cop_all_system_types = []
     for heat_system_type, heat_sources in snakemake.params.heat_pump_sources.items():
         cop_this_system_type = []
         for heat_source in heat_sources:
-            source_inlet_temperature_celsius = xr.open_dataarray(
-                snakemake.input[f"temp_{heat_source.replace('ground', 'soil')}_total"]
-            )
+            if heat_source in ["ground", "air"]:
+                source_inlet_temperature_celsius = xr.open_dataarray(
+                    snakemake.input[
+                        f"temp_{heat_source.replace('ground', 'soil')}_total"
+                    ]
+                )
+            elif heat_source in snakemake.params.heat_utilisation_potentials.keys():
+                source_inlet_temperature_celsius = (
+                    snakemake.params.heat_utilisation_potentials[heat_source][
+                        "constant_temperature_celsius"
+                    ]
+                )
+            else:
+                raise ValueError(
+                    f"Unknown heat source {heat_source}. Must be one of [ground, air] or {snakemake.params.heat_sources.keys()}."
+                )
+
             cop_da = get_cop(
                 heat_system_type=heat_system_type,
                 heat_source=heat_source,
                 source_inlet_temperature_celsius=source_inlet_temperature_celsius,
-                forward_temperature_by_node_and_time=forward_temperature_central_heating_by_node_and_time,
-                return_temperature_by_node_and_time=return_temperature_central_heating_by_node_and_time,
+                forward_temperature_by_node_and_time=central_heating_forward_temperature,
+                return_temperature_by_node_and_time=central_heating_return_temperature,
             )
             cop_this_system_type.append(cop_da)
         cop_all_system_types.append(

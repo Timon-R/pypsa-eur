@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-# SPDX-FileCopyrightText: : 2020-2024 The PyPSA-Eur Authors
+# SPDX-FileCopyrightText: Contributors to PyPSA-Eur <https://github.com/pypsa/pypsa-eur>
 #
 # SPDX-License-Identifier: MIT
 """
@@ -20,7 +19,6 @@ The regional distribution is taken from the map (Figure 6) and scaled to the
 capacities from the bar chart split by nearshore (<50km from sea),
 onshore (>50km from sea), offshore (Figure 7).
 """
-
 
 import geopandas as gpd
 import pandas as pd
@@ -74,9 +72,7 @@ if __name__ == "__main__":
     if "snakemake" not in globals():
         from _helpers import mock_snakemake
 
-        snakemake = mock_snakemake(
-            "build_salt_cavern_potentials", simpl="", clusters="37"
-        )
+        snakemake = mock_snakemake("build_salt_cavern_potentials", clusters="37")
 
     set_scenario_config(snakemake)
 

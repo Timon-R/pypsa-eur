@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-# SPDX-FileCopyrightText: : 2020-2024 The PyPSA-Eur Authors
+# SPDX-FileCopyrightText: Contributors to PyPSA-Eur <https://github.com/pypsa/pypsa-eur>
 #
 # SPDX-License-Identifier: MIT
 """
@@ -445,7 +444,9 @@ def chemicals_industry():
 
     # subtract ammonia energy demand (in ktNH3/a)
     ammonia = pd.read_csv(snakemake.input.ammonia_production, index_col=0)
-    ammonia_total = ammonia.loc[ammonia.index.intersection(eu27), str(max(2018, year))].sum()
+    ammonia_total = ammonia.loc[
+        ammonia.index.intersection(eu27), str(max(2018, year))
+    ].sum()
     df.loc["methane", sector] -= ammonia_total * params["MWh_CH4_per_tNH3_SMR"]
     df.loc["elec", sector] -= ammonia_total * params["MWh_elec_per_tNH3_SMR"]
 
@@ -1391,9 +1392,8 @@ def textiles_and_leather():
     df.loc["heat", sector] += s_fec["Low-enthalpy heat"]
 
     # Efficiency changes due to electrification
-    key = "Textiles: Electric drying"
     # in new JRC data zero assume old data
-    # eff_elec = s_ued[key] / s_fec[key]
+
     eff_elec = 73.7 / 146.6
     df.loc["elec", sector] += s_ued["Textiles: Drying"] / eff_elec
 
@@ -1467,7 +1467,6 @@ def wood_and_wood_products():
 
 
 def other_industrial_sectors():
-
     sector = "Other industrial sectors"
     idees = load_idees_data(sector)
 
