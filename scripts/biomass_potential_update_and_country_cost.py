@@ -4,10 +4,12 @@ import yaml
 
 #This is not part of the snakemake workflow
 
+#2010 Euro! so needs to be inflation adjusted to 2020 costs (which is done in the tech-data script)
+
 # Scenarios: ENS_Low, ENS_Med, ENS_High
 # Years: 2010, 2020, ... , 2050
 
-def create_biomass_costs(output_folder,config = 'config/config.yaml', scenario = 'ENS_High', year =2050, database_file ='data/ENSPRESO_BIOMASS.xlsx'):
+def create_biomass_costs(output_folder,config = 'config/config.yaml', scenario = 'ENS_Med', year =2050, database_file ='data/ENSPRESO_BIOMASS.xlsx'):
     ######## Read in data from ENSPRESO and create csv file for biomass costs
     costs = pd.read_excel(
         database_file,
@@ -47,8 +49,8 @@ def create_biomass_costs(output_folder,config = 'config/config.yaml', scenario =
 
     # Extract the dictionary
     biomass_classes = config['biomass']['classes']
-    scenario = config['biomass']['scenario']
-    year = config['biomass']['year']
+    #scenario = config['biomass']['scenario']
+    #year = config['biomass']['year']
 
     
     # Filter the costs and potentials DataFrames based on the year and scenario
