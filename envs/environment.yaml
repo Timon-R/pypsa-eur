@@ -56,7 +56,7 @@ dependencies:
 # GIS dependencies:
 - cartopy
 - descartes
-- rasterio
+- rasterio=1.4.1
 
 # Development dependencies
 - pre-commit

@@ -47,7 +47,7 @@ install-pinned-windows: _conda_check
 	$(CONDA_OR_MAMBA) env create -f envs/pinned-windows.yaml -n $(or $(name), pypsa-eur)
 	$(CONDA_OR_MAMBA) run -n $(or $(name), pypsa-eur) pre-commit install
 install-pinned-macos: _conda_check
-	$(CONDA_OR_MAMBA) env create -f envs/pinned-macos.yaml -n $(or $(name), pypsa-eur)
+	$(CONDA_OR_MAMBA) env create -f envs/macos-pinned.yaml -n $(or $(name), pypsa-eur)
 	$(CONDA_OR_MAMBA) run -n $(or $(name), pypsa-eur) pre-commit install
 
 
