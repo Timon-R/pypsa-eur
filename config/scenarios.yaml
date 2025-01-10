@@ -1,0 +1,213 @@
+# -*- coding: utf-8 -*-
+# SPDX-FileCopyrightText: : 2017-2023 The PyPSA-Eur Authors
+#
+# SPDX-License-Identifier: MIT
+
+# This file is used to define the scenarios that are run by snakemake. Each entry on the first level is a scenario. Each scenario can contain configuration overrides with respect to the config/config.yaml settings.
+#
+# Example
+#
+# custom-scenario: # name of the scenario
+#   electricity:
+#       renewable_carriers: [wind, solar] # override the list of renewable carriers
+
+# normal:
+#   electricity:
+#     renewable_carriers:
+#     - solar
+#     - onwind
+#     - offwind-ac
+#     - offwind-dc
+#     - hydro
+
+#Note all the differences to default in the scenario!!!
+
+# exogenous_0_ef:
+#   sector:
+#       industry_t:  # heat supply industry
+#         endogen: false
+
+# endogenous_0_ef:
+#   sector:
+#       industry_t:  # heat supply industry
+#         endogen: true
+
+exogenous_0_ef:
+  sector:
+    gas_network: true
+    biomass_spatial: true
+    biomass_transport: true
+    biogas_upgrading_cc: true
+    industry_t:  # heat supply industry
+      endogen: false
+    biomass_to_liquid: true
+    biomass_to_liquid_cc: true
+    electrobiofuels: true
+    biosng: true
+    biosng_cc: true
+    bioH2: true
+    municipal_solid_waste: true
+    solid_biomass_import:
+      enable: true
+  industry:
+    waste_to_energy: true
+    waste_to_energy_cc: true
+
+endogenous_0_ef:
+  sector:
+    gas_network: true
+    biomass_spatial: true
+    biomass_transport: true
+    biogas_upgrading_cc: true
+    industry_t:  # heat supply industry
+      endogen: true
+    biomass_to_liquid: true
+    biomass_to_liquid_cc: true
+    electrobiofuels: true
+    biosng: true
+    biosng_cc: true
+    bioH2: true
+    municipal_solid_waste: true
+    solid_biomass_import:
+      enable: true
+  industry:
+    waste_to_energy: true
+    waste_to_energy_cc: true
+
+endogenous_1_ef:
+  sector:
+    gas_network: true
+    biomass_spatial: true
+    biomass_transport: true
+    biogas_upgrading_cc: true
+    industry_t:  # heat supply industry
+      endogen: true
+    biomass_to_liquid: true
+    biomass_to_liquid_cc: true
+    electrobiofuels: true
+    biosng: true
+    biosng_cc: true
+    bioH2: true
+    municipal_solid_waste: true
+    solid_biomass_import:
+      enable: true
+  industry:
+    waste_to_energy: true
+    waste_to_energy_cc: true
+  biomass:
+    emission_factors:
+      agricultural waste: 0.108
+      fuelwood residues: 0.036
+      secondary forestry residues: 0.144
+      sawdust: 0.108
+      residues from landscape care: 0
+      grasses: 0.216
+      woody crops: 0.18
+      fuelwoodRW: 0.288
+      manure: 0.072
+      sludge: 0
+
+endogenous_1_ef_2_gas:
+  sector:
+    gas_network: true
+    biomass_spatial: true
+    biomass_transport: true
+    biogas_upgrading_cc: true
+    industry_t:  # heat supply industry
+      endogen: true
+    biomass_to_liquid: true
+    biomass_to_liquid_cc: true
+    electrobiofuels: true
+    biosng: true
+    biosng_cc: true
+    bioH2: true
+    municipal_solid_waste: true
+    solid_biomass_import:
+      enable: true
+  industry:
+    waste_to_energy: true
+    waste_to_energy_cc: true
+  biomass:
+    emission_factors:
+      agricultural waste: 0.108
+      fuelwood residues: 0.036
+      secondary forestry residues: 0.144
+      sawdust: 0.108
+      residues from landscape care: 0
+      grasses: 0.216
+      woody crops: 0.18
+      fuelwoodRW: 0.288
+      manure: 0.072
+      sludge: 0
+  adjustments:
+    sector:
+      factor:
+        Generator:
+          gas:
+            marginal_cost: 2.0
+
+endogenous_1_1_ef:
+  sector:
+    gas_network: true
+    biomass_spatial: true
+    biomass_transport: true
+    biogas_upgrading_cc: true
+    industry_t:  # heat supply industry
+      endogen: true
+    biomass_to_liquid: true
+    biomass_to_liquid_cc: true
+    electrobiofuels: true
+    biosng: true
+    biosng_cc: true
+    bioH2: true
+    municipal_solid_waste: true
+    solid_biomass_import:
+      enable: true
+  industry:
+    waste_to_energy: true
+    waste_to_energy_cc: true
+  biomass:
+    emission_factors:
+      agricultural waste: 0.1188
+      fuelwood residues: 0.0396
+      secondary forestry residues: 0.1584
+      sawdust: 0.1188
+      residues from landscape care: 0
+      grasses: 0.2376
+      woody crops: 0.198
+      fuelwoodRW: 0.3168
+      manure: 0.0792
+      sludge: 0
+
+endogenous_0_9_ef:
+  sector:
+    gas_network: true
+    biomass_spatial: true
+    biomass_transport: true
+    biogas_upgrading_cc: true
+    industry_t:  # heat supply industry
+      endogen: true
+    biomass_to_liquid: true
+    biomass_to_liquid_cc: true
+    electrobiofuels: true
+    biosng: true
+    biosng_cc: true
+    bioH2: true
+    municipal_solid_waste: true
+    solid_biomass_import:
+      enable: true
+  industry:
+    waste_to_energy: true
+    waste_to_energy_cc: true
+  biomass:
+    emission_factors:
+      agricultural waste: 0.0972
+      fuelwood residues: 0.0324
+      secondary forestry residues: 0.1296
+      sawdust: 0.0972
+      residues from landscape care: 0
+      grasses: 0.1944
+      woody crops: 0.162
+      fuelwoodRW: 0.2592
+      manure: 0.0648
+      sludge: 0

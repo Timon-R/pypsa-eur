@@ -29,8 +29,6 @@ doc/_build
 /scripts/create_scenarios.py
 /config/create_scenarios.py
 
-config/scenarios.yaml
-
 dconf
 /data/links_p_nom.csv
 /data/*totals.csv
@@ -66,7 +64,9 @@ d1gam3xoknrgr2.cloudfront.net/
 
 *.geojson
 
-#*.ipynb
+*.ipynb
+
+*.DS_Store
 
 merger-todos.md
 

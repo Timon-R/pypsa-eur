@@ -21,9 +21,9 @@ remote:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
   prefix: ""
-  name: ""
+  name: all
   scenarios:
-    enable: false
+    enable: true
     file: config/scenarios.yaml
   disable_progressbar: false
   shared_resources:
@@ -50,7 +50,7 @@ scenario:
   - ''
   planning_horizons:
   # - 2020
-  # - 2030
+  - 2030
   # - 2040
   - 2050
 
@@ -431,7 +431,7 @@ biomass:
     secondary forestry residues: 0
     sawdust: 0
     residues from landscape care: 0
-    grasses: 0 
+    grasses: 0
     woody crops: 0
     fuelwoodRW: 0
     manure: 0
@@ -786,7 +786,7 @@ sector:
     price: 54 #EUR/MWh
     max_amount: 1390 # TWh
     upstream_emissions_factor: .1 #share of solid biomass CO2 emissions at full combustion
-  non-edible_crops: true 
+  non-edible_crops: true
 
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#industry
@@ -883,7 +883,7 @@ industry:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#costs
 costs:
   year: 2030
-  version: Timon-R/technology-data/v0.0.3 
+  version: Timon-R/technology-data/v0.0.3
   social_discountrate: 0.02
   fill_values:
     FOM: 0
