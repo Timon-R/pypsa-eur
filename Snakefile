@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: MIT
 
-#snakemake -call all --configfile config/config.yaml --rerun-incomplete --cores 8 --use-conda or use 10 cores maybe
-#--rerun-triggers mtime 
+# snakemake -call all --configfile config/config.yaml --rerun-incomplete --cores 8 --use-conda or use 10 cores maybe
+# --rerun-triggers mtime
 # conda config --set channel_priority strict
 
 from pathlib import Path
@@ -20,7 +20,7 @@ from scripts._helpers import path_provider, copy_default_files, get_scenarios, g
 copy_default_files(workflow)
 
 
-#configfile: "config/config.default.yaml"
+# configfile: "config/config.default.yaml"
 configfile: "config/config.yaml"
 
 

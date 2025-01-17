@@ -46,6 +46,8 @@ dconf
 data/gas_network/scigrid-gas/
 data/costs_*.csv
 
+/export
+
 dask-worker-space/
 publications.jrc.ec.europa.eu/
 d1gam3xoknrgr2.cloudfront.net/
