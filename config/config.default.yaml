@@ -881,7 +881,7 @@ industry:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#costs
 costs:
   year: 2030
-  version: Timon-R/technology-data/v0.0.3 #v0.10.0
+  version: Timon-R/technology-data/v0.0.5 #v0.10.0
   social_discountrate: 0.02
   fill_values:
     FOM: 0

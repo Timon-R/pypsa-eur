@@ -139,6 +139,8 @@ def plot_bar_with_shares(
     custom_order=None,
     axis2_ticks=500,
     remove_last_letters=0,
+    width=14,
+    threshold=0.001,
 ):
     # Pivot the DataFrame for plotting
 
@@ -155,11 +157,14 @@ def plot_bar_with_shares(
 
     # delete 1 from data_name if it has it
     df["Data Name"] = df["Data Name"].str.replace("1", "")
+    df["Data Name"] = df["Data Name"].str.replace("2", "")
+    df["Data Name"] = df["Data Name"].str.replace("3", "")
+    df["Data Name"] = df["Data Name"].str.replace("4", "")
 
     pivot_df = df.pivot(index="Data Name", columns="Folder", values=["Values", "Share"])
 
     # only use data names that have a share higher than 0.001
-    pivot_df = pivot_df[pivot_df["Share"].max(axis=1) > 0.001]
+    pivot_df = pivot_df[pivot_df["Share"].max(axis=1) > threshold]
 
     # Extract values and shares for plotting
     values = pivot_df["Values"] / 1e6  # Convert to TWh
@@ -170,7 +175,7 @@ def plot_bar_with_shares(
     bar_width = 0.35
 
     # Create the bar plot
-    fig, ax = plt.subplots(figsize=(14, 6))
+    fig, ax = plt.subplots(figsize=(width, 6))
     for i, folder in enumerate(values.columns):
         ax.bar(x + i * bar_width, values[folder], bar_width, label=folder)
 
@@ -539,6 +544,7 @@ def plot_bar_with_totals(
     custom_order=None,
     remove_last_letters=0,
     axis2_ticks=500,
+    include_total=True,
 ):
     # plots the data in a bar chart and adds a sum of all values at the end
     # Pivot the DataFrame for plotting
@@ -553,22 +559,28 @@ def plot_bar_with_totals(
     if remove_last_letters != 0:
         df["Data Name"] = df["Data Name"].str[:-remove_last_letters]
 
+    df["Data Name"] = df["Data Name"].str.replace("1", "")
+    df["Data Name"] = df["Data Name"].str.replace("2", "")
+    df["Data Name"] = df["Data Name"].str.replace("3", "")
+    df["Data Name"] = df["Data Name"].str.replace("4", "")
+
     # Calculate the total values for each scenario
-    total_values = df.groupby("Folder")["Values"].sum().reset_index()
-    total_values["Data Name"] = "Total"
+    if include_total:
+        total_values = df.groupby("Folder")["Values"].sum().reset_index()
+        total_values["Data Name"] = "Total"
 
-    # Append the total values to the original DataFrame
-    df = pd.concat([df, total_values], ignore_index=True, sort=False)
+        # Append the total values to the original DataFrame
+        df = pd.concat([df, total_values], ignore_index=True, sort=False)
 
-    # Ensure 'Total' is at the end
-    data_names = list(df["Data Name"].unique())
-    if "Total" in data_names:
-        data_names.remove("Total")
-    data_names.append("Total")
-    df["Data Name"] = pd.Categorical(
-        df["Data Name"], categories=data_names, ordered=True
-    )
-    df = df.sort_values(by="Data Name")
+        # Ensure 'Total' is at the end
+        data_names = list(df["Data Name"].unique())
+        if "Total" in data_names:
+            data_names.remove("Total")
+        data_names.append("Total")
+        df["Data Name"] = pd.Categorical(
+            df["Data Name"], categories=data_names, ordered=True
+        )
+        df = df.sort_values(by="Data Name")
 
     pivot_df = df.pivot(index="Data Name", columns="Folder", values="Values")
     # convert from MWh to TWh
@@ -589,7 +601,7 @@ def plot_bar_with_totals(
             ax.text(
                 x[j] + i * bar_width,
                 value + max(pivot_df.max()) * 0.01,
-                f"{value:.1f}",
+                f"{value:.0f}",
                 ha="center",
                 fontsize=8,
             )
@@ -645,12 +657,13 @@ def __main__():
     data = load_csv("export/oil_production_2050.csv")
     plot_bar_with_shares(
         data,
-        "Oil Production in 2050",
+        "Liquid Fuel Production in 2050",
         "",
         "TWh",
         "oil_production_2050.png",
         custom_order,
         remove_last_letters=1,
+        width=10,
     )
 
     data = load_csv("export/electricity_generation_share_2050.csv")
@@ -662,6 +675,7 @@ def __main__():
         "electricity_generation_share_2050.png",
         custom_order,
         axis2_ticks=5000,
+        width=10,
     )
     plot_difference_bar(
         data,
@@ -682,6 +696,43 @@ def __main__():
         custom_order,
         remove_last_letters=1,
         axis2_ticks=500,
+    )
+
+    data = load_csv("export/industrial_energy_2050.csv")
+    plot_bar_with_totals(
+        data,
+        "Industrial Heat Supply in 2050",
+        "",
+        "TWh",
+        "industrial_energy_2050.png",
+        custom_order,
+        axis2_ticks=500,
+        include_total=False,
+    )
+
+    data = load_csv("export/heating_energy_2050.csv")
+    plot_bar_with_totals(
+        data,
+        "Heating Energy Supply in 2050",
+        "",
+        "TWh",
+        "heating_energy_2050.png",
+        custom_order,
+        axis2_ticks=1000,
+        include_total=False,
+    )
+
+    data = load_csv("export/primary_energy_2050.csv")
+    plot_bar_with_shares(
+        data,
+        "Primary Energy Supply in 2050",
+        "",
+        "TWh",
+        "primary_energy_2050.png",
+        custom_order,
+        axis2_ticks=5000,
+        width=10,
+        threshold=0.0001,
     )
 
     # data = load_csv("export/combined_costs.csv")

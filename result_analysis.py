@@ -155,82 +155,7 @@ def export_results(data, filename, include_share=False):
     print(f"Results exported to {file_path}")
 
 
-def calculate_share(
-    results,
-    folders,
-    dataframe,
-    fields,
-    value_column,
-    data_name_column,
-    year,
-    multiplier=1,
-    filter_positive=True,
-    remove_list=[],
-    add_lists=[],
-):
-    """
-    Calculate the share of each unique data name of the overall sum.
-
-    Parameters
-    ----------
-    results (dict): Dictionary containing the dataframes.
-    folders (list): List of folders to process.
-    dataframe (str): The key to access the specific dataframe in the dictionary.
-    fields (list): List of fields to filter the dataframe.
-    value_column (str): The column in which the value is located.
-    filter_positive (bool): If True, only take rows with positive values. If False, only take rows with negative values.
-
-    Returns
-    -------
-    dict: Dictionary containing the processed data with values and their share of the overall sum.
-    """
-    result_data = {}
-    if folders == "all":
-        folders = results.keys()
-
-    for folder, dataframes in results.items():
-        if folder in folders:
-            data_df = dataframes[dataframe]
-            condition = True
-            for i, field in enumerate(fields):
-                condition &= data_df.iloc[:, i].str.contains(
-                    field, case=False, na=False
-                )
-            data = data_df[condition].reset_index(drop=True)
-            # Apply add_list filter
-            if add_lists:
-                for list in add_lists:
-                    add_condition = True
-                    for i, field in enumerate(list):
-                        add_condition &= data_df.iloc[:, i].str.contains(
-                            field, case=False, na=False
-                        )
-                    add_data = data_df[add_condition]
-                    data = pd.concat([data, add_data])
-            data[value_column] = pd.to_numeric(data[value_column], errors="coerce")
-            if filter_positive:
-                data = data[data[value_column] > 0]
-            else:
-                data = data[data[value_column] < 0]
-                # Apply remove_list filter
-            if remove_list:
-                data = data[~data[data_name_column].str.contains("|".join(remove_list))]
-            # iterate through unique values in the data_name_column
-            if not data.empty:
-                for _, row in data.iterrows():
-                    share = row[value_column] / data[value_column].sum()
-                    key = f"{folder}_{year}_{row[data_name_column]}"
-                    result_data[key] = {
-                        "folder": folder,
-                        "year": year,
-                        "data_name": row[data_name_column],
-                        "values": round(row[value_column] * multiplier, 1),
-                        "share": round(share, 4),
-                    }
-    return result_data
-
-
-def aggregate_data(
+def aggregate_and_calculate_share(
     results,
     folders,
     dataframe,
@@ -242,31 +167,99 @@ def aggregate_data(
     multiplier=1,
     filter_positive=True,
     remove_list=[],
+    calculate_share=True,
 ):
-    # select rows from dataframes that match the fields in the fields_list
-    # sum the values using the merge_fields; each list in the merge fields list looks like this["shared_string","new name"]
+    """
+    Aggregate data and optionally calculate the share of each unique data name of the overall sum.
 
+    Parameters
+    ----------
+    results (dict): Dictionary containing the dataframes.
+    folders (list): List of folders to process.
+    dataframe (str): The key to access the specific dataframe in the dictionary.
+    fields_list (list): List of lists of fields to filter the dataframe.
+    merge_fields (list): List of lists containing merge conditions, new name, and case sensitivity.
+    value_column (str): The column in which the value is located.
+    data_name_column (str): The column in which the data name is located.
+    year (str): The year to filter the data.
+    multiplier (int, optional): Multiplier to apply to the values. Default is 1.
+    filter_positive (bool, optional): If True, only take rows with positive values. Default is True.
+    remove_list (list, optional): List of strings to remove from the data. Default is [].
+    calculate_share (bool, optional): If True, calculate the share of each unique data name of the overall sum. Default is False.
+
+    Returns
+    -------
+    dict: Dictionary containing the aggregated data and optionally their share of the overall sum.
+    """
     result_data = {}
     if folders == "all":
         folders = results.keys()
 
-    for folder, dataframes in results.items():
+    for folder, dataframes in results.copy().items():
         if folder in folders:
-            data_df = dataframes[dataframe]
-            condition = True
+            data_df = dataframes[dataframe].reset_index(drop=True)
+
+            # Build condition for filtering
+            condition = pd.Series([False] * len(data_df))
             for fields in fields_list:
+                field_condition = pd.Series([True] * len(data_df))
                 for i, field in enumerate(fields):
-                    condition &= data_df.iloc[:, i].str.contains(
+                    field_condition &= data_df.iloc[:, i].str.contains(
                         field, case=False, na=False
                     )
-            data = data_df[condition].reset_index(drop=True)
+                condition |= field_condition
+
+            data_df["condition"] = condition.fillna(False)
+            # Filter data based on condition
+            data = data_df[data_df["condition"]].copy()
+            data.drop(columns=["condition"], inplace=True)
+
             # Apply remove_list filter
             if remove_list:
-                data = data[~data[data_name_column].str.contains("|".join(remove_list))]
-            # merge the values using the merge_fields
-            for merge_condition, new_name in merge_fields:
-                merged_data = data[data[data_name_column].str.contains(merge_condition)]
-                # create a new row using the new_name and the sum of the values merged rows, delete all the old rows that are merged
+                data = data[
+                    ~data[data_name_column].str.contains(
+                        "|".join(remove_list), na=False
+                    )
+                ]
+
+            # Ensure value_column is numeric
+            data[value_column] = pd.to_numeric(data[value_column], errors="coerce")
+
+            # Apply filter_positive
+            if filter_positive:
+                data = data[data[value_column] > 0]
+            else:
+                data = data[data[value_column] < 0]
+
+            # Calculate total sum for share calculation
+            total_sum = data[value_column].sum()
+
+            # Merge the values using the merge_fields
+            for merge_conditions, new_name, is_cc in merge_fields:
+                merged_data = pd.DataFrame()
+                for merge_condition in merge_conditions:
+                    added_data = data[
+                        data[data_name_column].str.contains(merge_condition, na=False)
+                    ]
+                    if is_cc:  # CC case sensitive must be in the data_name
+                        added_data = added_data[
+                            added_data[data_name_column].str.contains(
+                                "CC", case=True, na=False
+                            )
+                        ]
+                    else:  # CC case sensitive must not be in the data_name
+                        added_data = added_data[
+                            ~added_data[data_name_column].str.contains(
+                                "CC", case=True, na=False
+                            )
+                        ]
+                    merged_data = pd.concat([merged_data, added_data])
+
+                    # Remove the added data from the original data
+                    if not added_data.empty:
+                        data = data[~data.index.isin(added_data.index)]
+
+                # Create a new row using the new_name and the sum of the values of merged rows
                 if not merged_data.empty:
                     new_row = {
                         "folder": folder,
@@ -276,23 +269,26 @@ def aggregate_data(
                             merged_data[value_column].sum() * multiplier, 1
                         ),
                     }
+                    if calculate_share:
+                        share = merged_data[value_column].sum() / total_sum
+                        new_row["share"] = round(share, 4)
                     result_data[f"{folder}_{year}_{new_name}"] = new_row
-                    data = data[
-                        ~data[data[data_name_column].str.contains(merge_condition)]
-                    ]
-            # iterate through unique values in the data_name_column
+
+            # Add remaining data and calculate shares if calculate_share is True
             if not data.empty:
                 for _, row in data.iterrows():
                     key = f"{folder}_{year}_{row[data_name_column]}"
-                    if key in result_data:
-                        result_data[key]["values"] += row[value_column] * multiplier
-                    else:
-                        result_data[key] = {
-                            "folder": folder,
-                            "year": year,
-                            "data_name": row[data_name_column],
-                            "values": row[value_column] * multiplier,
-                        }
+                    new_row = {
+                        "folder": folder,
+                        "year": year,
+                        "data_name": row[data_name_column],
+                        "values": round(row[value_column] * multiplier, 1),
+                    }
+                    if calculate_share:
+                        share = row[value_column] / total_sum
+                        new_row["share"] = round(share, 4)
+                    result_data[key] = new_row
+
     return result_data
 
 
@@ -317,34 +313,42 @@ def main():
     # ]
 
     remove_list = ["agriculture machinery oil1"]
-    oil_production_2050 = calculate_share(
+    oil_production_2050 = aggregate_and_calculate_share(
         results,
         scenarios,
         "supply_energy",
-        ["oil", "links"],
+        [["oil", "links"]],
+        [],
         "E",
         "C",
         "2050",
         filter_positive=True,
         remove_list=remove_list,
+        calculate_share=True,
     )
     export_results(oil_production_2050, "oil_production_2050.csv", include_share=True)
 
-    add_list = [
-        ["low voltage", "generators", "solar rooftop"],
-        ["AC", "links", "CHP"],
-        ["AC", "links", "OCGT"],
-    ]
-    electricity_generation_share_2050 = calculate_share(
+    electricity_generation_share_2050 = aggregate_and_calculate_share(
         results,
         scenarios,
         "supply_energy",
-        ["AC", "generators"],
+        [
+            ["AC", "generators"],
+            ["low voltage", "generators", "solar rooftop"],
+            ["AC", "links", "CHP"],
+            ["AC", "links", "OCGT"],
+            ["AC", "storage_unit", "hydro"],
+        ],
+        [
+            [["wind"], "wind", False],
+            [["solar"], "solar", False],
+            [["hydro", "ror"], "hydro", False],
+        ],  # merge_fields
         "E",
         "C",
         "2050",
         filter_positive=True,
-        add_lists=add_list,
+        calculate_share=True,
     )
     export_results(
         electricity_generation_share_2050,
@@ -352,21 +356,130 @@ def main():
         include_share=True,
     )
 
-    beccs = calculate_share(
+    beccs = aggregate_and_calculate_share(
         results,
         scenarios,
         "supply_energy",
-        ["solid biomass", "links", "CC"],
+        [["solid biomass", "links", "CC"]],
+        [],
         "E",
         "C",
         "2050",
         multiplier=-1,
         filter_positive=False,
+        calculate_share=True,
     )
     export_results(beccs, "beccs.csv")
 
-    # fields_list = [[]]  # all industries
-    # merge_fields = [[]]  # merge fuels considering CC or not
+    fields_list = [
+        ["highT industry", "links"],
+        ["mediumT industry", "links"],
+        ["lowT industry", "links"],
+    ]  # all industries
+    merge_fields = [
+        [["biomass"], "biomass", False],
+        [["biomass"], "biomass CC", True],
+        [["gas", "methane"], "gas", False],
+        [["gas", "methane"], "gas CC", True],
+        [["hydrogen"], "hydrogen", False],
+        [["heat pump", "electricity"], "electricity/heat pump", False],
+    ]
+    industrial_energy_2050 = aggregate_and_calculate_share(
+        results,
+        scenarios,
+        "supply_energy",
+        fields_list,
+        merge_fields,
+        "E",
+        "C",
+        "2050",
+        filter_positive=True,
+    )
+    export_results(
+        industrial_energy_2050, "industrial_energy_2050.csv", include_share=True
+    )
+
+    fields_list = [
+        ["rural heat", "links"],
+        ["urban central heat", "links"],
+        ["urban decentral heat", "links"],
+    ]  # all heating
+    merge_fields = [
+        [["biomass"], "biomass", False],
+        [["biomass"], "biomass CC", True],
+        [["waste"], "waste", False],
+        [["waste"], "waste CC", True],
+        [["gas", "CHP"], "gas", False],
+        [["gas", "CHP"], "gas CC", True],
+        [["H2"], "hydrogen", False],
+        [["heat pump", "resistive"], "electricity/heat pump", False],
+        [["water tanks discharger"], "water tank discharger", False],
+    ]
+    heating_energy_2050 = aggregate_and_calculate_share(
+        results,
+        scenarios,
+        "supply_energy",
+        fields_list,
+        merge_fields,
+        "E",
+        "C",
+        "2050",
+        filter_positive=True,
+    )
+    export_results(heating_energy_2050, "heating_energy_2050.csv", include_share=True)
+
+    # primary energy
+    fields_list = [
+        ["bioliquids", "generators"],
+        ["AC", "generators"],
+        ["AC", "links", "waste"],
+        ["AC", "storage_units", "hydro"],
+        ["biogas", "generators"],
+        ["biogas", "links"],
+        ["coal", "generators"],
+        ["gas", "generators"],
+        ["low voltage", "generators", "solar rooftop"],
+        ["waste", "generators"],
+        ["oil primary", "generators"],
+        ["solid biomass", "links"],
+        ["solid biomass", "generators"],
+    ]
+    merge_fields = [
+        [
+            [
+                "agricultural waste",
+                "fuelwood residues",
+                "secondary forestry residues",
+                "sawdust",
+                "residues from landscape care",
+                "grasses",
+                "woody crops",
+                "fuelwoodRW",
+                "manure",
+                "sludge",
+                "biomass",
+            ],
+            "biomass",
+            False,
+        ],
+        [["wind"], "wind", False],
+        [["solar"], "solar", False],
+        [["hydro", "ror"], "hydro", False],
+    ]
+    remove_list = ["biomass transport", "waste CHP"]
+    primary_energy_2050 = aggregate_and_calculate_share(
+        results,
+        scenarios,
+        "supply_energy",
+        fields_list,
+        merge_fields,
+        "E",
+        "C",
+        "2050",
+        filter_positive=True,
+        remove_list=remove_list,
+    )
+    export_results(primary_energy_2050, "primary_energy_2050.csv", include_share=True)
 
     # costs_2030 = get_data(
     #     results,

@@ -136,4 +136,4 @@ def create_biomass_costs(
 
 
 if __name__ == "__main__":
-    create_biomass_costs("export/", scenario="ENS_Med", year=2030)
+    create_biomass_costs("export/", scenario="ENS_High", year=2030)

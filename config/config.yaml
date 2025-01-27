@@ -21,9 +21,9 @@ remote:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
   prefix: ""
-  name: all
+  name: test #all
   scenarios:
-    enable: true
+    enable: false
     file: config/scenarios.yaml
   disable_progressbar: false
   shared_resources:
@@ -50,13 +50,13 @@ scenario:
   - ''
   planning_horizons:
   # - 2020
-  - 2030
+  # - 2030
   # - 2040
   - 2050
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#countries
-countries: ['AL', 'AT', 'BA', 'BE', 'BG', 'CH', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GB', 'GR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'ME', 'MK', 'NL', 'NO', 'PL', 'PT', 'RO', 'RS', 'SE', 'SI', 'SK', 'XK']
-#countries: ['SE','NO','DK']
+#countries: ['AL', 'AT', 'BA', 'BE', 'BG', 'CH', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GB', 'GR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'ME', 'MK', 'NL', 'NO', 'PL', 'PT', 'RO', 'RS', 'SE', 'SI', 'SK', 'XK']
+countries: ['SE', 'NO', 'DK']
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#snapshots
 snapshots:
@@ -380,9 +380,9 @@ biomass:
   year: 2030
   scenario: ENS_Med
   classes:
-    agricultural waste:
+    agricultural waste: #straw
     - Agricultural waste
-    fuelwood residues:
+    fuelwood residues: #logging residues / (slash)
     - Fuelwood residues
     secondary forestry residues:
     - Secondary Forestry residues - woodchips
@@ -397,12 +397,13 @@ biomass:
     - Poplar
     fuelwoodRW:
     - FuelwoodRW
+    C&P_RW:
+    - C&P_RW
     not included:
     - Sugar from sugar beet
     - Rape seed
     - "Sunflower, soya seed "
     - Bioethanol barley, wheat, grain maize, oats, other cereals and rye
-    - C&P_RW
     manure:
     - Manure solid, liquid
     sludge:
@@ -436,6 +437,7 @@ biomass:
     fuelwoodRW: 0
     manure: 0
     sludge: 0
+    C&P_RW: 0
 
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#solar-thermal
@@ -883,7 +885,7 @@ industry:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#costs
 costs:
   year: 2030
-  version: Timon-R/technology-data/v0.0.3
+  version: Timon-R/technology-data/v0.0.5
   social_discountrate: 0.02
   fill_values:
     FOM: 0
