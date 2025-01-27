@@ -395,12 +395,13 @@ biomass:
     - Poplar
     fuelwoodRW:
     - FuelwoodRW
+    C&P_RW:
+    - C&P_RW
     not included:
     - Sugar from sugar beet
     - Rape seed
     - "Sunflower, soya seed "
     - Bioethanol barley, wheat, grain maize, oats, other cereals and rye
-    - C&P_RW
     manure:
     - Manure solid, liquid
     sludge:
@@ -434,6 +435,7 @@ biomass:
     fuelwoodRW: 0
     manure: 0
     sludge: 0
+    C&P_RW: 0
 
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#solar-thermal

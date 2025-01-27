@@ -106,6 +106,7 @@ endogenous_1_ef:
       fuelwoodRW: 0.288
       manure: 0.072
       sludge: 0
+      C&P_RW: 0.144
 
 endogenous_1_ef_2_gas:
   sector:
@@ -139,6 +140,7 @@ endogenous_1_ef_2_gas:
       fuelwoodRW: 0.288
       manure: 0.072
       sludge: 0
+      C&P_RW: 0.144
   adjustments:
     sector:
       factor:
@@ -178,6 +180,7 @@ endogenous_1_1_ef:
       fuelwoodRW: 0.3168
       manure: 0.0792
       sludge: 0
+      C&P_RW: 0.1584
 
 endogenous_0_9_ef:
   sector:
@@ -211,3 +214,4 @@ endogenous_0_9_ef:
       fuelwoodRW: 0.2592
       manure: 0.0648
       sludge: 0
+      C&P_RW: 0.1296
