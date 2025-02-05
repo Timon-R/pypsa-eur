@@ -1215,6 +1215,7 @@ plotting:
     fuelwoodRW: '#ba9447'
     manure: '#d2ad5e'
     sludge: '#9a7c33'
+    C&P_RW: '#b9a04b'
     municipal solid waste: '#68a437'
     municipal solid waste transport: '#68a437'
     solid biomass import: '#d5ca8d'

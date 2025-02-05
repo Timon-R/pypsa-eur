@@ -26,6 +26,18 @@ def load_csv(file_path):
     return pd.read_csv(file_path)
 
 
+def reorder_data(data, custom_order):
+    """
+    Reorder data based on custom order.
+    """
+    if custom_order is not None:
+        data = data.assign(
+            Folder=pd.Categorical(data["Folder"], categories=custom_order, ordered=True)
+        )
+        data = data.sort_values(by=["Folder", "Year"])
+    return data
+
+
 def plot_difference_bar(
     df,
     title,
@@ -39,11 +51,7 @@ def plot_difference_bar(
     # Pivot the DataFrame for plotting
 
     if custom_order is not None:
-        df = df.assign(
-            Folder=pd.Categorical(df["Folder"], categories=custom_order, ordered=True)
-        )
-        # Sort the data by the new folder order
-        df = df.sort_values(by=["Folder", "Year"])
+        df = reorder_data(df, custom_order)
 
     if remove_last_letters != 0:
         df["Data Name"] = df["Data Name"].str[:-remove_last_letters]
@@ -81,7 +89,7 @@ def plot_difference_bar(
     # Add absolute values and share differences as labels
     for i, (value, share_delta) in enumerate(zip(value_diff, share_diff)):
         # Absolute value on the bars
-        absolute_text = f"Δ {value/1e6:.0f}"
+        absolute_text = f"Δ {value / 1e6:.0f}"
         ax.text(
             x[i],
             value / 1e6 + 0.03 * max(value_diff) / 1e6,
@@ -146,11 +154,7 @@ def plot_bar_with_shares(
 
     plt.rcParams.update({"font.size": 14})
     if custom_order is not None:
-        df = df.assign(
-            Folder=pd.Categorical(df["Folder"], categories=custom_order, ordered=True)
-        )
-        # Sort the data by the new folder order
-        df = df.sort_values(by=["Folder", "Year"])
+        df = reorder_data(df, custom_order)
 
     if remove_last_letters != 0:
         df["Data Name"] = df["Data Name"].str[:-remove_last_letters]
@@ -233,11 +237,7 @@ def plot_shares(df, title, x_label, y_label, file_path, custom_order=None):
 
     # Convert 'Folder' column to a categorical type with the specified order
     if custom_order is not None:
-        df = df.assign(
-            Folder=pd.Categorical(df["Folder"], categories=custom_order, ordered=True)
-        )
-        # Sort the data by the new folder order
-        df = df.sort_values(by=["Folder", "Year"])
+        df = reorder_data(df, custom_order)
 
     # Filter out shares less or equal than 0.01
     df_filtered = df[df["Share"] > 0.01].copy()
@@ -328,27 +328,78 @@ def plot_shares(df, title, x_label, y_label, file_path, custom_order=None):
     plt.close()
 
 
-def plot_data(data, title, x_label, y_label, file_path, custom_order=None):
+def plot_costs(df, title, x_label, y_label, file_path):
+    """
+    Plot costs
+    """
+    # convert to billion
+    df["Difference"] = df["Difference"] / 1e9
+    # remove all have an absolute value less than 1
+    df = df[df["Difference"].abs() > 1]
+    plt.rcParams.update({"font.size": 14})
+    # Recreate the bar chart with the reordered folders
+    plt.figure(figsize=(12, 6))
+
+    # Create a gradient color palette based on the values
+    norm = plt.Normalize(df["Difference"].min(), df["Difference"].max())
+    sm = plt.cm.ScalarMappable(cmap="RdYlGn", norm=norm)
+    sm.set_array([])
+
+    # Apply the color mapping to the bars
+    colors = df["Difference"].apply(lambda x: sm.to_rgba(x)).tolist()
+
+    ax = sns.barplot(
+        data=df, x="Year", y="Difference", hue="Data Name", palette=colors, orient="v"
+    )
+    ylim = ax.get_ylim()
+    ax.set_ylim(ylim[0], ylim[1] + abs(ylim[1] * 0.1))
+
+    # Add values as labels above the bars
+    for container in ax.containers:
+        ax.bar_label(container, fmt="%.0f", fontsize=12, padding=5)
+
+    # Add labels and title
+    plt.title(title, fontsize=16)
+    plt.xlabel(x_label)
+    plt.ylabel(y_label)
+    plt.legend(title="Data Name", bbox_to_anchor=(1.05, 1), loc="upper left")
+
+    # Show the plot
+    plt.tight_layout()
+
+    # Save the plot to a file
+    export_dir = "export/plots"
+    os.makedirs(export_dir, exist_ok=True)
+    file_path = os.path.join(export_dir, file_path)
+    plt.savefig(file_path)
+    plt.close()
+
+
+def plot_data(
+    data, title, x_label, y_label, file_path, custom_order=None, color_palette="viridis"
+):
     """
     Plot data
     """
     if custom_order is not None:
-        # Convert 'Folder' column to a categorical type with the specified order
-        data = data.assign(
-            Folder=pd.Categorical(data["Folder"], categories=custom_order, ordered=True)
-        )
-        # Sort the data by the new folder order
-        data = data.sort_values(by=["Folder", "Year"])
-
+        reorder_data(data, custom_order)
+    plt.rcParams.update({"font.size": 14})
     # Recreate the bar chart with the reordered folders
     plt.figure(figsize=(12, 6))
-    sns.barplot(
-        data=data, x="Year", y="Values", hue="Folder", palette="viridis", orient="v"
+    ax = sns.barplot(
+        data=data, x="Year", y="Values", hue="Folder", palette=color_palette, orient="v"
     )
+    ylim = ax.get_ylim()
+    ax.set_ylim(ylim[0], ylim[1] + abs(ylim[1] * 0.1))
+
+    # Add values as labels above the bars
+    for container in ax.containers:
+        ax.bar_label(container, fmt="%.0f", fontsize=12, padding=5)
+
     # Add labels and title
-    plt.title(title, fontsize=14)
-    plt.xlabel(x_label, fontsize=12)
-    plt.ylabel(y_label, fontsize=12)
+    plt.title(title, fontsize=16)
+    plt.xlabel(x_label)
+    plt.ylabel(y_label)
     plt.legend(title="Folder", bbox_to_anchor=(1.05, 1), loc="upper left")
 
     # Show the plot
@@ -366,6 +417,7 @@ def plot_biomass_use(df, title, x_label, y_label, file_path, year=2050):
     # Filter by year
 
     plt.rcParams.update({"font.size": 18})
+    df["Data Name"] = df["Data Name"].str.replace("1", "")
     emission_factors = {
         "agricultural waste": 0.108,
         "fuelwood residues": 0.036,
@@ -377,7 +429,44 @@ def plot_biomass_use(df, title, x_label, y_label, file_path, year=2050):
         "fuelwoodRW": 0.288,
         "manure": 0.072,
         "sludge": 0,
+        "C&P_RW": 0.144,
+        "solid biomass import": 0.3667 * 0.1,
     }
+
+    biomass_potentials_TWh = {
+        "agricultural waste": 306,
+        "fuelwood residues": 541.7,
+        "fuelwoodRW": 75.4,
+        "grasses": 504,
+        "manure": 338.1,
+        "municipal solid waste": 151.2,
+        # "not included": 398.5,
+        "residues from landscape care": 74.7,
+        "sawdust": 32.4,
+        "secondary forestry residues": 94.3,
+        "sludge": 9.2,
+        "woody crops": 117.3,
+        "solid biomass import": 0,
+        "C&P_RW": 576.5,
+        # "unsustainable solid biomass": 0,
+        # "unsustainable biogas": 0,
+        # "unsustainable bioliquids": 0
+    }
+
+    custom_order = [
+        "woody crops",
+        "grasses",
+        "fuelwoodRW",
+        "C&P_RW",
+        "secondary forestry residues",
+        "sawdust",
+        "fuelwood residues",
+        "agricultural waste",
+        "residues from landscape care",
+        "sludge",
+        "manure",
+        "solid biomass import",
+    ]
 
     df = df[df["Year"] == year]
     # Conversion factors
@@ -388,13 +477,16 @@ def plot_biomass_use(df, title, x_label, y_label, file_path, year=2050):
     df_pivot = df.pivot_table(
         index="Data Name", columns="Folder", values="Values"
     ).reset_index()
-    df_pivot = df_pivot.rename(
-        columns={"endogenous_0_ef": "Scenario A", "endogenous_1_ef": "Scenario B"}
-    )
 
-    # Convert values to TWh
-    df_pivot["Scenario A"] = df_pivot["Scenario A"] * mwh_to_twh
-    df_pivot["Scenario B"] = df_pivot["Scenario B"] * mwh_to_twh
+    # # Reorder according to custom order
+    # df_pivot["order"] = df_pivot["Data Name"].map(lambda x: custom_order.index(x) if x in custom_order else float('inf'))
+    # df_pivot = df_pivot.sort_values(by="order").drop(columns=["order"])
+
+    # Reorder data according to custom order
+    df_pivot = df_pivot.set_index("Data Name").reindex(custom_order).reset_index()
+
+    for folder in df_pivot.columns[1:]:
+        df_pivot[folder] = df_pivot[folder] * mwh_to_twh
 
     # Create the plot
     fig, ax = plt.subplots(figsize=(14, 10))
@@ -404,38 +496,78 @@ def plot_biomass_use(df, title, x_label, y_label, file_path, year=2050):
 
     for index, row in df_pivot.iterrows():
         biomass_type = row["Data Name"]
-        value_a = row["Scenario A"]
-        value_b = row["Scenario B"]
+        value_a = row["default"]
+        value_b = row["biomass_emissions"]
+        potential = biomass_potentials_TWh.get(biomass_type, 0)
+        if value_a - value_b > -1:
+            color = "LightGreen"
+            # Base bar
+            ax.bar(
+                x_coords[index],
+                value_a,
+                width=bar_width,
+                label="without biomass emissions" if index == 0 else "",
+                color=color,
+                hatch="///",
+            )
+            ax.bar(
+                x_coords[index],
+                value_b,
+                width=bar_width,
+                label="with biomass emissions" if index == 0 else "",
+                color=color,
+            )
+        else:
+            color = "red"
+            ax.bar(
+                x_coords[index],
+                value_b,
+                width=bar_width,
+                label="with biomass emissions" if index == 0 else "",
+                color=color,
+                hatch="///",
+            )
+            # Base bar
+            ax.bar(
+                x_coords[index],
+                value_a,
+                width=bar_width,
+                label="without biomass emissions" if index == 0 else "",
+                color=color,
+            )
 
-        # Base bar (Scenario A)
+        # Add potential outline (black box)
         ax.bar(
             x_coords[index],
-            value_a,
+            potential,
             width=bar_width,
-            label="Scenario A" if index == 0 else "",
-            color="LightGreen",
-            hatch="///",
-        )
-        ax.bar(
-            x_coords[index],
-            value_b,
-            width=bar_width,
-            label="Scenario B" if index == 0 else "",
-            color="LightGreen",
+            edgecolor="black",
+            facecolor="none",
+            linewidth=1.5,
+            label="Potential" if index == 0 else "",
         )
 
         # Add emission factor below the x-axis
         emission_factor = emission_factors.get(biomass_type, "N/A")
         ef_g_per_MJ = round(emission_factor / 0.0036)
+        if biomass_type == "solid biomass import":
+            potential = value_b
         ax.text(
             x_coords[index],
-            value_a + 1,
+            potential + 1,
             f"{emission_factor} | {ef_g_per_MJ} \n ton/MWh | g/MJ",
             ha="center",
             va="bottom",
             fontsize=10,
         )
 
+    # Add legend
+    potential_patch = mpl.patches.Patch(
+        edgecolor="black",
+        facecolor="none",
+        label="Biomass Potential",
+        linewidth=1.5,
+    )
     a_patch = mpl.patches.Patch(
         facecolor="LightGreen", label="Biomass use - no emissions considered"
     )
@@ -444,11 +576,16 @@ def plot_biomass_use(df, title, x_label, y_label, file_path, year=2050):
         hatch="///",
         label="Difference in biomass use - emissions considered",
     )
-    plt.legend(handles=[a_patch, b_patch], fontsize=16)
+    red_patch = mpl.patches.Patch(
+        facecolor="red",
+        hatch="///",
+        label="More biomass used with emissions considered",
+    )
+    plt.legend(handles=[potential_patch, a_patch, b_patch, red_patch], fontsize=14)
 
     # Adjust plot limits to add space for text
     ylim = ax.get_ylim()
-    ax.set_ylim(ylim[0], ylim[1] + abs(ylim[1] * 0.1))  # Add 10% to the y-axis limit
+    ax.set_ylim(ylim[0], ylim[1] + abs(ylim[1] * 0.3))  # Add 10% to the y-axis limit
 
     # Customize plot
     ax.set_xticks(x_coords)
@@ -477,16 +614,37 @@ def plot_biomass_use(df, title, x_label, y_label, file_path, year=2050):
 
 def plot_efs():
     emission_factors = {
-        "agricultural waste": 0.108,
-        "fuelwood residues": 0.036,
+        "woody crops": 0.18,
+        "grasses": 0.216,
+        "fuelwoodRW": 0.288,
+        "C&P_RW": 0.144,
         "secondary forestry residues": 0.144,
         "sawdust": 0.108,
+        "fuelwood residues": 0.036,
+        "agricultural waste": 0.108,
         "residues from landscape care": 0,
-        "grasses": 0.216,
-        "woody crops": 0.18,
-        "fuelwoodRW": 0.288,
-        "manure": 0.072,
         "sludge": 0,
+        "manure": 0.072,
+        "imported biomass": 0.3667 * 0.1,
+    }
+
+    biomass_costs = {  # Euro/MWh_LHV
+        "agricultural waste": 12.8786,
+        "fuelwood residues": 15.3932,
+        "fuelwoodRW": 12.6498,
+        "manure": 22.1119,
+        "residues from landscape care": 10.5085,
+        "secondary forestry residues": 8.1876,
+        "coal": 9.5542,
+        "fuelwood": 14.5224,
+        "gas": 24.568,
+        "oil": 52.9111,
+        "woody crops": 44.4,
+        "grasses": 18.9983,
+        "sludge": 22.0995,
+        "imported biomass": 54,
+        "sawdust": 6.4791,
+        "C&P_RW": 25.4661,
     }
 
     # font size
@@ -500,22 +658,66 @@ def plot_efs():
         ax.bar(
             x_coords[index], ef, width=bar_width, label=biomass_type, color="LightGreen"
         )
+        # Add cost as text above the bar
+        cost = biomass_costs.get(biomass_type, "N/A")
+        ax.text(
+            x_coords[index],
+            ef + 0.01,  # Position the text slightly above the bar
+            f"{cost:.2f}\n€/MWh" if cost != "N/A" else "N/A",
+            ha="center",
+            va="bottom",
+            fontsize=12,
+            color="black",
+        )
 
     # Add gas emission factor
     x_coords = np.append(x_coords, [x_coords[-1] + (bar_width + gap)])
     ax.bar(x_coords[-1], 0.198, width=bar_width, label="natural gas", color="Grey")
+    ax.text(
+        x_coords[-1],
+        0.198 + 0.01,
+        f"{biomass_costs['gas']:.2f}\n€/MWh",
+        ha="center",
+        va="bottom",
+        fontsize=12,
+        color="black",
+    )
 
-    # Add coal
+    # Add oil emission factor
+    x_coords = np.append(x_coords, [x_coords[-1] + (bar_width + gap)])
+    ax.bar(x_coords[-1], 0.2571, width=bar_width, label="oil", color="Brown")
+    ax.text(
+        x_coords[-1],
+        0.2571 + 0.01,
+        f"{biomass_costs['oil']:.2f}\n€/MWh",
+        ha="center",
+        va="bottom",
+        fontsize=12,
+        color="black",
+    )
+
+    # Add coal emission factor
     x_coords = np.append(x_coords, [x_coords[-1] + (bar_width + gap)])
     ax.bar(x_coords[-1], 0.3361, width=bar_width, label="coal", color="Black")
+    ax.text(
+        x_coords[-1],
+        0.3361 + 0.01,
+        f"{biomass_costs['coal']:.2f}\n€/MWh",
+        ha="center",
+        va="bottom",
+        fontsize=12,
+        color="black",
+    )
 
     ax.set_xticks(x_coords)
     # ax.set_xticklabels(emission_factors.keys(), rotation=45, ha="right")
     ax.set_xticklabels(
-        list(emission_factors.keys()) + ["Natural Gas", "Coal"], rotation=45, ha="right"
+        list(emission_factors.keys()) + ["natural gas", "oil", "coal"],
+        rotation=45,
+        ha="right",
     )
     ax.set_xlabel("")
-    ax.set_ylabel("ton/MWh")
+    ax.set_ylabel("tonCO2/MWh")
     ax.set_title("Emission factors for different feedstocks", fontsize=26)
 
     ax2 = ax.twinx()
@@ -524,6 +726,10 @@ def plot_efs():
 
     secondary_locator = MultipleLocator(10)  # Adjust this value as needed
     ax2.yaxis.set_major_locator(secondary_locator)
+
+    # Adjust plot limits to add space for text
+    ylim = ax.get_ylim()
+    ax.set_ylim(ylim[0], ylim[1] + abs(ylim[1] * 0.1))
 
     plt.tight_layout()
 
@@ -542,7 +748,7 @@ def plot_bar_with_totals(
     y_label,
     file_path,
     custom_order=None,
-    remove_last_letters=0,
+    remove_letters=None,
     axis2_ticks=500,
     include_total=True,
 ):
@@ -550,23 +756,17 @@ def plot_bar_with_totals(
     # Pivot the DataFrame for plotting
 
     if custom_order is not None:
-        df = df.assign(
-            Folder=pd.Categorical(df["Folder"], categories=custom_order, ordered=True)
-        )
-        # Sort the data by the new folder order
-        df = df.sort_values(by=["Folder", "Year"])
+        df = reorder_data(df, custom_order)
 
-    if remove_last_letters != 0:
-        df["Data Name"] = df["Data Name"].str[:-remove_last_letters]
-
-    df["Data Name"] = df["Data Name"].str.replace("1", "")
-    df["Data Name"] = df["Data Name"].str.replace("2", "")
-    df["Data Name"] = df["Data Name"].str.replace("3", "")
-    df["Data Name"] = df["Data Name"].str.replace("4", "")
+    if remove_letters is not None:
+        for replace_letter in remove_letters:
+            df["Data Name"] = df["Data Name"].str.replace(f"{replace_letter}", "")
 
     # Calculate the total values for each scenario
     if include_total:
-        total_values = df.groupby("Folder")["Values"].sum().reset_index()
+        total_values = (
+            df.groupby("Folder", observed=False)["Values"].sum().reset_index()
+        )
         total_values["Data Name"] = "Total"
 
         # Append the total values to the original DataFrame
@@ -644,13 +844,20 @@ def __main__():
     #     "endogenous_1_1_ef",
     #     "endogenous_1_ef_2_gas",
     # ]
-    custom_order = [
-        "endogenous_0_ef",
-        "endogenous_1_ef",
-    ]
+    custom_order = ["default", "biomass_emissions"]
+
+    data = load_csv("export/costs2050.csv")
+    plot_data(
+        data,
+        "Total Costs",
+        "Year",
+        "Cost (Billion EUR)",
+        "total_costs.png",
+        custom_order,
+    )
 
     data = load_csv("export/biomass_supply.csv")
-    plot_biomass_use(data, "Biomass Supply", "", "TWh", "biomass_supply.png")
+    plot_biomass_use(data, "Biomass Use", "", "TWh", "biomass_supply.png")
 
     plot_efs()
 
@@ -694,7 +901,7 @@ def __main__():
         "TWh",
         "beccs.png",
         custom_order,
-        remove_last_letters=1,
+        remove_letters=[1],
         axis2_ticks=500,
     )
 
@@ -735,125 +942,92 @@ def __main__():
         threshold=0.0001,
     )
 
-    # data = load_csv("export/combined_costs.csv")
-    # plot_data(data, "Total Costs", "Year", "Cost (Billion EUR)", "total_costs.png")
+    data = load_csv("export/biomass_use_2050.csv")
+    plot_bar_with_shares(
+        data,
+        "Biomass Use in 2050",
+        "",
+        "TWh",
+        "biomass_use_2050.png",
+        custom_order,
+        axis2_ticks=500,
+        width=10,
+    )
 
-    # data = load_csv("export/combined_shadow_price.csv")
-    # plot_data(
-    #     data, "Shadow Prices", "Year", "Shadow Price (EUR/MWh)", "shadow_prices.png"
-    # )
+    data = load_csv("export/biomass_use_by_sector_2050.csv")
+    plot_bar_with_shares(
+        data,
+        "Biomass Use by Sector in 2050",
+        "",
+        "TWh",
+        "biomass_use_by_sector_2050.png",
+        custom_order,
+        axis2_ticks=500,
+        width=10,
+    )
 
-    # data = load_csv("export/gas_supply.csv")
-    # plot_data(data, "Gas Supply", "Year", "Supply (MWh)", "gas_supply.png")
+    data = load_csv("export/fossil_fuel_supply.csv")
+    plot_bar_with_totals(
+        data,
+        "Fossil Fuel Supply",
+        "",
+        "TWh",
+        "fossil_fuel_supply.png",
+        custom_order,
+        include_total=False,
+    )
 
-    # data = load_csv("export/biomass_use_sum.csv")
-    # plot_data(data, "Biomass Use", "Year", "Use (MWh)", "biomass_use.png")
+    data = load_csv("export/cost_difference.csv")
+    plot_costs(
+        data,
+        "Extra Costs Due to Biomass Emissions (bigger than 1 Billion EUR)",
+        "",
+        "Cost (Billion EUR)",
+        "cost_difference.png",
+    )
 
-    # data = load_csv("export/electricity_generation_share.csv")
-    # unique_data_names = data["Data Name"].unique()
-    # for data_name in unique_data_names:
-    #     filtered_data = data[data["Data Name"] == data_name]
-    #     title = f"{data_name}"
-    #     output_file = f"{data_name.replace(' ', '_')}.png"
-    #     plot_data(filtered_data, title, "Year", "Generation (MWh)", output_file)
+    data = load_csv("export/shadow_price_2050.csv")
+    plot_data(
+        data, "Shadow Prices", "Year", "Shadow Price (EUR/MWh)", "shadow_prices.png"
+    )
 
-    # # Plot sum of all wind
-    # wind_data = data[data["Data Name"].str.contains("wind")]
-    # title = "Wind Power Generation"
-    # output_file = "wind_generation.png"
-    # wind_data = wind_data.groupby(["Year", "Folder"]).sum().reset_index()
-    # plot_data(wind_data, title, "Year", "Generation (MWh)", output_file)
+    data = load_csv("export/hydrogen_production_2050.csv")
+    plot_bar_with_totals(
+        data,
+        "Hydrogen Production",
+        "",
+        "TWh",
+        "hydrogen_production_2050.png",
+        custom_order,
+        remove_letters=[1],
+        axis2_ticks=500,
+        include_total=True,
+    )
 
-    # # Plot sum of all solar
-    # solar_data = data[data["Data Name"].str.contains("solar")]
-    # solar_rooftop = load_csv("export/solar_rooftop.csv")
-    # solar_data = pd.concat([solar_data, solar_rooftop], ignore_index=True)
-    # title = "Solar Power Generation"
-    # output_file = "solar_generation.png"
-    # solar_data = solar_data.groupby(["Year", "Folder"]).sum().reset_index()
-    # plot_data(solar_data, title, "Year", "Generation (MWh)", output_file)
+    data = load_csv("export/heat_pumps_2050.csv")
+    plot_bar_with_totals(
+        data,
+        "Heat Pump Electricity Consumption",
+        "",
+        "TWh",
+        "heat_pumps_2050.png",
+        custom_order,
+        remove_letters=[0],
+        axis2_ticks=500,
+        include_total=True,
+    )
 
-    # data = load_csv("export/biomass_use.csv")
-    # unique_data_names = data["Data Name"].unique()
-    # for data_name in unique_data_names:
-    #     filtered_data = data[data["Data Name"] == data_name]
-    #     title = f"{data_name}"
-    #     output_file = f"{data_name.replace(' ', '_')}.png"
-    #     plot_data(filtered_data, title, "Year", "Biomass Input in MWh", output_file)
-
-    # data = load_csv("export/biomass_supply.csv")
-    # unique_data_names = data["Data Name"].unique()
-    # for data_name in unique_data_names:
-    #     filtered_data = data[data["Data Name"] == data_name]
-    #     title = f"{data_name}"
-    #     output_file = f"{data_name.replace(' ', '_')}.png"
-    #     plot_data(filtered_data, title, "Year", "Biomass Supply in MWh", output_file)
-
-    # data = load_csv("export/EV_data.csv")
-    # unique_data_names = data["Data Name"].unique()
-    # for data_name in unique_data_names:
-    #     filtered_data = data[data["Data Name"] == data_name]
-    #     title = f"{data_name}"
-    #     output_file = f"{data_name.replace(' ', '_')}.png"
-    #     plot_data(filtered_data, title, "Year", data_name, output_file)
-
-    # data = load_csv("export/storage_data.csv")
-    # unique_data_names = data["Data Name"].unique()
-    # for data_name in unique_data_names:
-    #     filtered_data = data[data["Data Name"] == data_name]
-    #     title = f"{data_name}"
-    #     output_file = f"{data_name.replace(' ', '_')}.png"
-    #     plot_data(filtered_data, title, "Year", data_name, output_file)
-    # data = load_csv("export/oil_supply.csv")
-    # plot_data(data, "Oil Supply", "Year", "Supply (MWh)", "oil_supply.png")
-
-    # data = load_csv("export/biomass_prices.csv")
-    # plot_data(data, "Biomass Prices", "Year", "Price (EUR/MWh)", "biomass_prices.png")
-
-    # data = load_csv("export/mediumT_share.csv")
-    # plot_shares(
-    #     data, "Medium Temperature Heat Industry", "Year", "Share", "mediumT_shares.png"
-    # )
-
-    # data = load_csv("export/highT_share.csv")
-    # plot_shares(
-    #     data, "High Temperature Heat Industry", "Year", "Share", "highT_shares.png"
-    # )
-
-    # data = load_csv("export/lowT_share.csv")
-    # plot_shares(
-    #     data, "Low Temperature Heat Industry", "Year", "Share", "lowT_shares.png"
-    # )
-
-    # data = load_csv("export/urban_central_heat_share.csv")
-    # plot_shares(
-    #     data, "Urban Central Heat", "Year", "Share", "urban_central_heat_shares.png"
-    # )
-
-    # data = load_csv("export/urban_decentral_heat_share.csv")
-    # plot_shares(
-    #     data, "Urban Decentral Heat", "Year", "Share", "urban_decentral_heat_shares.png"
-    # )
-
-    # data = load_csv("export/rural_heating_share.csv")
-    # plot_shares(data, "Rural Heating", "Year", "Share", "rural_heating_shares.png")
-
-    # data = load_csv("export/low_voltage_share_output.csv")
-    # plot_shares(
-    #     data, "Low Voltage Output", "Year", "Share", "low_voltage_output_shares.png"
-    # )
-
-    # data = load_csv("export/solar_rooftop.csv")
-    # plot_data(data, "Solar Rooftop", "Year", "Generation (MWh)", "solar_rooftop.png")
-
-    # data = load_csv("export/electricity_generation_share.csv")
-    # plot_shares(
-    #     data,
-    #     "Electricity Generation Share (AC)",
-    #     "Year",
-    #     "Share",
-    #     "electricity_generation_shares.png",
-    # )
+    data = load_csv("export/gas_use_2050.csv")
+    plot_bar_with_totals(
+        data,
+        "(Bio)Gas Use",
+        "",
+        "TWh",
+        "gas_use_2050.png",
+        custom_order,
+        axis2_ticks=500,
+        include_total=False,
+    )
 
 
 if __name__ == "__main__":
