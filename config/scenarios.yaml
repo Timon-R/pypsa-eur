@@ -24,7 +24,7 @@ default:
   sector:
     gas_network: true
     biomass_spatial: true
-    biomass_transport: true
+    biomass_transport: true #markus had false here
     biogas_upgrading_cc: true
     industry_t:  # heat supply industry
       endogen: true
