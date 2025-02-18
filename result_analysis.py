@@ -577,6 +577,28 @@ def calculate_carbon_removal(
     return results
 
 
+def calculate_share(dict):
+    folders = list(set([content["folder"] for content in dict.values()]))
+    totals = {}
+    for folder in folders:
+        total = 0
+        for key, content in dict.items():
+            if content["folder"] == folder:
+                total += content["values"]
+        totals[folder] = total
+    results = {}
+    for key, content in dict.items():
+        share = content["values"] / totals[content["folder"]]
+        results[key] = {
+            "folder": content["folder"],
+            "year": content["year"],
+            "data_name": content["data_name"],
+            "values": content["values"],
+            "share": share,
+        }
+    return results
+
+
 def calculate_removal_share(dict):
     results = {}
     for key, content in dict.items():
@@ -629,9 +651,114 @@ def calc_gas_share(
     return results
 
 
+def split_CHP(data):
+    electrictiy_share = 0.248
+    heat_share = 0.752
+    new_entries = []
+    updated_entries = []
+    deleted_entries = []
+
+    for key, content in data.items():
+        if "CHP" in content["data_name"]:
+            # Check if an entry with "electricity production" already exists
+            electricity_exists = False
+            for key2, content2 in data.items():
+                if (
+                    content2["folder"] == content["folder"]
+                    and content2["year"] == content["year"]
+                    and content2["data_name"] == "electricity production"
+                ):
+                    updated_entries.append(
+                        (
+                            key2,
+                            {
+                                "folder": content2["folder"],
+                                "year": content2["year"],
+                                "data_name": "electricity production",
+                                "values": content2["values"]
+                                + content["values"] * electrictiy_share,
+                                "share": content2["share"]
+                                + content["share"] * electrictiy_share,
+                            },
+                        )
+                    )
+                    electricity_exists = True
+                    break
+
+            if not electricity_exists:
+                new_key = key + "_electricity"
+                new_entries.append(
+                    (
+                        new_key,
+                        {
+                            "folder": content["folder"],
+                            "year": content["year"],
+                            "data_name": "electricity production",
+                            "values": content["values"] * electrictiy_share,
+                            "share": content["share"] * electrictiy_share,
+                        },
+                    )
+                )
+
+            # Check if an entry with "heat production" already exists
+            heat_exists = False
+            for key2, content2 in data.items():
+                if (
+                    content2["folder"] == content["folder"]
+                    and content2["year"] == content["year"]
+                    and "heat production" in content2["data_name"]
+                ):
+                    updated_entries.append(
+                        (
+                            key2,
+                            {
+                                "folder": content2["folder"],
+                                "year": content2["year"],
+                                "data_name": "heat production",
+                                "values": content2["values"]
+                                + content["values"] * heat_share,
+                                "share": content2["share"]
+                                + content["share"] * heat_share,
+                            },
+                        )
+                    )
+                    heat_exists = True
+                    break
+
+            if not heat_exists:
+                new_key = key + "_heat"
+                new_entries.append(
+                    (
+                        new_key,
+                        {
+                            "folder": content["folder"],
+                            "year": content["year"],
+                            "data_name": "heat production",
+                            "values": content["values"] * heat_share,
+                            "share": content["share"] * heat_share,
+                        },
+                    )
+                )
+
+            deleted_entries.append(key)
+
+    # Update the dictionary after iteration
+    for new_key, new_content in new_entries:
+        data[new_key] = new_content
+    for key2, updated_content in updated_entries:
+        data[key2] = updated_content
+    for key in deleted_entries:
+        del data[key]
+
+    # Sort the dictionary
+    data = dict(sorted(data.items()))
+
+    return data
+
+
 def main():
     results_dir = "results"
-    scenarios = ["default", "biomass_emissions"]
+    scenarios = ["default", "biomass_emissions", "150_seq", "400_seq"]
     results = load_results(results_dir, scenarios)
     # scenarios = "all"
 
@@ -703,7 +830,6 @@ def main():
         "supply_energy",
         [
             ["solid biomass", "links", "CC"],
-            ["solid biomass", "links", "electrobiofuel"],
         ],
         [],
         "D",
@@ -824,53 +950,6 @@ def main():
         remove_list=remove_list,
     )
     export_results(primary_energy_2050, "primary_energy_2050.csv", include_share=True)
-
-    merge_fields = [
-        [["biogas to gas"], "biogas upgrading without CC", False],
-        [["biogas to gas"], "biogas upgrading with CC", True],
-        [["CC", "electrobiofuels"], "biomass use with CC", None],
-        [[""], "biomass use without CC", False],
-    ]
-    biomass_use_2050 = aggregate_and_calculate_share(
-        results,
-        scenarios,
-        "supply_energy",
-        [["solid biomass", "links", ""]],
-        merge_fields,
-        "D",
-        "C",
-        "2050",
-        filter_positive=False,
-        multiplier=-1,
-        calculate_share=True,
-        remove_list=["transport", "import"],
-    )
-    export_results(biomass_use_2050, "biomass_use_2050.csv", include_share=True)
-
-    merge_fields = [
-        [["SNG"], "Conversion to SNG", None],
-        [["to liquid", "electrobiofuels"], "Conversion to liquid fuels", None],
-        [["industry", "boiler"], "Use for heat", None],
-        [["CHP"], "Use in CHP", None],
-        [["hydrogen"], "Use for hydrogen production", None],
-    ]
-    biomass_use_by_sector_2050 = aggregate_and_calculate_share(
-        results,
-        scenarios,
-        "supply_energy",
-        [["solid biomass", "links", ""]],
-        merge_fields,
-        "D",
-        "C",
-        "2050",
-        filter_positive=False,
-        multiplier=-1,
-        calculate_share=True,
-        remove_list=["transport", "import"],
-    )
-    export_results(
-        biomass_use_by_sector_2050, "biomass_use_by_sector_2050.csv", include_share=True
-    )
 
     # costs_2030 = get_data(
     #     results,
@@ -1084,6 +1163,16 @@ def main():
             "oil primary": 467.8 * 0.2571,
             "gas": 467.8 * 0.198,
         },
+        "150_seq": {
+            "oil": 1046.5 * 0.2571,
+            "oil primary": 1046.5 * 0.2571,
+            "gas": 1046.5 * 0.198,
+        },
+        "400_seq": {
+            "oil": 291.3 * 0.2571,
+            "oil primary": 291.3 * 0.2571,
+            "gas": 291.3 * 0.198,
+        },
     }
     weighted_prices_2050 = add_costs(weighted_prices_2050)
     weighted_prices_2050 = add_co2_price(
@@ -1135,13 +1224,14 @@ def main():
     co2_digestable_biomass = 0.2848
 
     carbon_from_solid_biomass = calculate_carbon_removal(
-        solid_biomass_supply, co2_solid_biomass, co2_solid_biomass
+        solid_biomass_supply, co2_solid_biomass, co2_solid_biomass, scenarios=scenarios
     )
     total_biomass_carbon = calculate_carbon_removal(
         digestable_biomass_supply,
         co2_digestable_biomass,
         co2_digestable_biomass,
         existing_dict=carbon_from_solid_biomass,
+        scenarios=scenarios,
     )
 
     all_biomass_co2_capture = aggregate_and_calculate_share(
@@ -1192,6 +1282,7 @@ def main():
         existing_dict=total_biomass_carbon,
         is_removed=True,
         add_to_total=False,
+        scenarios=scenarios,
     )
     seq_biomass2 = calculate_carbon_removal(
         all_gas_capture,
@@ -1202,6 +1293,7 @@ def main():
         is_removed=True,
         add_to_total=False,
         gas_shares=gas_shares,
+        scenarios=scenarios,
     )
     with_share = calculate_removal_share(seq_biomass2)
     export_carbon_removal(with_share, "carbon_removal.csv")
@@ -1248,6 +1340,66 @@ def main():
         filter_positive=True,
     )
     export_results(co2_capture, "co2_capture.csv", include_share=True)
+
+    # use "gas_shares"
+
+    merge_fields = [
+        [["to liquid", "electrobiofuels"], "conversion to liquid fuels", None],
+        [["industry", "boiler"], "heat production", None],
+        [["CHP"], "CHP", None],
+        [["hydrogen", "SMR"], "hydrogen production", None],
+        [["OCGT"], "electricity production", None],
+    ]
+    solid_biomass_use_by_sector_2050 = (
+        aggregate_and_calculate_share(  # this doesn't account for the gas share yet
+            results,
+            scenarios,
+            "supply_energy",
+            [["solid biomass", "links", ""]],
+            merge_fields,
+            "D",
+            "C",
+            "2050",
+            filter_positive=False,
+            multiplier=-1,
+            calculate_share=False,
+            remove_list=["transport", "import", "pipeline", "biogas to gas", "SNG"],
+        )
+    )
+    digestable_biomass_use_by_sector_2050 = (
+        aggregate_and_calculate_share(  # this doesn't account for the gas share yet
+            results,
+            scenarios,
+            "supply_energy",
+            [["gas", "links", ""]],
+            merge_fields,
+            "D",
+            "C",
+            "2050",
+            filter_positive=False,
+            multiplier=-1,
+            calculate_share=False,
+            remove_list=["transport", "import", "pipeline", "biogas to gas"],
+        )
+    )
+    for key, content in digestable_biomass_use_by_sector_2050.items():
+        # mulitply the values by the 1-gas share
+        content["values"] = content["values"] * (
+            1 - gas_shares[content["folder"]]["share"]
+        )
+
+    biomass_use_by_sector_2050 = solid_biomass_use_by_sector_2050.copy()
+    for key, value in digestable_biomass_use_by_sector_2050.items():
+        if key in biomass_use_by_sector_2050:
+            biomass_use_by_sector_2050[key]["values"] += value["values"]
+        else:
+            biomass_use_by_sector_2050[key] = value
+    biomass_use_by_sector_2050 = calculate_share(biomass_use_by_sector_2050)
+    biomass_use_by_sector_2050 = split_CHP(biomass_use_by_sector_2050)
+
+    export_results(
+        biomass_use_by_sector_2050, "biomass_use_by_sector_2050.csv", include_share=True
+    )
 
 
 if __name__ == "__main__":

@@ -366,7 +366,7 @@ def plot_feedstock_prices(df, title, x_label, y_label, file_path, custom_order=N
         Ticks for the secondary axis.
     """
     # Remove unwanted feedstocks
-    df = df[~df["Data Name"].isin(["biogas", "solid biomass"])]
+    df = df[~df["Data Name"].isin(["solid biomass"])]
 
     # Define categories
     digestible_biomass = ["manure", "sludge"]
@@ -387,9 +387,10 @@ def plot_feedstock_prices(df, title, x_label, y_label, file_path, custom_order=N
     feedstocks = [
         "solid biomass",
         "digestible biomass",
+        "biogas",
         "liquid fuels",
         "primary oil",
-        "gas",
+        "natural gas",
     ]
 
     # Set color palette
@@ -412,13 +413,18 @@ def plot_feedstock_prices(df, title, x_label, y_label, file_path, custom_order=N
             "digestible biomass": scenario_df.loc[
                 scenario_df["Data Name"].isin(digestible_biomass), "Values"
             ].values,
+            "biogas": scenario_df.loc[
+                scenario_df["Data Name"] == "biogas", "Values"
+            ].values,
             "liquid fuels": scenario_df.loc[
                 scenario_df["Data Name"] == "oil", "Values"
             ].values,
             "primary oil": scenario_df.loc[
                 scenario_df["Data Name"] == "oil primary", "Values"
             ].values,
-            "gas": scenario_df.loc[scenario_df["Data Name"] == "gas", "Values"].values,
+            "natural gas": scenario_df.loc[
+                scenario_df["Data Name"] == "gas", "Values"
+            ].values,
         }
 
         # Apply custom order if provided
@@ -618,7 +624,7 @@ def plot_bar_with_shares(
 
     # Define x-axis positions and bar width
     x = np.arange(len(values))  # Positions for each Data Name
-    bar_width = 0.35
+    bar_width = 0.2
 
     # Create the bar plot
     fig, ax = plt.subplots(figsize=(width, 6))
@@ -1230,10 +1236,10 @@ def plot_bar_with_totals(
 
     # Define x-axis positions and bar width
     x = np.arange(len(pivot_df))  # Positions for each Data Name
-    bar_width = 0.35
+    bar_width = 0.2
 
     # Create the bar plot
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(14, 6))
     for i, folder in enumerate(pivot_df.columns):
         ax.bar(x + i * bar_width, pivot_df[folder], bar_width, label=folder)
 
@@ -1256,9 +1262,9 @@ def plot_bar_with_totals(
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     ax.set_title(title)
-    ax.set_xticks(x + bar_width / 2)
-    ax.set_xticklabels(pivot_df.index, rotation=45, ha="right")
-    ax.legend(title="Scenario")
+    ax.set_xticks(x + bar_width * 1.5)
+    ax.set_xticklabels(pivot_df.index, rotation=45, ha="right", fontsize=12)
+    ax.legend(title="Scenario", fontsize=12)
 
     ax2 = ax.twinx()
     ax2.set_yticks(ax.get_yticks() * 3.6)
@@ -1321,7 +1327,7 @@ def __main__():
     #     "endogenous_1_1_ef",
     #     "endogenous_1_ef_2_gas",
     # ]
-    custom_order = ["default", "biomass_emissions"]
+    custom_order = ["default", "biomass_emissions", "150_seq", "400_seq"]
 
     data = load_csv("export/costs2050.csv")
     plot_data(
@@ -1335,6 +1341,17 @@ def __main__():
 
     data = load_csv("export/biomass_supply.csv")
     plot_biomass_use(data, "Biomass Use", "", "TWh", "biomass_supply.png")
+    plot_bar_with_totals(
+        data,
+        "Biomass Supply",
+        "",
+        "TWh",
+        "biomass_supply_totals.png",
+        custom_order,
+        remove_letters=[1],
+        axis2_ticks=500,
+        include_total=False,
+    )
 
     plot_efs()
 
@@ -1361,14 +1378,14 @@ def __main__():
         axis2_ticks=5000,
         width=10,
     )
-    plot_difference_bar(
-        data,
-        "Difference in Electricity Generation Considering Biomass Emissions",
-        "",
-        "TWh",
-        "electricity_generation_share_2050_diff.png",
-        custom_order,
-    )
+    # plot_difference_bar(
+    #     data,
+    #     "Difference in Electricity Generation Considering Biomass Emissions",
+    #     "",
+    #     "TWh",
+    #     "electricity_generation_share_2050_diff.png",
+    #     custom_order,
+    # )
 
     data = load_csv("export/beccs.csv")
     plot_bar_with_totals(
@@ -1419,18 +1436,6 @@ def __main__():
         threshold=0.0001,
     )
 
-    data = load_csv("export/biomass_use_2050.csv")
-    plot_bar_with_shares(
-        data,
-        "Solid Biomass Use in 2050",
-        "",
-        "TWh",
-        "biomass_use_2050.png",
-        custom_order,
-        axis2_ticks=500,
-        width=10,
-    )
-
     data = load_csv("export/biomass_use_by_sector_2050.csv")
     plot_bar_with_shares(
         data,
@@ -1465,7 +1470,11 @@ def __main__():
 
     data = load_csv("export/shadow_price_2050.csv")
     plot_data(
-        data, "Shadow Prices", "Year", "Shadow Price (EUR/tonCO2)", "shadow_prices.png"
+        data,
+        "CO2 Shadow Prices",
+        "Year",
+        "Shadow Price (EUR/tonCO2)",
+        "shadow_prices.png",
     )
 
     data = load_csv("export/hydrogen_production_2050.csv")
@@ -1569,6 +1578,17 @@ def __main__():
         custom_order,
         multiplier=1e-6,
         remove_last_letters=1,
+    )
+
+    data = load_csv("export/biomass_use_by_sector_2050.csv")
+    plot_stacked_bar(
+        data,
+        "Biomass Use by Sector in 2050",
+        "",
+        "TWh",
+        "biomass_use_by_sector_2050.png",
+        custom_order,
+        multiplier=1e-6,
     )
 
 

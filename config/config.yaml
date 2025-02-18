@@ -786,7 +786,7 @@ sector:
     enable: false
     price: 54 #EUR/MWh
     max_amount: 1390 # TWh
-    upstream_emissions_factor: .1 #share of solid biomass CO2 emissions at full combustion
+    upstream_emissions_factor: .59 #share of solid biomass CO2 emissions at full combustion - 0.59= 60g/MJ , default was 0.1 but that is too low
   non-edible_crops: true
 
 
