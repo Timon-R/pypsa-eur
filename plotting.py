@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from matplotlib.legend_handler import HandlerPatch
+from matplotlib.path import Path
 from matplotlib.ticker import MultipleLocator
 
 
@@ -39,6 +40,225 @@ def reorder_data(data, custom_order):
         )
         data = data.sort_values(by=["Folder", "Year"])
     return data
+
+    # Create a custom elliptical wedge for the filled portion
+
+
+def create_elliptical_wedge(
+    center_x, center_y, width, height, theta1, theta2, num_points=100
+):
+    # Convert angles from degrees to radians
+    theta1_rad = np.radians(theta1)
+    theta2_rad = np.radians(theta2)
+
+    # Create the angle array
+    theta = np.linspace(theta2_rad, theta1_rad, num_points)
+
+    # Create the points on the arc
+    x = center_x + width * np.cos(theta)
+    y = center_y + height * np.sin(theta)
+
+    # Add the center point at the beginning
+    x = np.insert(x, 0, center_x)
+    y = np.insert(y, 0, center_y)
+
+    # Create the vertices
+    vertices = np.column_stack([x, y])
+
+    # Create the codes
+    codes = [Path.MOVETO] + [Path.LINETO] * (num_points - 1) + [Path.CLOSEPOLY]
+
+    return Path(vertices, codes)
+
+
+def create_gravitational_plot(
+    title,
+    file_path,
+    multiplier=1e-6,
+    biomass_supply=None,
+    scenario=None,
+):
+    emission_factors = {
+        "agricultural waste": 0.108,
+        "fuelwood residues": 0.036,
+        "secondary forestry residues": 0.144,
+        "sawdust": 0.108,
+        "residues from landscape care": 0,
+        "grasses": 0.216,
+        "woody crops": 0.18,
+        "fuelwoodRW": 0.288,
+        "manure": 0.072,
+        "sludge": 0,
+        "C&P_RW": 0.144,
+        "solid biomass import": 0.3667 * 0.59,
+    }
+    biomass_potentials_TWh = {  # check if this is still true
+        "agricultural waste": 306,
+        "fuelwood residues": 541.7,
+        "fuelwoodRW": 75.4,
+        "grasses": 504,
+        "manure": 338.1,
+        "municipal solid waste": 151.2,
+        "residues from landscape care": 74.7,
+        "sawdust": 32.4,
+        "secondary forestry residues": 94.3,
+        "sludge": 9.2,
+        "woody crops": 117.3,
+        "solid biomass import": 1390,
+        "C&P_RW": 576.5,
+    }
+    biomass_costs = {  # Euro/MWh_LHV
+        "agricultural waste": 12.8786,
+        "fuelwood residues": 15.3932,
+        "fuelwoodRW": 12.6498,
+        "manure": 22.1119,
+        "residues from landscape care": 10.5085,
+        "secondary forestry residues": 8.1876,
+        "woody crops": 44.4,
+        "grasses": 18.9983,
+        "sludge": 22.0995,
+        "solid biomass import": 54,
+        "sawdust": 6.4791,
+        "C&P_RW": 25.4661,
+    }
+
+    if biomass_supply is not None and scenario is not None:
+        biomass_supply = biomass_supply[biomass_supply["Folder"] == scenario]
+        # remove the 1 from the data_name
+        biomass_supply.loc[:, "Data Name"] = biomass_supply["Data Name"].str.replace(
+            "1", ""
+        )
+
+    # Extract data for plotting
+    biomass_types = list(emission_factors.keys())
+    emissions = [emission_factors[bt] for bt in biomass_types]
+    costs = [biomass_costs[bt] for bt in biomass_types]
+    potentials = [biomass_potentials_TWh[bt] for bt in biomass_types]
+
+    # Normalize potentials for circle sizes
+    max_potential = max(potentials)
+    sizes = [max_potential * (p / max_potential) for p in potentials]
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    dig_biomass_color = "blue"
+    solid_biomass_color = "green"
+
+    # Draw the plot first to get the limits
+    for i, bt in enumerate(biomass_types):
+        if bt in ["manure", "sludge"]:
+            color = dig_biomass_color
+        else:
+            color = solid_biomass_color
+        plt.scatter(
+            costs[i],
+            emissions[i],
+            s=sizes[i],
+            alpha=1,
+            facecolors="none",
+            edgecolors=color,
+            linewidth=1,
+        )
+        plt.text(
+            costs[i],
+            emissions[i] + 2 * sizes[i] / max_potential * 0.01 + 0.01,
+            bt,
+            fontsize=9,
+            ha="center",
+        )
+
+    # Set up the axes and draw to ensure limits are calculated
+    plt.xlabel("Costs in Euro/MWh_LHV")
+    plt.ylabel("Emission Factors in tonCO2/MWh")
+    plt.title(title)
+    plt.xlim(0, max(costs) + 5)
+    plt.ylim(-0.02, max(emissions) + 0.05)
+    fig.canvas.draw()
+
+    # Get the actual data ratio
+    data_ratio = ax.get_data_ratio()
+
+    # Get the physical dimensions ratio
+    bbox = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
+    width_inches, height_inches = bbox.width, bbox.height
+    physical_ratio = height_inches / width_inches
+
+    # Calculate the combined adjustment factor
+    adjustment_factor = data_ratio / physical_ratio
+
+    # Now draw the wedges with the proper adjustment
+    for i, bt in enumerate(biomass_types):
+        if bt in ["manure", "sludge"]:
+            color = dig_biomass_color
+        else:
+            color = solid_biomass_color
+        if biomass_supply is not None and bt in biomass_supply["Data Name"].values:
+            supply = (
+                biomass_supply[biomass_supply["Data Name"] == bt]["Values"].values[0]
+                * multiplier
+            )
+            potential = biomass_potentials_TWh[bt]
+            usage = supply / potential * 100
+            if usage > 99:
+                usage = 100
+            theta1 = 90
+            theta2 = 90 - 360 * (usage / 100)
+
+            # Correctly convert from area (sizes[i]) to radius, matching the scatter plot circles
+            # The scatter plot uses s=area, so we need sqrt(sizes[i]/pi) to get equivalent radius
+            circle_radius = np.sqrt(sizes[i] / np.pi)
+            width = circle_radius * 0.09  # Scale factor for visual appearance
+            height = width * adjustment_factor
+
+            if usage >= 99.5:  # Special case for (nearly) 100% usage
+                # Draw a filled ellipse instead of a wedge
+                ellipse = mpatches.Ellipse(
+                    (costs[i], emissions[i]),
+                    width=width * 2,  # Diameter = 2*radius
+                    height=height * 2,
+                    facecolor=color,
+                    edgecolor="none",
+                    alpha=1,
+                )
+                ax.add_patch(ellipse)
+            else:
+                # Normal case: draw a wedge
+                theta1 = 90
+                theta2 = 90 - 360 * (usage / 100)
+                wedge_path = create_elliptical_wedge(
+                    costs[i], emissions[i], width, height, theta1, theta2
+                )
+                wedge_patch = mpatches.PathPatch(
+                    wedge_path, facecolor=color, edgecolor="none", alpha=1
+                )
+                ax.add_patch(wedge_patch)
+
+    # Add legend for circle sizes
+    for size in [100, 200, 500]:  # Example sizes
+        plt.scatter(
+            [],
+            [],
+            s=max_potential * (size / max_potential),
+            edgecolors="black",
+            facecolors="none",
+            label=f"{size} TWh",
+        )
+    plt.legend(scatterpoints=1, frameon=False, labelspacing=1, title="Potential")
+
+    # # Add legend for biomass types
+    # handles = [plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='none', markeredgecolor=colors[i], markersize=10, label=bt) for i, bt in enumerate(biomass_types)]
+    # plt.legend(handles=handles, title='Biomass Types', bbox_to_anchor=(1.05, 1), loc='upper left')
+
+    # add some space to the top and left
+    plt.xlim(0, max(costs) + 5)
+    plt.ylim(-0.02, max(emissions) + 0.05)
+
+    # Save the plot to a file
+    export_dir = "export/plots"
+    os.makedirs(export_dir, exist_ok=True)
+    file_path = os.path.join(export_dir, file_path)
+    plt.savefig(file_path)
+    plt.close()
 
 
 def plot_stacked_bar(
@@ -1724,6 +1944,25 @@ def __main__():
         index="Data Name",
         threshold=0.001,
         threshold_column="emission_difference",
+    )
+
+    create_gravitational_plot(
+        "Gravitational Plot",
+        "gravitational_plot.png",
+    )
+
+    data = load_csv("export/biomass_supply.csv")
+    create_gravitational_plot(
+        "Gravitational Plot (biomass_emissions)",
+        "gravitational_plot_biomass_emissions.png",
+        biomass_supply=data,
+        scenario="biomass_emissions",
+    )
+    create_gravitational_plot(
+        "Gravitational Plot (default)",
+        "gravitational_plot_default.png",
+        biomass_supply=data,
+        scenario="default",
     )
 
 
