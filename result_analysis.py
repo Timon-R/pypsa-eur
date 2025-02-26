@@ -295,6 +295,7 @@ def export_results(
     scenario1="default",
     scenario2="biomass_emissions",
     add_costs=False,
+    simply_print=False,
 ):
     """
     Export the results to a CSV file.
@@ -307,45 +308,50 @@ def export_results(
     export_dir = "export"
     os.makedirs(export_dir, exist_ok=True)
     rows = []
-    for key, content in data.items():
-        # Flatten the values if they are lists with a single entry
-        if include_difference:
-            values1 = content[f"values_{scenario1}"]
-            if isinstance(values1, list) and len(values1) == 1:
-                values1 = values1[0]
-            values2 = content[f"values_{scenario2}"]
-            if isinstance(values2, list) and len(values2) == 1:
-                values2 = values2[0]
-            rows.append(
-                {
-                    "Year": content["year"],
-                    "Data Name": content["data_name"],
-                    f"Values_{scenario1}": values1,
-                    f"Values_{scenario2}": values2,
-                    "Difference": content["difference"],
-                }
-            )
-        else:
-            values = content["values"]
-            if isinstance(values, list) and len(values) == 1:
-                values = values[0]
-            rows.append(
-                {
-                    "Folder": content["folder"],
-                    "Year": content["year"],
-                    "Data Name": content["data_name"],
-                    "Values": values,
-                }
-            )
-            if include_share:
-                rows[-1]["Share"] = content["share"]
-        if add_costs:
-            if content["costs"] is not None and isinstance(
-                content["costs"], (int, float)
-            ):
-                rows[-1]["Costs"] = round(content["costs"], 2)
+    if simply_print:
+        # for every key, add all the items of the content dictionary to the row
+        for key, content in data.items():
+            rows.append({**content})
+    else:
+        for key, content in data.items():
+            # Flatten the values if they are lists with a single entry
+            if include_difference:
+                values1 = content[f"values_{scenario1}"]
+                if isinstance(values1, list) and len(values1) == 1:
+                    values1 = values1[0]
+                values2 = content[f"values_{scenario2}"]
+                if isinstance(values2, list) and len(values2) == 1:
+                    values2 = values2[0]
+                rows.append(
+                    {
+                        "Year": content["year"],
+                        "Data Name": content["data_name"],
+                        f"Values_{scenario1}": values1,
+                        f"Values_{scenario2}": values2,
+                        "Difference": content["difference"],
+                    }
+                )
             else:
-                rows[-1]["Costs"] = content["costs"]
+                values = content["values"]
+                if isinstance(values, list) and len(values) == 1:
+                    values = values[0]
+                rows.append(
+                    {
+                        "Folder": content["folder"],
+                        "Year": content["year"],
+                        "Data Name": content["data_name"],
+                        "Values": values,
+                    }
+                )
+                if include_share:
+                    rows[-1]["Share"] = content["share"]
+            if add_costs:
+                if content["costs"] is not None and isinstance(
+                    content["costs"], (int, float)
+                ):
+                    rows[-1]["Costs"] = round(content["costs"], 2)
+                else:
+                    rows[-1]["Costs"] = content["costs"]
     df = pd.DataFrame(rows)
     file_path = os.path.join(export_dir, filename)
     df.to_csv(file_path, index=False)
@@ -423,7 +429,9 @@ def aggregate_and_calculate_share(
             data[value_column] = pd.to_numeric(data[value_column], errors="coerce")
 
             # Apply filter_positive
-            if filter_positive:
+            if filter_positive is None:
+                data = data
+            elif filter_positive:
                 data = data[data[value_column] > 0]
             else:
                 data = data[data[value_column] < 0]
@@ -556,22 +564,22 @@ def calculate_carbon_removal(
         if gas_shares is not None:
             capture_rate = capture_rate * (1 - gas_shares[folder]["share"])
         if existing_dict is None:
-            carbon_removed = 0
+            carbon_stored = 0
             total_carbon = 0
         else:
-            carbon_removed = existing_dict[folder]["carbon_removed"]
+            carbon_stored = existing_dict[folder]["carbon_stored"]
             total_carbon = existing_dict[folder]["total_carbon"]
         for key, content in dict.items():
             if content["folder"] == folder:
                 if content["values"] is not None:
                     if is_removed:
-                        carbon_removed += (
+                        carbon_stored += (
                             content["values"] * carbon_removal * capture_rate
                         )
                     if add_to_total:
                         total_carbon += content["values"] * carbon_intensity
             results[folder] = {
-                "carbon_removed": carbon_removed,
+                "carbon_stored": carbon_stored,
                 "total_carbon": total_carbon,
             }
     return results
@@ -602,13 +610,13 @@ def calculate_share(dict):
 def calculate_removal_share(dict):
     results = {}
     for key, content in dict.items():
-        carbon_removed = content["carbon_removed"]
+        carbon_stored = content["carbon_stored"]
         total_carbon = content["total_carbon"]
-        share_removed = carbon_removed / total_carbon
+        share_removed = carbon_stored / total_carbon
         results[key] = {
-            "carbon_removed": carbon_removed,
+            "carbon_stored": carbon_stored,
             "total_carbon": total_carbon,
-            "share_removed": share_removed,
+            "share_stored": share_removed,
         }
     return results
 
@@ -622,9 +630,9 @@ def export_carbon_removal(data, filename):
         rows.append(
             {
                 "Folder": key,
-                "Carbon Removed": content["carbon_removed"],
+                "Carbon Stored": content["carbon_stored"],
+                "Carbon Utilised": content["carbon_utilised"],
                 "Total Carbon": content["total_carbon"],
-                "Share Removed": content["share_removed"],
             }
         )
     df = pd.DataFrame(rows)
@@ -756,9 +764,161 @@ def split_CHP(data):
     return data
 
 
+def calculate_supply_difference_and_emission_difference(
+    data, scenario1, scenario2, year
+):
+    results = {}
+    emission_factors = {
+        "woody crops": 0.18,
+        "grasses": 0.216,
+        "fuelwoodRW": 0.288,
+        "C&P_RW": 0.144,
+        "secondary forestry residues": 0.144,
+        "sawdust": 0.108,
+        "fuelwood residues": 0.036,
+        "agricultural waste": 0.108,
+        "residues from landscape care": 0,
+        "sludge": 0,
+        "manure": 0.072,
+        "solid biomass import": 0.3667 * 0.1,
+    }
+    # find all rows that match year and data name and calculate the difference between folder1 and folder2
+    for key, content in data.items():
+        # remove number 1 from data name
+        content["data_name"] = content["data_name"].replace("1", "")
+        if content["year"] == year:
+            if content["folder"] == scenario1:
+                key2 = key.replace(scenario1, scenario2)
+                if key2 in data:
+                    difference = content["values"] - data[key2]["values"]
+                    new_key = key.replace(scenario1, f"{scenario1}_{scenario2}")
+                    results[new_key] = {
+                        "year": year,
+                        "data_name": content["data_name"],
+                        f"values_{scenario1}": content["values"],
+                        f"values_{scenario2}": data[key2]["values"],
+                        "difference": difference,
+                        "emission_difference": difference
+                        * emission_factors[content["data_name"]],
+                    }
+    results["total"] = {
+        "year": year,
+        "data_name": "total",
+        f"values_{scenario1}": sum(
+            [
+                content["values"]
+                for content in results.values()
+                if "values" in content and scenario1 in content
+            ]
+        ),
+        f"values_{scenario2}": sum(
+            [
+                content["values"]
+                for content in results.values()
+                if "values" in content and scenario2 in content
+            ]
+        ),
+        "difference": sum(
+            [
+                content["difference"]
+                for content in results.values()
+                if "difference" in content
+            ]
+        ),
+        "emission_difference": sum(
+            [
+                content["emission_difference"]
+                for content in results.values()
+                if "emission_difference" in content
+            ]
+        ),
+    }
+
+    return results
+
+
+def add_carbon_utilisation(dict_with_storage, data, share_sequestered):
+    for key, content in dict_with_storage.items():
+        for key1, content1 in data.items():
+            if content1["folder"] == key:
+                dict_with_storage[key]["carbon_utilised"] = content1[
+                    "values"
+                ] + content["carbon_stored"] * (1 - share_sequestered[key]["share"])
+                dict_with_storage[key]["carbon_stored"] = (
+                    dict_with_storage[key]["carbon_stored"]
+                    * share_sequestered[key]["share"]
+                )
+    # for key, content in dict_with_storage.items():
+    #     content["share_utilised"] = content["carbon_utilised"] / content["total_carbon"]
+    return dict_with_storage
+
+
+def calculate_upstream_emissions(data, scenarios):
+    emission_factors = {
+        "woody crops": 0.18,
+        "grasses": 0.216,
+        "fuelwoodRW": 0.288,
+        "C&P_RW": 0.144,
+        "secondary forestry residues": 0.144,
+        "sawdust": 0.108,
+        "fuelwood residues": 0.036,
+        "agricultural waste": 0.108,
+        "residues from landscape care": 0,
+        "sludge": 0,
+        "manure": 0.072,
+        "solid biomass import": 0.3667 * 0.1,
+    }
+    results = {}
+    for key, content in data.items():
+        for scenario in scenarios:
+            if content["folder"] == scenario:
+                results[key] = {
+                    "folder": content["folder"],
+                    "data_name": content["data_name"],
+                    "year": content["year"],
+                    "upstream emissions": content["values"]
+                    * emission_factors[content["data_name"]],
+                }
+    # calculate the total upstream emissions
+    for scenario in scenarios:
+        total_upstream_emissions = sum(
+            [
+                content["upstream emissions"]
+                for content in results.values()
+                if content["folder"] == scenario
+            ]
+        )
+        results[f"{scenario}_total"] = {
+            "folder": scenario,
+            "data_name": "total",
+            "year": content["year"],
+            "upstream emissions": total_upstream_emissions,
+        }
+    return results
+
+
+def calculate_share_of_sequestration(data, scenarios):
+    results = {}
+    for scenario in scenarios:
+        total = 0
+        for key, content in data.items():
+            if content["folder"] == scenario:
+                total += content["values"]
+        for key, content in data.items():
+            if content["folder"] == scenario:
+                if "sequestered" in content["data_name"]:
+                    share = content["values"] / total
+                    results[content["folder"]] = {
+                        "folder": content["folder"],
+                        "share": share,
+                    }
+    return results
+
+
 def main():
     results_dir = "results"
-    scenarios = ["default", "biomass_emissions", "150_seq", "400_seq"]
+    # scenarios = ["default", "biomass_emissions", "150_seq", "400_seq"]
+    scenarios = ["default", "biomass_emissions"]
     results = load_results(results_dir, scenarios)
     # scenarios = "all"
 
@@ -988,6 +1148,10 @@ def main():
         remove_list=["biomass transport"],
     )
     export_results(biomass_supply_2050, "biomass_supply.csv")
+    difference = calculate_supply_difference_and_emission_difference(
+        biomass_supply_2050, "default", "biomass_emissions", "2050"
+    )
+    export_results(difference, "biomass_supply_difference.csv", simply_print=True)
 
     fossil_fuel_supply_2050 = aggregate_and_calculate_share(
         results,
@@ -1004,22 +1168,23 @@ def main():
 
     merge_fields = [
         [[["", "", "wind"]], "wind", None],
-        [[["", "", "waste CHP"]], "waste CHP CC", True],
+        [[["", "", "waste CHP"]], "waste CHP with CC", True],
         [[["", "", "biomass import"]], "biomass import", None],
         [[["", "", "heat pump"]], "heat pumps", None],
         [[["", "", "electrobiofuels"]], "electrobiofuels", None],
         [[["", "", "biomass to liquid"]], "biomass to liquid", None],
         [[["", "", "solar"]], "solar", None],
         [[["", "", "H2"]], "hydrogen", None],
-        [[["", "", "gas boiler"]], "(bio)gas boiler", None],
-        [[["", "", "oil primary"]], "oil primary", None],
+        [[["", "", "gas boiler"]], "biogas boiler", None],
+        [[["", "", "oil primary"]], "primary oil", None],
         [[["", "", "biomass boiler"]], "biomass boiler", None],
         [[["", "", "biomass CHP"]], "biomass CHP", None],
         [[["", "", "nuclear"]], "nuclear", None],
         [[["generators", "", "gas"]], "natural gas", None],
-        [[["", "", "water pits"]], "water pits (storage)", None],
-        [[["", "", "biogas"]], "biogas CC", True],
-        [[["", "", "biogas"]], "biogas without CC", False],
+        [[["", "", "water pits"]], "thermal energy storage", None],
+        [[["", "", "biogas"]], "biogas production with CC", True],
+        [[["", "", "biogas"]], "biogas production without CC", False],
+        [[["", "", "DAC"]], "DAC", None],
         [
             [
                 ["", "", "agricultural waste"],
@@ -1149,38 +1314,38 @@ def main():
         "B",
         "A",
         "2050",
-        filter_positive=True,
+        filter_positive=None,
         remove_list=["agriculture machinery oil"],
     )
-    co2_prices_fossil = {
-        "default": {
-            "oil": 192.6 * 0.2571,
-            "oil primary": 192.6 * 0.2571,
-            "gas": 192.6 * 0.198,
-        },
-        "biomass_emissions": {
-            "oil": 467.8 * 0.2571,
-            "oil primary": 467.8 * 0.2571,
-            "gas": 467.8 * 0.198,
-        },
-        "150_seq": {
-            "oil": 1046.5 * 0.2571,
-            "oil primary": 1046.5 * 0.2571,
-            "gas": 1046.5 * 0.198,
-        },
-        "400_seq": {
-            "oil": 291.3 * 0.2571,
-            "oil primary": 291.3 * 0.2571,
-            "gas": 291.3 * 0.198,
-        },
-    }
+    # co2_prices_fossil = {
+    #     "default": {
+    #         "oil": 192.6 * 0.2571,
+    #         "oil primary": 192.6 * 0.2571,
+    #         "gas": 192.6 * 0.198,
+    #     },
+    #     "biomass_emissions": {
+    #         "oil": 467.8 * 0.2571,
+    #         "oil primary": 467.8 * 0.2571,
+    #         "gas": 467.8 * 0.198,
+    #     },
+    #     "150_seq": {
+    #         "oil": 1046.5 * 0.2571,
+    #         "oil primary": 1046.5 * 0.2571,
+    #         "gas": 1046.5 * 0.198,
+    #     },
+    #     "400_seq": {
+    #         "oil": 291.3 * 0.2571,
+    #         "oil primary": 291.3 * 0.2571,
+    #         "gas": 291.3 * 0.198,
+    #     },
+    # }
     weighted_prices_2050 = add_costs(weighted_prices_2050)
-    weighted_prices_2050 = add_co2_price(
-        weighted_prices_2050, co2_prices_fossil, column="values"
-    )
-    weighted_prices_2050 = add_co2_price(
-        weighted_prices_2050, co2_prices_fossil, column="costs"
-    )
+    # weighted_prices_2050 = add_co2_price(
+    #     weighted_prices_2050, co2_prices_fossil, column="values"
+    # )
+    # weighted_prices_2050 = add_co2_price(
+    #     weighted_prices_2050, co2_prices_fossil, column="costs"
+    # )
     # weighted_prices_2050 = add_co2_price(weighted_prices_2050, co2_prices_biomass, column="costs")
     export_results(weighted_prices_2050, "weighted_prices_2050.csv", add_costs=True)
 
@@ -1219,6 +1384,35 @@ def main():
         filter_positive=True,
         remove_list=["gas pipeline"],
     )
+
+    co2_use = aggregate_and_calculate_share(
+        results,
+        scenarios,
+        "supply_energy",
+        [["CO2 stored", "links"]],
+        [],
+        "D",
+        "C",
+        "2050",
+        filter_positive=False,
+        multiplier=-1,
+    )
+    export_results(co2_use, "co2_use.csv", include_share=True)
+
+    share_sequestered = calculate_share_of_sequestration(co2_use, scenarios)
+
+    co2_capture = aggregate_and_calculate_share(
+        results,
+        scenarios,
+        "supply_energy",
+        [["CO2 stored", "links"]],
+        [],
+        "D",
+        "C",
+        "2050",
+        filter_positive=True,
+    )
+    export_results(co2_capture, "co2_capture.csv", include_share=True)
 
     co2_solid_biomass = 0.3667
     co2_digestable_biomass = 0.2848
@@ -1295,8 +1489,59 @@ def main():
         gas_shares=gas_shares,
         scenarios=scenarios,
     )
-    with_share = calculate_removal_share(seq_biomass2)
-    export_carbon_removal(with_share, "carbon_removal.csv")
+
+    carbon_utilisation = aggregate_and_calculate_share(
+        results,
+        scenarios,
+        "supply_energy",
+        [
+            ["CO2", "links", "biomass to liquid"],
+            ["CO2", "links", "electrobiofuels"],
+            ["CO2", "links", "biogas to gas"],
+            ["CO2", "links", "BioSNG"],
+        ],
+        [[[""], "All utilised", None]],
+        "D",
+        "C",
+        "2050",
+        filter_positive=False,
+        multiplier=-1,
+        calculate_share=False,
+    )
+
+    secondary_gas_carbon_storage = aggregate_and_calculate_share(
+        results,
+        scenarios,
+        "supply_energy",
+        [
+            ["CO2 stored", "links", "SMR CC"],
+            ["CO2 stored", "links", "gas for highT industry CC"],
+            ["CO2 stored", "links", "gas for mediumT industry CC"],
+            ["CO2 stored", "links", "lowT industry methane CC"],
+            ["CO2 stored", "links", "urban central CHP CC"],
+        ],
+        [[[""], "All gas storage", None]],
+        "D",
+        "C",
+        "2050",
+        filter_positive=True,
+        remove_list=["urban central solid biomass CHP CC4"],
+    )
+    for key, content in secondary_gas_carbon_storage.items():
+        content["values"] = content["values"] * (
+            1 - gas_shares[content["folder"]]["share"]
+        )
+
+    for key, content in carbon_utilisation.items():
+        for key1, content1 in secondary_gas_carbon_storage.items():
+            if content1["folder"] == content["folder"]:
+                carbon_utilisation[key]["values"] -= content1["values"]
+
+    carbon_utilisation = add_carbon_utilisation(
+        seq_biomass2, carbon_utilisation, share_sequestered
+    )
+
+    export_carbon_removal(carbon_utilisation, "CCUS.csv")
 
     all_biomass_supply = aggregate_and_calculate_share(
         results,
@@ -1313,33 +1558,6 @@ def main():
         remove_list=["biomass transport"],
     )
     export_results(all_biomass_supply, "all_biomass_supply.csv")
-
-    co2_use = aggregate_and_calculate_share(
-        results,
-        scenarios,
-        "supply_energy",
-        [["CO2 stored", "links"]],
-        [],
-        "D",
-        "C",
-        "2050",
-        filter_positive=False,
-        multiplier=-1,
-    )
-    export_results(co2_use, "co2_use.csv", include_share=True)
-
-    co2_capture = aggregate_and_calculate_share(
-        results,
-        scenarios,
-        "supply_energy",
-        [["CO2 stored", "links"]],
-        [],
-        "D",
-        "C",
-        "2050",
-        filter_positive=True,
-    )
-    export_results(co2_capture, "co2_capture.csv", include_share=True)
 
     # use "gas_shares"
 
@@ -1400,6 +1618,9 @@ def main():
     export_results(
         biomass_use_by_sector_2050, "biomass_use_by_sector_2050.csv", include_share=True
     )
+
+    upstream_emissions = calculate_upstream_emissions(biomass_supply_2050, scenarios)
+    export_results(upstream_emissions, "upstream_emissions.csv", simply_print=True)
 
 
 if __name__ == "__main__":

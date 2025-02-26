@@ -48,7 +48,7 @@ scenario:
   planning_horizons:
   # - 2020
   # - 2030
-  # - 2040
+  - 2040
   - 2050
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#countries
@@ -77,7 +77,7 @@ co2_budget:
   2025: 0.648 # With additional measures (WAM) projection, CO2 excl LULUCF, European Environment Agency. (2023e). Member States’ greenhouse gas (GHG) emission projections 2023. https://www.eea.europa.eu/en/datahub/datahubitem-view/4b8d94a4-aed7-4e67-a54c-0623a50f48e8
   2030: 0.450 # 55% reduction by 2030 (Ff55)
   2035: 0.250
-  2040: 0.100 # 90% by 2040
+  2040: 0.000 #0.100 # 90% by 2040
   2045: 0.050
   2050: 0.000 # climate-neutral by 2050
 
@@ -664,7 +664,7 @@ sector:
     min_size: 3
     max_size: 25
     years_of_storage: 25
-  co2_sequestration_potential:
+  co2_sequestration_potential: #in Mt
     2020: 0
     2025: 0
     2030: 50

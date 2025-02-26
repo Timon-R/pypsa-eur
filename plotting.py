@@ -4,11 +4,13 @@
 import os
 
 import matplotlib as mpl
+import matplotlib.lines as mlines
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from matplotlib.legend_handler import HandlerPatch
 from matplotlib.ticker import MultipleLocator
 
 
@@ -48,6 +50,11 @@ def plot_stacked_bar(
     custom_order=None,
     multiplier=1,
     remove_last_letters=0,
+    column="Values",
+    columns="Folder",
+    index="Data Name",
+    threshold=0.005,
+    threshold_column="Share",
 ):
     """
     Plot a stacked bar chart for each folder (scenario) using the provided DataFrame.
@@ -67,20 +74,24 @@ def plot_stacked_bar(
     custom_order : list, optional
         Custom order of folders.
     """
+    # rename data_name column to Data Name
+    df.rename(columns={"data_name": "Data Name"}, inplace=True)
     if custom_order is not None:
         df = reorder_data(df, custom_order)
 
     if remove_last_letters != 0:
         df["Data Name"] = df["Data Name"].str[:-remove_last_letters]
 
-    df["Values"] = df["Values"] * multiplier
+    df[column] = df[column] * multiplier
     for row in df.iterrows():
-        if row[1]["Share"] < 0.005:
+        if abs(row[1][threshold_column]) < threshold:
             # remove the row
             df.drop(row[0], inplace=True)
 
-    # Pivot the DataFrame for plotting
-    pivot_df = df.pivot(index="Data Name", columns="Folder", values="Values").fillna(0)
+    if index is None:
+        df["Index"] = range(len(df))
+        index = "Index"
+    pivot_df = df.pivot(index=index, columns=columns, values=column).fillna(0)
 
     # Define x-axis positions and bar width
     x = np.arange(len(pivot_df.columns))  # Positions for each Folder
@@ -106,6 +117,10 @@ def plot_stacked_bar(
     ax.set_xticklabels(pivot_df.columns, rotation=45, ha="right")
     ax.legend(title="Legend", bbox_to_anchor=(1.05, 1), loc="upper left")
 
+    # no x-ticks
+    ax.set_xticks([])
+    ax.set_xticklabels([])
+
     plt.tight_layout()
     # Save the plot to a file
     export_dir = "export/plots"
@@ -115,71 +130,102 @@ def plot_stacked_bar(
     plt.close()
 
 
-def plot_biomass_supply_with_carbon_captured(
-    df, df_captured, title, x_label, y_label, file_path, custom_order=None
+def plot_BECCUS(
+    df,
+    title,
+    x_label,
+    y_label,
+    file_path,
+    custom_order=None,
+    multiplier=1e-6,
+    upstream_data=None,
 ):
     if custom_order is not None:
         df = reorder_data(df, custom_order)
 
-    # convert to TWh
-    df["Values"] = df["Values"] / 1e6
+    df["Not Captured"] = (
+        df["Total Carbon"] - df["Carbon Stored"] - df["Carbon Utilised"]
+    )
 
-    # I want to add the column
-    df = df.merge(df_captured, on=["Folder"], how="left")
+    # Select only the relevant columns for plotting
+    df_plot = df[["Folder", "Carbon Stored", "Carbon Utilised", "Not Captured"]]
+
+    if upstream_data is not None:
+        upstream_total = upstream_data[upstream_data["data_name"] == "total"].copy()
+        upstream_total["Upstream Emissions"] = (
+            upstream_total["upstream emissions"] * multiplier
+        )
+        upstream_total["Folder"] = upstream_total["folder"]
+        upstream_total = upstream_total[["Folder", "Upstream Emissions"]]
+
+        # Merge upstream_total with df_plot
+        df_plot = df_plot.merge(upstream_total, on="Folder", how="left")
+
+    # Convert the values to MtCO2
+    df_plot["Biogenic Carbon Stored"] = df_plot["Carbon Stored"] * multiplier
+    df_plot["Biogenic Carbon Utilised"] = df_plot["Carbon Utilised"] * multiplier
+    df_plot["Biogenic Carbon Not Captured"] = df_plot["Not Captured"] * multiplier
+
+    # Set the index to "Folder" for plotting
+    df_plot.set_index("Folder", inplace=True)
 
     # Create the plot
     fig, ax = plt.subplots(figsize=(14, 10))
-    bar_width = 0.8
-    gap = 0.6  # Adjust this value to change the space between bars
-    x_coords = np.arange(len(df)) * (bar_width + gap)
+    bar_width = 0.35  # Width of the bars
+    x = np.arange(len(df_plot.index))  # Positions for each Folder
 
-    color1 = "LightGreen"
-    color2 = "DarkGreen"
-
-    for index, row in df.iterrows():
-        supply = row["Values"]
-        captured = row["Share Removed"]
-        ax.bar(x_coords[index], supply, width=bar_width, color=color1)
-        ax.text(
-            x_coords[index],
-            supply + 0.02 * max(df["Values"]),
-            f"{supply:.0f} TWh",
-            ha="center",
-            va="center",
-            fontsize=14,
-            color="black",
-        )
+    # Plot the stacked bars for carbon data
+    bottom = np.zeros(len(df_plot.index))
+    for column in [
+        "Biogenic Carbon Stored",
+        "Biogenic Carbon Utilised",
+        "Biogenic Carbon Not Captured",
+    ]:
         ax.bar(
-            x_coords[index],
-            supply * captured,
-            width=bar_width,
-            color=color2,  # , hatch="///"
+            x - bar_width / 2, df_plot[column], bar_width, label=column, bottom=bottom
         )
-        # write the share in the center of the 2end bar
-        ax.text(
-            x_coords[index],
-            supply * captured / 2,
-            f"{captured * 100:.1f}%",
-            ha="center",
-            va="center",
-            fontsize=14,
-            color="white",
+        bottom += df_plot[column]
+
+    if upstream_data is not None:
+        # Plot the upstream emissions bars next to the stacked bars
+        ax.bar(
+            x + bar_width / 2,
+            df_plot["Upstream Emissions"],
+            bar_width,
+            label="Upstream Emissions",
+            color="grey",
+            alpha=0.6,
         )
 
-    # add legend
-    supply_patch = mpl.patches.Patch(
-        facecolor=color1, label="Share of biogenic carbon not captured"
-    )
-    captured_patch = mpl.patches.Patch(
-        facecolor=color2, label="Share of biogenic carbon captured"
-    )
-    plt.legend(handles=[supply_patch, captured_patch], fontsize=14)
-
-    ax.set_xticks(x_coords)
-    ax.set_xticklabels(df["Folder"], rotation=45, ha="right")
+    # Add labels and title
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     ax.set_title(title)
+    ax.set_xticks(x)
+    ax.set_xticklabels(df_plot.index, rotation=45, ha="right")
+
+    # Add legend
+    ax.legend(title="Legend", fontsize=14)
+
+    # Add percentages on the bars
+    for container in ax.containers[:-1]:
+        for i, bar in enumerate(container):
+            height = bar.get_height()
+            total = sum([c[i].get_height() for c in ax.containers[:-1]])
+            percentage = height / total * 100
+            if percentage < 4:
+                color = "black"
+            else:
+                color = "white"
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_y() + height / 2,
+                f"{percentage:.1f}%",
+                ha="center",
+                va="center",
+                fontsize=12,
+                color=color,
+            )
 
     # Adjust plot limits to add space for text
     ylim = ax.get_ylim()
@@ -192,6 +238,24 @@ def plot_biomass_supply_with_carbon_captured(
     file_path = os.path.join(export_dir, file_path)
     plt.savefig(file_path)
     plt.close()
+
+
+class HandlerWedge(HandlerPatch):
+    def create_artists(
+        self, legend, orig_handle, xdescent, ydescent, width, height, fontsize, trans
+    ):
+        center = 0.5 * width, 0.5 * height
+        p = mpatches.Wedge(
+            center,
+            0.5 * min(width, height),
+            orig_handle.theta1,
+            orig_handle.theta2,
+            facecolor=orig_handle.get_facecolor(),
+            edgecolor=orig_handle.get_edgecolor(),
+        )
+        self.update_prop(p, orig_handle, legend)
+        p.set_transform(trans)
+        return [p]
 
 
 def plot_costs_vs_prices(df, title, x_label, y_label, file_path, scenario, usage_dict):
@@ -268,6 +332,8 @@ def plot_costs_vs_prices(df, title, x_label, y_label, file_path, scenario, usage
         label="_nolegend_",
     )
 
+    legend_handles = []
+
     for biomass in biomass_types:
         subset = biomass_df[biomass_df["Data Name"] == biomass]
         if not subset.empty:
@@ -301,7 +367,7 @@ def plot_costs_vs_prices(df, title, x_label, y_label, file_path, scenario, usage
                     theta2 = 90 - 360 * (usage / 100)
                     wedge = mpatches.Wedge(
                         (row["Costs"], row["Values"]),
-                        1,
+                        1.4,
                         theta2,
                         theta1,
                         facecolor=color,
@@ -309,19 +375,59 @@ def plot_costs_vs_prices(df, title, x_label, y_label, file_path, scenario, usage
                         alpha=0.8,
                     )
                     ax.add_patch(wedge)
-                    ax.scatter(
-                        row["Costs"],
-                        row["Values"],
-                        s=100,
-                        facecolors="none",
-                        edgecolors=color,
-                        label=biomass,
-                        alpha=0.8,
+                    # ax.scatter(
+                    #     row["Costs"],
+                    #     row["Values"],
+                    #     s=100,
+                    #     facecolors="none",
+                    #     edgecolors=color,
+                    #     label=biomass,
+                    #     alpha=0.8,
+                    # )
+
+                # Add to legend handles
+                if usage == 0:
+                    legend_handles.append(
+                        mlines.Line2D(
+                            [],
+                            [],
+                            marker="o",
+                            linestyle="None",
+                            markersize=10,
+                            markerfacecolor="none",
+                            markeredgecolor=color,
+                            label=biomass,
+                        )
+                    )
+                elif usage == 100:
+                    legend_handles.append(
+                        mlines.Line2D(
+                            [],
+                            [],
+                            marker="o",
+                            linestyle="None",
+                            markersize=10,
+                            markerfacecolor=color,
+                            markeredgecolor=color,
+                            label=biomass,
+                        )
+                    )
+                else:
+                    legend_handles.append(
+                        mpatches.Wedge(
+                            (0, 0),
+                            1,
+                            theta2,
+                            theta1,
+                            facecolor=color,
+                            edgecolor=color,
+                            alpha=0.8,
+                            label=biomass,
+                        )
                     )
 
     # Add legend before the diagonal line
-    handles, labels = ax.get_legend_handles_labels()
-    by_label = dict(zip(labels, handles))
+    by_label = {handle.get_label(): handle for handle in legend_handles}
     ax.legend(
         by_label.values(),
         by_label.keys(),
@@ -329,6 +435,7 @@ def plot_costs_vs_prices(df, title, x_label, y_label, file_path, scenario, usage
         loc="center left",
         bbox_to_anchor=(1.05, 0.5),
         borderaxespad=0,
+        handler_map={mpatches.Wedge: HandlerWedge()},
     )
 
     ax.set_xlim(0, max_limit)
@@ -387,19 +494,19 @@ def plot_feedstock_prices(df, title, x_label, y_label, file_path, custom_order=N
     feedstocks = [
         "solid biomass",
         "digestible biomass",
-        "biogas",
-        "liquid fuels",
-        "primary oil",
-        "natural gas",
+        # "biogas",
+        # "liquid fuels",
+        # "primary oil",
+        # "natural gas",
     ]
 
     # Set color palette
     palette = sns.color_palette("Set2", n_colors=len(folders))
 
-    fig, ax = plt.subplots(figsize=(14, 8))
+    fig, ax = plt.subplots(figsize=(10, 8))
 
     # Adjust position for each scenario within each feedstock
-    width = 0.15  # Bar width for spacing
+    width = 0.3  # Bar width for spacing
     x = np.arange(len(feedstocks))  # Base positions
 
     for idx, scenario in enumerate(folders):
@@ -413,18 +520,18 @@ def plot_feedstock_prices(df, title, x_label, y_label, file_path, custom_order=N
             "digestible biomass": scenario_df.loc[
                 scenario_df["Data Name"].isin(digestible_biomass), "Values"
             ].values,
-            "biogas": scenario_df.loc[
-                scenario_df["Data Name"] == "biogas", "Values"
-            ].values,
-            "liquid fuels": scenario_df.loc[
-                scenario_df["Data Name"] == "oil", "Values"
-            ].values,
-            "primary oil": scenario_df.loc[
-                scenario_df["Data Name"] == "oil primary", "Values"
-            ].values,
-            "natural gas": scenario_df.loc[
-                scenario_df["Data Name"] == "gas", "Values"
-            ].values,
+            # "biogas": scenario_df.loc[
+            #     scenario_df["Data Name"] == "biogas", "Values"
+            # ].values,
+            # "liquid fuels": scenario_df.loc[
+            #     scenario_df["Data Name"] == "oil", "Values"
+            # ].values,
+            # "primary oil": scenario_df.loc[
+            #     scenario_df["Data Name"] == "oil primary", "Values"
+            # ].values,
+            # "natural gas": scenario_df.loc[
+            #     scenario_df["Data Name"] == "gas", "Values"
+            # ].values,
         }
 
         # Apply custom order if provided
@@ -465,7 +572,9 @@ def plot_feedstock_prices(df, title, x_label, y_label, file_path, custom_order=N
                         label=scenario if i == 0 else "",
                     )
 
-    ax.set_xticks(x)
+    # Adjust x-tick positions to be between the two bars
+    x_ticks = x + (width * (len(folders) - 1) / 2)
+    ax.set_xticks(x_ticks - width)
     ax.set_xticklabels(feedstocks)
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
@@ -566,7 +675,7 @@ def plot_difference_bar(
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     ax.set_title(title)
-    ax.set_xticks(x)
+    ax.set_xticks()
     ax.set_xticklabels(pivot_df.index, rotation=45, ha="right")
     ax.axhline(0, color="black", linewidth=0.8, linestyle="--")
 
@@ -624,7 +733,7 @@ def plot_bar_with_shares(
 
     # Define x-axis positions and bar width
     x = np.arange(len(values))  # Positions for each Data Name
-    bar_width = 0.2
+    bar_width = 0.35
 
     # Create the bar plot
     fig, ax = plt.subplots(figsize=(width, 6))
@@ -800,7 +909,7 @@ def plot_costs(df, title, x_label, y_label, file_path):
         data=df, x="Year", y="Difference", hue="Data Name", palette=colors, orient="v"
     )
     ylim = ax.get_ylim()
-    ax.set_ylim(ylim[0], ylim[1] + abs(ylim[1] * 0.1))
+    ax.set_ylim(ylim[0] - abs(ylim[1] * 0.1), ylim[1] + abs(ylim[1] * 0.1))
 
     # Add values as labels above the bars
     for container in ax.containers:
@@ -810,7 +919,11 @@ def plot_costs(df, title, x_label, y_label, file_path):
     plt.title(title, fontsize=16)
     plt.xlabel(x_label)
     plt.ylabel(y_label)
-    plt.legend(title="Data Name", bbox_to_anchor=(1.05, 1), loc="upper left")
+    plt.legend(title="Legend", bbox_to_anchor=(1.05, 1), loc="upper left")
+
+    # Remove x-ticks and their labels
+    ax.set_xticks([])
+    ax.set_xticklabels([])
 
     # Show the plot
     plt.tight_layout()
@@ -852,6 +965,10 @@ def plot_data(
 
     # Show the plot
     plt.tight_layout()
+
+    # no x-ticks
+    ax.set_xticks([])
+    ax.set_xticklabels([])
 
     # Save the plot to a file
     export_dir = "export/plots"
@@ -1017,19 +1134,20 @@ def plot_biomass_use(df, title, x_label, y_label, file_path, year=2050):
         linewidth=1.5,
     )
     a_patch = mpl.patches.Patch(
-        facecolor="LightGreen", label="Biomass use - no emissions considered"
+        facecolor="LightGreen",
+        label="Biomass use in scenario default (no biomass emissions)",
     )
     b_patch = mpl.patches.Patch(
         facecolor="none",
         hatch="///",
-        label="Difference in biomass use - emissions considered",
+        label="Reduction in biomass use when emissions considered",
     )
-    red_patch = mpl.patches.Patch(
-        facecolor="red",
-        hatch="///",
-        label="More biomass used with emissions considered",
-    )
-    plt.legend(handles=[potential_patch, a_patch, b_patch, red_patch], fontsize=14)
+    # red_patch = mpl.patches.Patch(
+    #     facecolor="red",
+    #     hatch="///",
+    #     label="More biomass used with emissions considered",
+    # )
+    plt.legend(handles=[potential_patch, a_patch, b_patch], fontsize=14)
 
     # Adjust plot limits to add space for text
     ylim = ax.get_ylim()
@@ -1064,22 +1182,22 @@ def plot_efs():
     emission_factors = {
         "woody crops": 0.18,
         "grasses": 0.216,
-        "fuelwoodRW": 0.288,
-        "C&P_RW": 0.144,
+        "stemwood": 0.288,
+        "chips and pellets": 0.144,
         "secondary forestry residues": 0.144,
         "sawdust": 0.108,
-        "fuelwood residues": 0.036,
+        "logging residues": 0.036,
         "agricultural waste": 0.108,
         "residues from landscape care": 0,
         "sludge": 0,
         "manure": 0.072,
-        "imported biomass": 0.3667 * 0.1,
+        "imported biomass": 0.3667 * 0.59,
     }
 
     biomass_costs = {  # Euro/MWh_LHV
         "agricultural waste": 12.8786,
-        "fuelwood residues": 15.3932,
-        "fuelwoodRW": 12.6498,
+        "logging residues": 15.3932,  # fuelwood residues
+        "stemwood": 12.6498,
         "manure": 22.1119,
         "residues from landscape care": 10.5085,
         "secondary forestry residues": 8.1876,
@@ -1092,7 +1210,7 @@ def plot_efs():
         "sludge": 22.0995,
         "imported biomass": 54,
         "sawdust": 6.4791,
-        "C&P_RW": 25.4661,
+        "chips and pellets": 25.4661,  # C&P_RW
     }
 
     # font size
@@ -1166,7 +1284,7 @@ def plot_efs():
     )
     ax.set_xlabel("")
     ax.set_ylabel("tonCO2/MWh")
-    ax.set_title("Emission factors for different feedstocks", fontsize=26)
+    ax.set_title("Emission Factors and Costs for Different Feedstocks", fontsize=26)
 
     ax2 = ax.twinx()
     ax2.set_yticks(ax.get_yticks() / 0.0036)
@@ -1327,13 +1445,14 @@ def __main__():
     #     "endogenous_1_1_ef",
     #     "endogenous_1_ef_2_gas",
     # ]
-    custom_order = ["default", "biomass_emissions", "150_seq", "400_seq"]
+    # custom_order = ["default", "biomass_emissions", "150_seq", "400_seq"]
+    custom_order = ["default", "biomass_emissions"]
 
     data = load_csv("export/costs2050.csv")
     plot_data(
         data,
         "Total Costs",
-        "Year",
+        "",
         "Cost (Billion EUR)",
         "total_costs.png",
         custom_order,
@@ -1472,7 +1591,7 @@ def __main__():
     plot_data(
         data,
         "CO2 Shadow Prices",
-        "Year",
+        "",
         "Shadow Price (EUR/tonCO2)",
         "shadow_prices.png",
     )
@@ -1546,17 +1665,6 @@ def __main__():
         usage_dict=usage_dict_biomass_emissions,
     )
 
-    data1 = load_csv("export/all_biomass_supply.csv")
-    data2 = load_csv("export/carbon_removal.csv")
-    plot_biomass_supply_with_carbon_captured(
-        data1,
-        data2,
-        "Biomass Supply",
-        "",
-        "TWh",
-        "biomass_supply_and_carbon_captured.png",
-    )
-
     data = load_csv("export/co2_use.csv")
     plot_stacked_bar(
         data,
@@ -1589,6 +1697,33 @@ def __main__():
         "biomass_use_by_sector_2050.png",
         custom_order,
         multiplier=1e-6,
+    )
+
+    upstream_data = load_csv("export/upstream_emissions.csv")
+
+    data = load_csv("export/CCUS.csv")
+    plot_BECCUS(
+        data,
+        "BECCUS",
+        "",
+        "Mt_CO2",
+        "beccus.png",
+        upstream_data=upstream_data,
+    )
+
+    data = load_csv("export/biomass_supply_difference.csv")
+    plot_stacked_bar(
+        data,
+        "Additional CO2 Emissions Due to Biomass Use",
+        "",
+        "Mt_CO2",
+        "biomass_emission_difference.png",
+        multiplier=1e-6,
+        column="emission_difference",
+        columns="year",
+        index="Data Name",
+        threshold=0.001,
+        threshold_column="emission_difference",
     )
 
 
