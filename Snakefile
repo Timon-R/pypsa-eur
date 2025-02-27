@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: MIT
 
-#snakemake -call all --configfile config/config.yaml --rerun-incomplete --cores 8 --use-conda
-#--rerun-triggers mtime 
+# snakemake -call all --configfile config/config.yaml --rerun-incomplete --cores 8 --use-conda
+# --rerun-triggers mtime
 
 from pathlib import Path
 import yaml
@@ -13,7 +13,13 @@ from snakemake.utils import min_version
 
 min_version("8.11")
 
-from scripts._helpers import path_provider, copy_default_files, get_scenarios, get_rdir
+from scripts._helpers import (
+    path_provider,
+    copy_default_files,
+    get_scenarios,
+    get_rdir,
+    get_GSA,
+)
 
 
 copy_default_files(workflow)
@@ -32,6 +38,8 @@ exclude_from_shared = run["shared_resources"]["exclude"]
 logs = path_provider("logs/", RDIR, shared_resources, exclude_from_shared)
 benchmarks = path_provider("benchmarks/", RDIR, shared_resources, exclude_from_shared)
 resources = path_provider("resources/", RDIR, shared_resources, exclude_from_shared)
+
+gsa_config = get_GSA(run)
 
 CDIR = "" if run["shared_cutouts"] else RDIR
 RESULTS = "results/" + RDIR
@@ -57,6 +65,7 @@ include: "rules/solve_electricity.smk"
 include: "rules/postprocess.smk"
 include: "rules/validate.smk"
 include: "rules/development.smk"
+include: "rules/GSA.smk"
 
 
 if config["foresight"] == "overnight":
@@ -77,6 +86,7 @@ if config["foresight"] == "perfect":
 rule all:
     input:
         expand(RESULTS + "graphs/costs.svg", run=config["run"]["name"]),
+        *"results/GSA/summary.csv" if config["run"]["GSA"]["enable"] else [],
     default_target: True
 
 
