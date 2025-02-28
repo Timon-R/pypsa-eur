@@ -29,11 +29,7 @@ rule expand_sample:
         sample_file="GSA/morris_sample.txt",
     params:
         config=gsa_config,
-        output_dir="GSA/modelruns",
     output:
-        output=expand(
-            "GSA/modelruns/model_{model_run}/sample_{model_run}.yaml",
-            model_run=MODELRUNS,
-        ),
+        output="GSA/modelruns.yaml",
     script:
         "../scripts/GSA/expand_sample.py"

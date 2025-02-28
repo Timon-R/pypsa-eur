@@ -25,7 +25,6 @@ The sample file should be formatted as follows::
 """
 
 import logging
-import os
 import sys
 from logging import getLogger
 
@@ -39,38 +38,40 @@ logging.basicConfig(
 logger = getLogger(__name__)
 
 
-def generate_scenarios(sample, output_dir: str, parameters: dict):
-    try:
-        os.makedirs(output_dir, exist_ok=True)
+def set_nested_value(d, keys, value):
+    """Recursively set a value in a nested dictionary."""
+    for key in keys[:-1]:
+        d = d.setdefault(key, {})
+    d[keys[-1]] = value
 
+
+def extract_keys(d, keys):
+    for k, v in d.items():
+        keys.append(k)
+        if isinstance(v, dict):
+            extract_keys(v, keys)
+
+
+def generate_scenarios(sample, output_file: str, parameters: dict):
+    try:
+        scenarios = {}
         for i, row in enumerate(sample):
-            scenario = {"parameters": {}}
+            scenario = {}
             for j, (param_name, param_details) in enumerate(parameters.items()):
                 value = float(row[j])
-                adjustments = param_details["config_file_location"]["adjustments"]
-                type = "factor" if "factor" in adjustments["sector"] else "absolute"
-                component = list(adjustments["sector"][type].keys())[0]
-                attribute = list(adjustments["sector"][type][component].keys())[0]
-                scenario["parameters"].setdefault(param_name, {"adjustments": {}})
-                scenario["parameters"][param_name]["adjustments"].setdefault(
-                    "sector", {}
-                )
-                scenario["parameters"][param_name]["adjustments"]["sector"].setdefault(
-                    type, {}
-                )
-                scenario["parameters"][param_name]["adjustments"]["sector"][
-                    type
-                ].setdefault(component, {})
-                scenario["parameters"][param_name]["adjustments"]["sector"][type][
-                    component
-                ][attribute] = value
+                config_file_location = param_details["config_file_location"]
+                keys = []
+                extract_keys(config_file_location, keys)
+                set_nested_value(scenario.setdefault(param_name, {}), keys, value)
+            scenarios[f"modelrun_{i}"] = scenario
 
-            scenario_file = os.path.join(output_dir, f"model_{i}/sample_{i}.yaml")
-            with open(scenario_file, "w") as f:
-                yaml.dump(scenario, f)
-            logger.info(f"Scenario saved to {scenario_file}")
+        yaml_content = yaml.dump(scenarios, default_flow_style=False)
+
+        with open(output_file, "w") as f:
+            f.write(yaml_content.replace("\nmodelrun_", "\n\nmodelrun_"))
+        logger.info(f"Scenarios saved to {output_file}")
     except Exception as e:
-        logger.error(f"Error generating scenarios yaml files (expand_sample.py): {e}")
+        logger.error(f"Error generating scenarios yaml file (expand_sample.py): {e}")
         raise e
 
 
@@ -90,8 +91,7 @@ if __name__ == "__main__":
 
     sample_file = snakemake.input.sample_file
     parameters = snakemake.params.config["parameters"]
-    # output_files = snakemake.output.output
-    output_dir = snakemake.params.output_dir
+    output_file = snakemake.output.output
 
     morris_sample = np.loadtxt(sample_file, delimiter=",")
-    generate_scenarios(morris_sample, output_dir, parameters)
+    generate_scenarios(morris_sample, output_file, parameters)

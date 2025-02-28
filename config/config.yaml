@@ -27,7 +27,7 @@ run:
     file: config/scenarios.yaml
   disable_progressbar: false
   shared_resources:
-    policy: false
+    policy: true # if true, shared resources are used
     exclude: []
   shared_cutouts: true
   GSA: #scenarios have to be not enabled
