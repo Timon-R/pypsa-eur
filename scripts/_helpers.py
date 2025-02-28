@@ -52,16 +52,6 @@ def get_scenarios(run):
     return {}
 
 
-def get_GSA(run):
-    GSA_config = run.get("GSA", {})
-    if GSA_config.get("enable"):
-        fn = Path(GSA_config["file"])
-        if fn.exists():
-            with fn.open() as f:
-                return yaml.safe_load(f)
-    return {}
-
-
 def get_rdir(run):
     scenario_config = run.get("scenarios", {})
     GSA_config = run.get("GSA", {})

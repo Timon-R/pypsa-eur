@@ -35,6 +35,7 @@ doc/_build
 /config/create_scenarios.py
 
 config/scenarios.yaml
+config/GSA_runs.yaml
 
 dconf
 /data/links_p_nom.csv

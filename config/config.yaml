@@ -23,16 +23,13 @@ run:
   prefix: ""
   name: all
   scenarios:
-    enable: false
-    file: config/scenarios.yaml
+    enable: true
+    file: config/GSA_runs.yaml
   disable_progressbar: false
   shared_resources:
-    policy: true # if true, shared resources are used
+    policy: base
     exclude: []
   shared_cutouts: true
-  GSA: #scenarios have to be not enabled
-    enable: true
-    file: config/GSA.yaml
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#foresight
 foresight: overnight

@@ -18,9 +18,7 @@ from scripts._helpers import (
     copy_default_files,
     get_scenarios,
     get_rdir,
-    get_GSA,
 )
-
 
 copy_default_files(workflow)
 
@@ -38,8 +36,6 @@ exclude_from_shared = run["shared_resources"]["exclude"]
 logs = path_provider("logs/", RDIR, shared_resources, exclude_from_shared)
 benchmarks = path_provider("benchmarks/", RDIR, shared_resources, exclude_from_shared)
 resources = path_provider("resources/", RDIR, shared_resources, exclude_from_shared)
-
-gsa_config = get_GSA(run)
 
 CDIR = "" if run["shared_cutouts"] else RDIR
 RESULTS = "results/" + RDIR
@@ -65,7 +61,6 @@ include: "rules/solve_electricity.smk"
 include: "rules/postprocess.smk"
 include: "rules/validate.smk"
 include: "rules/development.smk"
-include: "rules/GSA.smk"
 
 
 if config["foresight"] == "overnight":
@@ -86,7 +81,7 @@ if config["foresight"] == "perfect":
 rule all:
     input:
         expand(RESULTS + "graphs/costs.svg", run=config["run"]["name"]),
-        *"results/GSA/summary.csv" if config["run"]["GSA"]["enable"] else [],
+        #*"results/GSA/summary.csv" if config["run"]["GSA"]["enable"] else [],
     default_target: True
 
 
@@ -109,6 +104,7 @@ rule purge:
         if do_purge == "y":
             rmtree("resources/", ignore_errors=True)
             rmtree("results/", ignore_errors=True)
+            rmtree("GSA/", ignore_errors=True)
             rmtree("doc/_build", ignore_errors=True)
             print("Purging generated resources, results and docs. Downloads are kept.")
         else:
