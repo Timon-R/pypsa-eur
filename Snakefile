@@ -81,7 +81,6 @@ if config["foresight"] == "perfect":
 rule all:
     input:
         expand(RESULTS + "graphs/costs.svg", run=config["run"]["name"]),
-        #*"results/GSA/summary.csv" if config["run"]["GSA"]["enable"] else [],
     default_target: True
 
 
