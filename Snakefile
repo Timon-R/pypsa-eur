@@ -23,7 +23,7 @@ from scripts._helpers import (
 copy_default_files(workflow)
 
 
-configfile: "config/config.default.yaml"
+# configfile: "config/config.default.yaml"
 configfile: "config/config.yaml"
 
 

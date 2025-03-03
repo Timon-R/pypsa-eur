@@ -7,7 +7,7 @@
 
 general:
   distribution_default: unif #uniform distribution
-  replicates: 5
+  replicates: 3
   method: morris #Maybe other later
   covariance_plot: false
 
@@ -30,42 +30,31 @@ parameters: #define parameter uncertainty ranges (what about the option of chang
       adjustments: #recommended for most parameters
         sector:
           factor: #if this is absolute, then absolute
-            Link:
+            Generator:
               solid biomass: marginal_cost
-  wind_costs: #name of parameter only for reference
-    groupname: wind_costs #name of group for grouping the parameters
-    distribution: default
-    min: 400
-    max: 600
-    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
-      costs:
-        capital_cost: wind
 
 results: #define results from results folder (TODO: or from the network directly)
   gas_capital_costs: #name of result
-    type: csv #or network for directly accessing the network
     multiplier: 1 #to change the unit of the result or to change the sign if the output in the csv is negative
     unit: € #unit of the result
     csv:
       filename: costs.csv #name of the file
       identification_column_entries: generators,capital,gas #has to be unique (otherwise raise error)
-      value_column: D #column with the value of interest
-    network: #needs to be in type to be used
-      component: Line
-      name: electricity distribution grid
-      attribute: capital_cost
   system_costs: #name of result
-    type: csv #or network for directly accessing the network
-    multiplier: 1e-9 #to change the unit of the result or to change the sign if the output in the csv is negative
-    unit: billion € #unit of the result
+    multiplier: 1e-6 #to change the unit of the result or to change the sign if the output in the csv is negative
+    unit: million € #unit of the result
     csv:
       filename: metrics.csv #name of the file
       identification_column_entries: total costs #has to be unique (otherwise raise error)
-      value_column: D #column with the value of interest
-    network: #needs to be in type to be used
-      component: Line
-      name: electricity distribution grid
-      attribute: capital_cost
+  biomass_use:
+    multiplier: 1e-6
+    unit: TWh
+    csv:
+      filename: supply_energy.csv
+      identification_column_entries: solid biomass,generators,solid biomass
+
+
+
 
 
 

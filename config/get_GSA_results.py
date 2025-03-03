@@ -67,9 +67,8 @@ def extract_results():
     results_dir.mkdir(parents=True, exist_ok=True)
     for variable, params in result_variables.items():
         variable_dict = {}
-        type = params.get("type")
-        if type == "csv":
-            for folder in resultsfolder.iterdir():
+        for folder in resultsfolder.iterdir():
+            if "modelrun" in folder.name:
                 run = folder.name
                 for folder in folder.iterdir():
                     if folder.is_dir() and folder.name == "csvs":
@@ -102,10 +101,6 @@ def extract_results():
                                         variable_dict[run] = value * multiplier
                                         break
                                 csv.close()
-        elif type == "network":
-            raise NotImplementedError("Network results not yet implemented.")
-        else:
-            raise ValueError(f"Unknown result type {type}. Has to be csv or network.")
 
         variable_dict = dict(
             sorted(
@@ -130,12 +125,14 @@ def calculate_GSA_metrics():
     Path("GSA/SA_results").mkdir(parents=True, exist_ok=True)
     Path("GSA/SA_plots").mkdir(parents=True, exist_ok=True)
 
+    X = np.loadtxt(sample, delimiter=",")
+    problem = create_salib_problem(parameters)
     for variable, params in gsa_config.get("results", {}).items():
         results = pd.read_csv(f"GSA/results/{variable}.csv")
         Y = results["value"].values
-        problem = create_salib_problem(parameters)
-        X = np.loadtxt(sample, delimiter=",")
-        Si = analyze_morris.analyze(problem, X, Y, print_to_console=False, scaled=False)
+        print(f"GSA for {variable}: ")
+        Si = analyze_morris.analyze(problem, X, Y, print_to_console=True)
+        print("\n")
         Si.to_df().to_csv(f"GSA/SA_results/{variable}_SA_results.csv")
 
         title = variable.capitalize()

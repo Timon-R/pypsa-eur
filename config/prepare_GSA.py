@@ -68,9 +68,14 @@ def generate_scenarios(sample, output_file: str, parameters: dict):
         for j, (param_name, param_details) in enumerate(parameters.items()):
             value = float(row[j])
             config_file_location = param_details["config_file_location"]
+
+            # Convert the nested dictionary structure to a flat list of keys
             keys = []
             extract_keys(config_file_location, keys)
-            set_nested_value(scenario.setdefault(param_name, {}), keys, value)
+
+            # Set the value directly in the scenario dictionary without the parameter name level
+            set_nested_value(scenario, keys, value)
+
         scenarios[f"modelrun_{i}"] = scenario
 
     yaml_content = ""
