@@ -48,6 +48,8 @@ data/gas_network/scigrid-gas/
 data/costs_*.csv
 
 /export
+/GSA
+/config/GSA_runs.yaml
 
 dask-worker-space/
 publications.jrc.ec.europa.eu/

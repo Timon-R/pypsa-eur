@@ -1,0 +1,63 @@
+# -*- coding: utf-8 -*-
+# SPDX-FileCopyrightText: Contributors to PyPSA-Eur <https://github.com/pypsa/pypsa-eur>
+#
+# SPDX-License-Identifier: MIT
+
+# only works for Greenfield scenarios
+
+general:
+  distribution_default: unif #uniform distribution
+  replicates: 3
+  method: morris #Maybe other later
+  covariance_plot: false
+
+#they will get reorderd alphabetically, also, what about parameters that are spatially different? - I would need to alter the costs file instead
+parameters: #define parameter uncertainty ranges (what about the option of changing a paramter in the config file as the general method?)
+  seq_potential: #name of parameter only for reference
+    groupname: seq_potential #name of group for grouping the parameters, this one is used in the plots
+    distribution: default
+    min: 150
+    max: 250
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      sector:
+        co2_sequestration_potential: 2050
+  biomass_costs: #name of parameter only for reference
+    groupname: biomass_costs #name of group for grouping the parameters
+    distribution: default
+    min: 0.5
+    max: 3
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      adjustments: #recommended for most parameters
+        sector:
+          factor: #if this is absolute, then absolute
+            Generator:
+              solid biomass: marginal_cost
+
+results: #define results from results folder (TODO: or from the network directly)
+  gas_capital_costs: #name of result
+    multiplier: 1 #to change the unit of the result or to change the sign if the output in the csv is negative
+    unit: € #unit of the result
+    csv:
+      filename: costs.csv #name of the file
+      identification_column_entries: generators,capital,gas #has to be unique (otherwise raise error)
+  system_costs: #name of result
+    multiplier: 1e-6 #to change the unit of the result or to change the sign if the output in the csv is negative
+    unit: million € #unit of the result
+    csv:
+      filename: metrics.csv #name of the file
+      identification_column_entries: total costs #has to be unique (otherwise raise error)
+  biomass_use:
+    multiplier: 1e-6
+    unit: TWh
+    csv:
+      filename: supply_energy.csv
+      identification_column_entries: solid biomass,generators,solid biomass
+
+
+
+
+
+
+
+
+

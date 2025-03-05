@@ -24,10 +24,10 @@ run:
   name: all #all
   scenarios:
     enable: true
-    file: config/scenarios.yaml
+    file: config/GSA_runs.yaml
   disable_progressbar: false
   shared_resources:
-    policy: false
+    policy: false #base (try that one)
     exclude: []
   shared_cutouts: true
 
