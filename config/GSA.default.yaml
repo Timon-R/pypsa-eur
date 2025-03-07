@@ -7,15 +7,15 @@
 
 general:
   replicates: 3 #10 is standard
-  method: morris #Maybe other later
+  method: morris # Maybe other later
   covariance_plot: false
 
-#they will get reorderd alphabetically
-parameters:
+#they will get reorderd alphabetically, also, what about parameters that are spatially different? - I would need to alter the costs file instead
+parameters: #define parameter uncertainty ranges (what about the option of changing a paramter in the config file as the general method?)
   seq_potential: #name of parameter only for reference
     groupname: seq_potential #name of group for grouping the parameters, this one is used in the plots
     min: 150
-    max: 710 # source doi: 10.1016/J.IJGGC.2022.103766
+    max: 250
     config_file_location: #has to be a non-binary numerical value so that the sampling can be done
       sector:
         co2_sequestration_potential: 2050
@@ -26,22 +26,16 @@ parameters:
     config_file_location: #has to be a non-binary numerical value so that the sampling can be done
       biomass:
         emission_factors: manure
-  ef_crop_residues: #name of parameter only for reference
-    groupname: ef_crop_residues #name of group for grouping the parameters
-    min: 0.036 # 10 g/MJ
-    max: 0.108 # 30 g/MJ
+  biomass_costs: #needs to be done for every biomass type, changed via costs file (test if it works first)
+    groupname: biomass_costs #name of group for grouping the parameters
+    min: 0.5
+    max: 3
     config_file_location: #has to be a non-binary numerical value so that the sampling can be done
-      biomass:
-        emission_factors: agricultural waste
-  ef_logging_residues: #name of parameter only for reference
-    groupname: ef_logging_residues #name of group for grouping the parameters
-    distribution: default
-    min: 0.045 # 12.5 g/MJ
-    max: 0.135 # 37.5 g/MJ
-    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
-      biomass:
-        emission_factors: fuelwood residues
-
+      adjustments: #recommended for most parameters
+        sector:
+          factor: #if this is absolute, then absolute
+            Generator:
+              solid biomass: marginal_cost
 
 results: #define results from results folder (TODO: or from the network directly)
   gas_capital_costs: #name of result

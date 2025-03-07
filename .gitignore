@@ -26,6 +26,8 @@ gurobi.log
 /tmp
 doc/_build
 
+biomass_costs_comparison_2050.csv
+
 /scripts/old
 /scripts/create_scenarios.py
 /config/create_scenarios.py
