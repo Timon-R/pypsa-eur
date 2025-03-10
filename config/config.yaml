@@ -21,15 +21,16 @@ remote:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
   prefix: ""
-  name: all #all
+  name: all
   scenarios:
     enable: true
-    file: config/Ens.yaml
+    file: config/GSA_runs.yaml
   disable_progressbar: false
   shared_resources:
-    policy: false #base (try that one)
+    policy: base
     exclude: []
   shared_cutouts: true
+  use_shadow_directory: true # Set to false if problems regarding missing directories occur
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#foresight
 foresight: overnight
@@ -38,6 +39,7 @@ foresight: overnight
 # Wildcard docs in https://pypsa-eur.readthedocs.io/en/latest/wildcards.html
 scenario:
   clusters:
+  # - 5
   - 39
   #- 128
   #- 256
@@ -77,7 +79,7 @@ co2_budget:
   2025: 0.648 # With additional measures (WAM) projection, CO2 excl LULUCF, European Environment Agency. (2023e). Member States’ greenhouse gas (GHG) emission projections 2023. https://www.eea.europa.eu/en/datahub/datahubitem-view/4b8d94a4-aed7-4e67-a54c-0623a50f48e8
   2030: 0.450 # 55% reduction by 2030 (Ff55)
   2035: 0.250
-  2040: 0.000 #0.100 # 90% by 2040
+  2040: 0.100 # 90% by 2040
   2045: 0.050
   2050: 0.000 # climate-neutral by 2050
 
@@ -133,6 +135,7 @@ electricity:
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#atlite
 atlite:
+  cutout_directory: cutouts
   default_cutout: europe-2013-sarah3-era5
   nprocesses: 4
   show_progress: false
@@ -502,16 +505,9 @@ sector:
       heat_exchanger_pinch_point_temperature_difference: 5 #K
       isentropic_compressor_efficiency: 0.8
       heat_loss: 0.0
-    heat_utilisation_potentials:
+    limited_heat_sources:
       geothermal:
-        # activate for 85C hydrothermal
-        # key: hydrothermal_85
-        # constant_temperature_celsius: 85
-        key: hydrothermal_65
         constant_temperature_celsius: 65
-        column_name: Energy_TWh
-        unit: TWh
-        full_load_hours: 4000
     direct_utilisation_heat_sources:
     - geothermal
   heat_pump_sources:
@@ -640,12 +636,15 @@ sector:
     micro_chp: false # Only gas is used for micro_chp
   solar_thermal: true
   solar_cf_correction: 0.788457  # =  >>> 1/1.2683
-  marginal_cost_storage: 0. #1e-4
   methanation: true
   coal_cc: false
   dac: true
   co2_vent: false
-  central_heat_vent: false
+  heat_vent:
+    urban central: true
+    urban decentral: true
+    rural: true
+  marginal_cost_heat_vent: 0.02
   allam_cycle_gas: false
   hydrogen_fuel_cell: true
   hydrogen_turbine: false
@@ -664,7 +663,7 @@ sector:
     min_size: 3
     max_size: 25
     years_of_storage: 25
-  co2_sequestration_potential: #in Mt
+  co2_sequestration_potential:
     2020: 0
     2025: 0
     2030: 50
@@ -721,19 +720,19 @@ sector:
     electricity distribution grid:
       efficiency_static: 0.97
   H2_network: true
-  gas_network: false
+  gas_network: true
   H2_retrofit: false
   H2_retrofit_capacity_per_CH4: 0.6
   gas_network_connectivity_upgrade: 1
   gas_distribution_grid: true
   gas_distribution_grid_cost_factor: 1.0
-  biomass_spatial: false
-  biomass_transport: false
-  biogas_upgrading_cc: false
+  biomass_spatial: true
+  biomass_transport: true #markus had false here
+  biogas_upgrading_cc: true
   conventional_generation:
     OCGT: gas
   industry_t:  # heat supply industry
-    endogen: false  # if heat supply for industry should be endogenously optimised
+    endogen: true  # if heat supply for industry should be endogenously optimised
     must_run: 0.8 # NB: industrial heat demand is in reality supplied at site by discrete plants
     # which follow the local demand and therefore cannot be dispatched too much.
     # Thus, p_min_pu is set to must run to avoid too much dispatch behaviour. Improvements welcome!
@@ -754,13 +753,13 @@ sector:
     high_T:
       hydrogen: true
       methane: true
-  biomass_to_liquid: false
-  biomass_to_liquid_cc: false
-  electrobiofuels: false
-  biosng: false
-  biosng_cc: false
-  bioH2: false
-  municipal_solid_waste: false
+  biomass_to_liquid: true
+  biomass_to_liquid_cc: true
+  electrobiofuels: true
+  biosng: true
+  biosng_cc: true
+  bioH2: true
+  municipal_solid_waste: true
   limit_max_growth:
     enable: false
     # allowing 30% larger than max historic growth
@@ -783,10 +782,10 @@ sector:
     var_cf: true
     sustainability_factor: 0.0025
   solid_biomass_import:
-    enable: false
+    enable: true
     price: 54 #EUR/MWh
     max_amount: 1390 # TWh
-    upstream_emissions_factor: .59 #share of solid biomass CO2 emissions at full combustion - 0.59= 60g/MJ , default was 0.1 but that is too low
+    upstream_emissions_factor: .59 #share of solid biomass CO2 emissions at full combustion
   non-edible_crops: true
 
 
@@ -855,8 +854,8 @@ industry:
     2045: 0.16
     2050: 0.20
   HVC_environment_sequestration_fraction: 0.
-  waste_to_energy: false
-  waste_to_energy_cc: false
+  waste_to_energy: true
+  waste_to_energy_cc: true
   sector_ratios_fraction_future:
     2020: 0.0
     2025: 0.1
@@ -895,9 +894,9 @@ costs:
     lifetime: 25
     "CO2 intensity": 0
     "discount rate": 0.07
-  # Marginal and capital costs can be overwritten
-  # capital_cost:
-  #   onwind: 500
+  overwrites: {}
+    # fuel: 
+    #   Agricultural waste: 30
   marginal_cost:
     solar: 0.01
     onwind: 0.015
@@ -908,6 +907,8 @@ costs:
     fuel cell: 0.
     battery: 0.
     battery inverter: 0.
+    home battery storage: 0
+    water tank charger: 0.03
   emission_prices:
     enable: false
     co2: 0.
@@ -1014,6 +1015,12 @@ solving:
       ipm_optimality_tolerance: 1e-4
       parallel: "on"
       random_seed: 123
+    highs-simplex:
+      solver: "simplex"
+      parallel: "on"
+      primal_feasibility_tolerance: 1e-5
+      dual_feasibility_tolerance: 1e-5
+      random_seed: 123
     gurobi-default:
       threads: 8
       method: 2 # barrier
@@ -1070,6 +1077,7 @@ solving:
     rtol: 0.01
 
   mem_mb: 30000 #memory in MB; 20 GB enough for 50+B+I+H2; 100 GB for 181+B+I+H2
+  memory_logging_frequency: 30 # in seconds
   runtime: 6h #runtime in humanfriendly style https://humanfriendly.readthedocs.io/en/latest/
 
 
@@ -1274,8 +1282,18 @@ plotting:
     services urban decentral water tanks: '#f1b4a4'
     urban central water tanks: '#e9977d'
     hot water storage: '#e69487'
-    water pits: '#cc826a'
-    urban central water pits: '#d96f4c'
+    hot water charging: '#e8998b'
+    urban central water tanks charger: '#b57a67'
+    residential rural water tanks charger: '#b4887c'
+    residential urban decentral water tanks charger: '#b39995'
+    services rural water tanks charger: '#b3abb0'
+    services urban decentral water tanks charger: '#b3becc'
+    hot water discharging: '#e99c8e'
+    urban central water tanks discharger: '#b9816e'
+    residential rural water tanks discharger: '#ba9685'
+    residential urban decentral water tanks discharger: '#baac9e'
+    services rural water tanks discharger: '#bbc2b8'
+    services urban decentral water tanks discharger: '#bdd8d3'
     # heat demand
     Heat load: '#cc1f1f'
     heat: '#cc1f1f'

@@ -6,7 +6,7 @@
 # only works for Greenfield scenarios, uniform distribution is used for all parameters
 
 general:
-  replicates: 3 #10 is standard
+  replicates: 10 #10 is standard
   method: morris #Maybe other later
   covariance_plot: false
 
@@ -35,33 +35,151 @@ parameters:
         emission_factors: agricultural waste
   ef_logging_residues: #name of parameter only for reference
     groupname: ef_logging_residues #name of group for grouping the parameters
-    distribution: default
     min: 0.045 # 12.5 g/MJ
     max: 0.135 # 37.5 g/MJ
     config_file_location: #has to be a non-binary numerical value so that the sampling can be done
       biomass:
         emission_factors: fuelwood residues
-
+  costs_agricultural_waste: #name of parameter only for reference
+    groupname: biomass_costs #name of group for grouping the parameters
+    min: 10.03
+    max: 12.67
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      costs:
+        overwrites:
+          fuel:
+            Agricultural waste:
+  costs_C&P_RW: #name of parameter only for reference
+    groupname: biomass_costs #name of group for grouping the parameters
+    min: 19.28
+    max: 24.46
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      costs:
+        overwrites:
+          fuel:
+            C&P_RW:
+  costs_fuelwood_residues: #name of parameter only for reference
+    groupname: biomass_costs #name of group for grouping the parameters
+    min: 11.76
+    max: 14.72
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      costs:
+        overwrites:
+          fuel:
+            Fuelwood residues:
+  costs_fuelwoodRW: #name of parameter only for reference
+    groupname: biomass_costs #name of group for grouping the parameters
+    min: 9.64
+    max: 12.11
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      costs:
+        overwrites:
+          fuel:
+            FuelwoodRW:
+  costs_grasses: #name of parameter only for reference
+    groupname: biomass_costs #name of group for grouping the parameters
+    min: 15.7
+    max: 17.4
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      costs:
+        overwrites:
+          fuel:
+            Bioethanol barley, wheat, grain maize, oats, other cereals and rye:
+  costs_manure: #name of parameter only for reference
+    groupname: biomass_costs #name of group for grouping the parameters
+    min: 18.28
+    max: 19.85
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      costs:
+        overwrites:
+          fuel:
+            Manure:
+  costs_residues_from_landscape_care: #name of parameter only for reference
+    groupname: biomass_costs #name
+    min: 8.21
+    max: 9.88
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      costs:
+        overwrites:
+          fuel:
+            Residues from landscape care:
+  costs_sawdust:
+    groupname: biomass_costs
+    min: 5.09
+    max: 6.08
+    config_file_location:
+      costs:
+        overwrites:
+          fuel:
+            Sawdust:
+  costs_secondary_forestry_residues:
+    groupname: biomass_costs
+    min: 6.4
+    max: 7.72
+    config_file_location:
+      costs:
+        overwrites:
+          fuel:
+            Secondary Forestry residues - woodchips:
+  costs_sludge:
+    groupname: biomass_costs
+    min: 16.89
+    max: 21.97
+    config_file_location:
+      costs:
+        overwrites:
+          fuel:
+            Sludge:
+  costs_woody_crops_poplar:
+    groupname: biomass_costs
+    min: 45.91
+    max: 48.15
+    config_file_location:
+      costs:
+        overwrites:
+          fuel:
+            Poplar:
+  costs_woody_crops_willow:
+    groupname: biomass_costs
+    min: 27.98
+    max: 30.52
+    config_file_location:
+      costs:
+        overwrites:
+          fuel:
+            Willow:
 
 results: #define results from results folder (TODO: or from the network directly)
-  gas_capital_costs: #name of result
-    multiplier: 1 #to change the unit of the result or to change the sign if the output in the csv is negative
-    unit: € #unit of the result
-    csv:
-      filename: costs.csv #name of the file
-      identification_column_entries: generators,capital,gas #has to be unique (otherwise raise error)
   system_costs: #name of result
     multiplier: 1e-6 #to change the unit of the result or to change the sign if the output in the csv is negative
     unit: million € #unit of the result
     csv:
       filename: metrics.csv #name of the file
       identification_column_entries: total costs #has to be unique (otherwise raise error)
-  biomass_use:
+  manure_use:
     multiplier: 1e-6
     unit: TWh
     csv:
       filename: supply_energy.csv
-      identification_column_entries: solid biomass,generators,solid biomass
+      identification_column_entries:
+  crop_residues_use:
+    multiplier: 1e-6
+    unit: TWh
+    csv:
+      filename: supply_energy.csv
+      identification_column_entries:
+  logging_residues_use:
+    multiplier: 1e-6
+    unit: TWh
+    csv:
+      filename: supply_energy.csv
+      identification_column_entries:
+  co2_shadow_price:
+    multiplier: 1
+    unit: €/t
+    csv:
+      filename: metrics.csv
+      identification_column_entries:
 
 
 
