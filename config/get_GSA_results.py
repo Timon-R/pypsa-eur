@@ -143,12 +143,12 @@ def calculate_GSA_metrics():
             fig, axs = plt.subplots(2, figsize=(20, 20))
             plot_morris.horizontal_bar_plot(axs[0], Si, unit=unit)
             plot_morris.covariance_plot(axs[1], Si, unit=unit)
-            axs[1].set_xlabel(unit, fontsize=18)
+            axs[1].set_xlabel(f"µ in {unit}", fontsize=18)
             axs[1].tick_params(axis="both", which="major", labelsize=14)
         else:
             fig, axs = plt.subplots(1, figsize=(16, 10))
             plot_morris.horizontal_bar_plot(axs, Si, unit=unit)
-            axs.set_xlabel(unit, fontsize=18)
+            axs.set_xlabel(f"µ* in {unit}", fontsize=18)
             axs.tick_params(axis="both", which="major", labelsize=14)
         fig.suptitle(title, fontsize=24)
 

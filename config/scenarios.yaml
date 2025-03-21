@@ -20,141 +20,79 @@
 #     - offwind-dc
 #     - hydro
 
-default:
-  sector:
-    gas_network: true
-    biomass_spatial: true
-    biomass_transport: true #markus had false here
-    biogas_upgrading_cc: true
-    industry_t:  # heat supply industry
-      endogen: true
-    biomass_to_liquid: true
-    biomass_to_liquid_cc: true
-    electrobiofuels: true
-    biosng: true
-    biosng_cc: true
-    bioH2: true
-    municipal_solid_waste: true
-    solid_biomass_import:
-      enable: true
-  industry:
-    waste_to_energy: true
-    waste_to_energy_cc: true
+no_biomass_emissions:
+  biomass:
+    emission_factors:
+      agricultural waste: 0
+      fuelwood residues: 0
+      secondary forestry residues: 0
+      sawdust: 0
+      residues from landscape care: 0
+      grasses: 0
+      woody crops: 0
+      fuelwoodRW: 0
+      manure: 0
+      sludge: 0
+      C&P_RW: 0
 
 biomass_emissions:
-  sector:
-    gas_network: true
-    biomass_spatial: true
-    biomass_transport: true
-    biogas_upgrading_cc: true
-    industry_t:  # heat supply industry
-      endogen: true
-    biomass_to_liquid: true
-    biomass_to_liquid_cc: true
-    electrobiofuels: true
-    biosng: true
-    biosng_cc: true
-    bioH2: true
-    municipal_solid_waste: true
-    solid_biomass_import:
-      enable: true
-  industry:
-    waste_to_energy: true
-    waste_to_energy_cc: true
   biomass:
-    emission_factors:
-      agricultural waste: 0.108
-      fuelwood residues: 0.036
+    emission_factors: #same as default
+      agricultural waste: 0.072
+      fuelwood residues: 0.09
       secondary forestry residues: 0.144
       sawdust: 0.108
       residues from landscape care: 0
       grasses: 0.216
       woody crops: 0.18
       fuelwoodRW: 0.288
-      manure: 0.072
+      manure: 0.054
       sludge: 0
       C&P_RW: 0.144
 
-150_seq:
+bm_em_150_seq:
   sector:
-    gas_network: true
-    biomass_spatial: true
-    biomass_transport: true
-    biogas_upgrading_cc: true
-    industry_t:  # heat supply industry
-      endogen: true
-    biomass_to_liquid: true
-    biomass_to_liquid_cc: true
-    electrobiofuels: true
-    biosng: true
-    biosng_cc: true
-    bioH2: true
-    municipal_solid_waste: true
-    solid_biomass_import:
-      enable: true
     co2_sequestration_potential:
-      2020: 0
-      2025: 0
-      2030: 150
-      2035: 150
-      2040: 150
-      2045: 150
       2050: 150
-  industry:
-    waste_to_energy: true
-    waste_to_energy_cc: true
-  biomass:
-    emission_factors:
-      agricultural waste: 0.108
-      fuelwood residues: 0.036
-      secondary forestry residues: 0.144
-      sawdust: 0.108
-      residues from landscape care: 0
-      grasses: 0.216
-      woody crops: 0.18
-      fuelwoodRW: 0.288
-      manure: 0.072
-      sludge: 0
-      C&P_RW: 0.144
 
-400_seq:
+bm_em_710_seq:
   sector:
-    gas_network: true
-    biomass_spatial: true
-    biomass_transport: true
-    biogas_upgrading_cc: true
-    industry_t:  # heat supply industry
-      endogen: true
-    biomass_to_liquid: true
-    biomass_to_liquid_cc: true
-    electrobiofuels: true
-    biosng: true
-    biosng_cc: true
-    bioH2: true
-    municipal_solid_waste: true
-    solid_biomass_import:
-      enable: true
     co2_sequestration_potential:
-      2020: 0
-      2025: 0
-      2030: 400
-      2035: 400
-      2040: 400
-      2045: 400
-      2050: 400
-  industry:
-    waste_to_energy: true
-    waste_to_energy_cc: true
+      2050: 710
+
+no_bm_em_150_seq:
   biomass:
     emission_factors:
-      agricultural waste: 0.108
-      fuelwood residues: 0.036
-      secondary forestry residues: 0.144
-      sawdust: 0.108
+      agricultural waste: 0
+      fuelwood residues: 0
+      secondary forestry residues: 0
+      sawdust: 0
       residues from landscape care: 0
-      grasses: 0.216
-      woody crops: 0.18
-      fuelwoodRW: 0.288
-      manure: 0.072
+      grasses: 0
+      woody crops: 0
+      fuelwoodRW: 0
+      manure: 0
       sludge: 0
-      C&P_RW: 0.144
+      C&P_RW: 0
+  sector:
+    co2_sequestration_potential:
+      2050: 150
+
+no_bm_em_710_seq:
+  biomass:
+    emission_factors:
+      agricultural waste: 0
+      fuelwood residues: 0
+      secondary forestry residues: 0
+      sawdust: 0
+      residues from landscape care: 0
+      grasses: 0
+      woody crops: 0
+      fuelwoodRW: 0
+      manure: 0
+      sludge: 0
+      C&P_RW: 0
+  sector:
+    co2_sequestration_potential:
+      2050: 710
+

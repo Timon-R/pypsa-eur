@@ -6,6 +6,8 @@ import os
 import string
 
 import pandas as pd
+import pypsa
+import yaml
 
 
 def load_results(results_dir, folders="all"):
@@ -32,10 +34,14 @@ def load_results(results_dir, folders="all"):
         print(f"Loading data from {folder}...")
         for file in csv_files:
             file_path = os.path.join(folder_path, file)
-            df = pd.read_csv(file_path).drop(index=range(3))
+            if "custom_metrics" not in file:
+                df = pd.read_csv(file_path).drop(index=range(3))
+            else:
+                df = pd.read_csv(file_path).drop(index=range(1))
             df.columns = list(string.ascii_uppercase[: len(df.columns)])
             key = os.path.splitext(file)[0]
-            dataframes[key] = df
+            dataframes[key] = df.reset_index(drop=True)
+
         results[folder] = dataframes
     return results
 
@@ -853,6 +859,42 @@ def add_carbon_utilisation(dict_with_storage, data, share_sequestered):
     return dict_with_storage
 
 
+def get_biomass_potentials(
+    network_path="results/biomass_emissions/networks/base_s_39___2050.nc",
+):
+    config_file_path = "config/config.yaml"
+
+    # Open and load the YAML file
+    with open(config_file_path) as file:
+        config = yaml.safe_load(file)
+
+    # Extract biomass types
+    biomass_types = list(config["biomass"]["classes"].keys())
+
+    n = pypsa.Network(network_path)
+
+    biomass_potentials = {}
+
+    for biomass_type in biomass_types:
+        biomass_stores = n.stores[n.stores.carrier == biomass_type]
+        biomass_potentials[biomass_type] = biomass_stores.e_initial.sum()
+
+    # export to csv
+    export_dir = "export"
+    os.makedirs(export_dir, exist_ok=True)
+    rows = []
+    for key, content in biomass_potentials.items():
+        rows.append(
+            {
+                "Biomass Type": key,
+                "Potential": content,
+            }
+        )
+    df = pd.DataFrame(rows)
+    file_path = os.path.join(export_dir, "biomass_potentials.csv")
+    df.to_csv(file_path, index=False)
+
+
 def calculate_upstream_emissions(data, scenarios):
     emission_factors = {
         "woody crops": 0.18,
@@ -918,7 +960,14 @@ def calculate_share_of_sequestration(data, scenarios):
 def main():
     results_dir = "results"
     # scenarios = ["default", "biomass_emissions", "150_seq", "400_seq"]
-    scenarios = ["default", "biomass_emissions"]
+    scenarios = [
+        "no_biomass_emissions",
+        "biomass_emissions",
+        "bm_em_150_seq",
+        "bm_em_710_seq",
+        "no_bm_em_150_seq",
+        "no_bm_em_710_seq",
+    ]
     results = load_results(results_dir, scenarios)
     # scenarios = "all"
 
@@ -1212,20 +1261,20 @@ def main():
             None,
         ],
     ]
-    # Calculate the difference between two scenarios in costs
-    cost_difference = calculate_difference(
-        results,
-        "default",
-        "biomass_emissions",
-        "costs",
-        ["A", "B", "C"],
-        "D",
-        "2050",
-        merge_fields,
-        remove_list=[],
-        round_digits=0,
-    )
-    export_results(cost_difference, "cost_difference.csv", include_difference=True)
+    # # Calculate the difference between two scenarios in costs
+    # cost_difference = calculate_difference(
+    #     results,
+    #     "default",
+    #     "biomass_emissions",
+    #     "costs",
+    #     ["A", "B", "C"],
+    #     "D",
+    #     "2050",
+    #     merge_fields,
+    #     remove_list=[],
+    #     round_digits=0,
+    # )
+    # export_results(cost_difference, "cost_difference.csv", include_difference=True)
 
     shadow_price_2050 = get_data(
         results,
@@ -1621,6 +1670,8 @@ def main():
 
     upstream_emissions = calculate_upstream_emissions(biomass_supply_2050, scenarios)
     export_results(upstream_emissions, "upstream_emissions.csv", simply_print=True)
+
+    get_biomass_potentials()
 
 
 if __name__ == "__main__":

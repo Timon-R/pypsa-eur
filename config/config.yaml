@@ -24,7 +24,7 @@ run:
   name: all
   scenarios:
     enable: true
-    file: config/GSA_runs.yaml
+    file: config/scenarios.yaml   #config/GSA_runs.yaml
   disable_progressbar: false
   shared_resources:
     policy: base
@@ -429,17 +429,17 @@ biomass:
     2045: 1
     2050: 1
   emission_factors: #tCO2/MWh #municipal solid waste is not included in the emission factors
-    agricultural waste: 0
-    fuelwood residues: 0
-    secondary forestry residues: 0
-    sawdust: 0
+    agricultural waste: 0.072
+    fuelwood residues: 0.09
+    secondary forestry residues: 0.144
+    sawdust: 0.108
     residues from landscape care: 0
-    grasses: 0
-    woody crops: 0
-    fuelwoodRW: 0
-    manure: 0
+    grasses: 0.216
+    woody crops: 0.18
+    fuelwoodRW: 0.288
+    manure: 0.054
     sludge: 0
-    C&P_RW: 0
+    C&P_RW: 0.144
 
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#solar-thermal
@@ -882,7 +882,7 @@ industry:
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#costs
 costs:
-  year: 2030
+  year: 2050
   version: Timon-R/technology-data/v0.0.5 #v0.10.0
   social_discountrate: 0.02
   fill_values:

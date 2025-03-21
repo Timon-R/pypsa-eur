@@ -14,6 +14,73 @@ from matplotlib.legend_handler import HandlerPatch
 from matplotlib.path import Path
 from matplotlib.ticker import MultipleLocator
 
+# config_file_path = "config/config.yaml"
+
+# # Open and load the YAML file
+# with open(config_file_path, "r") as file:
+#     config = yaml.safe_load(file)
+
+# # Extract biomass types
+# biomass_types = list(config["biomass"]["classes"].keys())
+
+emission_factors = {
+    "agricultural waste": 0.072,
+    "fuelwood residues": 0.09,
+    "secondary forestry residues": 0.144,
+    "sawdust": 0.108,
+    "residues from landscape care": 0,
+    "grasses": 0.216,
+    "woody crops": 0.18,
+    "fuelwoodRW": 0.288,
+    "manure": 0.054,
+    "sludge": 0,
+    "C&P_RW": 0.144,
+    "solid biomass import": 0.3667 * 0.59,
+}
+emission_factors_new_names = {
+    "woody crops": 0.18,
+    "grasses": 0.216,
+    "stemwood": 0.288,
+    "chips and pellets": 0.144,
+    "secondary forestry residues": 0.144,
+    "sawdust": 0.108,
+    "logging residues": 0.09,
+    "agricultural waste": 0.072,
+    "residues from landscape care": 0,
+    "sludge": 0,
+    "manure": 0.054,
+    "imported biomass": 0.3667 * 0.59,
+}
+biomass_potentials_TWh = {
+    "agricultural waste": 290.4185038259868,
+    "fuelwood residues": 547.1662388608518,
+    "secondary forestry residues": 87.15159435646442,
+    "sawdust": 30.14011967737334,
+    "residues from landscape care": 70.67024100998525,
+    "grasses": 472.9656047672824,
+    "woody crops": 111.53964182929641,
+    "fuelwoodRW": 86.6139452513965,
+    "C&P_RW": 666.8196265469048,
+    "not included": 0.0,
+    "manure": 345.45933182016194,
+    "sludge": 13.908196004274894,
+    "solid biomass import": 1390,
+}
+biomass_costs = {  # Euro/MWh_LHV
+    "agricultural waste": 12.8786,
+    "fuelwood residues": 15.3932,
+    "fuelwoodRW": 12.6498,
+    "manure": 22.1119,
+    "residues from landscape care": 10.5085,
+    "secondary forestry residues": 8.1876,
+    "woody crops": 44.4,
+    "grasses": 18.9983,
+    "sludge": 22.0995,
+    "solid biomass import": 54,
+    "sawdust": 6.4791,
+    "C&P_RW": 25.4661,
+}
+
 
 def load_csv(file_path):
     """
@@ -78,50 +145,6 @@ def create_gravitational_plot(
     biomass_supply=None,
     scenario=None,
 ):
-    emission_factors = {
-        "agricultural waste": 0.108,
-        "fuelwood residues": 0.036,
-        "secondary forestry residues": 0.144,
-        "sawdust": 0.108,
-        "residues from landscape care": 0,
-        "grasses": 0.216,
-        "woody crops": 0.18,
-        "fuelwoodRW": 0.288,
-        "manure": 0.072,
-        "sludge": 0,
-        "C&P_RW": 0.144,
-        "solid biomass import": 0.3667 * 0.59,
-    }
-    biomass_potentials_TWh = {  # check if this is still true
-        "agricultural waste": 306,
-        "fuelwood residues": 541.7,
-        "fuelwoodRW": 75.4,
-        "grasses": 504,
-        "manure": 338.1,
-        "municipal solid waste": 151.2,
-        "residues from landscape care": 74.7,
-        "sawdust": 32.4,
-        "secondary forestry residues": 94.3,
-        "sludge": 9.2,
-        "woody crops": 117.3,
-        "solid biomass import": 1390,
-        "C&P_RW": 576.5,
-    }
-    biomass_costs = {  # Euro/MWh_LHV
-        "agricultural waste": 12.8786,
-        "fuelwood residues": 15.3932,
-        "fuelwoodRW": 12.6498,
-        "manure": 22.1119,
-        "residues from landscape care": 10.5085,
-        "secondary forestry residues": 8.1876,
-        "woody crops": 44.4,
-        "grasses": 18.9983,
-        "sludge": 22.0995,
-        "solid biomass import": 54,
-        "sawdust": 6.4791,
-        "C&P_RW": 25.4661,
-    }
-
     if biomass_supply is not None and scenario is not None:
         biomass_supply = biomass_supply[biomass_supply["Folder"] == scenario]
         # remove the 1 from the data_name
@@ -159,9 +182,12 @@ def create_gravitational_plot(
             edgecolors=color,
             linewidth=1,
         )
+        location = emissions[i] + 2 * sizes[i] / max_potential * 0.01 + 0.01
+        if bt == "agricultural waste":  # below the point
+            location = emissions[i] - 2 * sizes[i] / max_potential * 0.01 - 0.015
         plt.text(
             costs[i],
-            emissions[i] + 2 * sizes[i] / max_potential * 0.01 + 0.01,
+            location,
             bt,
             fontsize=9,
             ha="center",
@@ -243,7 +269,14 @@ def create_gravitational_plot(
             facecolors="none",
             label=f"{size} TWh",
         )
-    plt.legend(scatterpoints=1, frameon=False, labelspacing=1, title="Potential")
+    plt.legend(
+        scatterpoints=1,
+        frameon=False,
+        labelspacing=1,
+        title="Potential",
+        loc="lower right",
+        bbox_to_anchor=(1, 0),
+    )
 
     # # Add legend for biomass types
     # handles = [plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='none', markeredgecolor=colors[i], markersize=10, label=bt) for i, bt in enumerate(biomass_types)]
@@ -1203,40 +1236,6 @@ def plot_biomass_use(df, title, x_label, y_label, file_path, year=2050):
 
     plt.rcParams.update({"font.size": 18})
     df["Data Name"] = df["Data Name"].str.replace("1", "")
-    emission_factors = {
-        "agricultural waste": 0.108,
-        "fuelwood residues": 0.036,
-        "secondary forestry residues": 0.144,
-        "sawdust": 0.108,
-        "residues from landscape care": 0,
-        "grasses": 0.216,
-        "woody crops": 0.18,
-        "fuelwoodRW": 0.288,
-        "manure": 0.072,
-        "sludge": 0,
-        "C&P_RW": 0.144,
-        "solid biomass import": 0.3667 * 0.1,
-    }
-
-    biomass_potentials_TWh = {
-        "agricultural waste": 306,
-        "fuelwood residues": 541.7,
-        "fuelwoodRW": 75.4,
-        "grasses": 504,
-        "manure": 338.1,
-        "municipal solid waste": 151.2,
-        # "not included": 398.5,
-        "residues from landscape care": 74.7,
-        "sawdust": 32.4,
-        "secondary forestry residues": 94.3,
-        "sludge": 9.2,
-        "woody crops": 117.3,
-        "solid biomass import": 0,
-        "C&P_RW": 576.5,
-        # "unsustainable solid biomass": 0,
-        # "unsustainable biogas": 0,
-        # "unsustainable bioliquids": 0
-    }
 
     custom_order = [
         "woody crops",
@@ -1399,21 +1398,6 @@ def plot_biomass_use(df, title, x_label, y_label, file_path, year=2050):
 
 
 def plot_efs():
-    emission_factors = {
-        "woody crops": 0.18,
-        "grasses": 0.216,
-        "stemwood": 0.288,
-        "chips and pellets": 0.144,
-        "secondary forestry residues": 0.144,
-        "sawdust": 0.108,
-        "logging residues": 0.036,
-        "agricultural waste": 0.108,
-        "residues from landscape care": 0,
-        "sludge": 0,
-        "manure": 0.072,
-        "imported biomass": 0.3667 * 0.59,
-    }
-
     biomass_costs = {  # Euro/MWh_LHV
         "agricultural waste": 12.8786,
         "logging residues": 15.3932,  # fuelwood residues
@@ -1438,14 +1422,12 @@ def plot_efs():
     fig, ax = plt.subplots(figsize=(14, 10))
     bar_width = 0.8
     gap = 0.6  # Adjust this value to change the space between bars
-    x_coords = np.arange(len(emission_factors)) * (bar_width + gap)
+    x_coords = np.arange(len(emission_factors_new_names)) * (bar_width + gap)
 
-    for index, (biomass_type, ef) in enumerate(emission_factors.items()):
-        ax.bar(
-            x_coords[index], ef, width=bar_width, label=biomass_type, color="LightGreen"
-        )
+    for index, (biomass, ef) in enumerate(emission_factors_new_names.items()):
+        ax.bar(x_coords[index], ef, width=bar_width, label=biomass, color="LightGreen")
         # Add cost as text above the bar
-        cost = biomass_costs.get(biomass_type, "N/A")
+        cost = biomass_costs.get(biomass, "N/A")
         ax.text(
             x_coords[index],
             ef + 0.01,  # Position the text slightly above the bar
@@ -1498,7 +1480,7 @@ def plot_efs():
     ax.set_xticks(x_coords)
     # ax.set_xticklabels(emission_factors.keys(), rotation=45, ha="right")
     ax.set_xticklabels(
-        list(emission_factors.keys()) + ["natural gas", "oil", "coal"],
+        list(emission_factors_new_names.keys()) + ["natural gas", "oil", "coal"],
         rotation=45,
         ha="right",
     )
@@ -1967,4 +1949,28 @@ def __main__():
 
 
 if __name__ == "__main__":
-    __main__()
+    # __main__()
+    create_gravitational_plot(
+        "Gravitational Plot",
+        "gravitational_plot.png",
+    )
+    data = load_csv("export/biomass_supply.csv")
+    create_gravitational_plot(
+        "Gravitational Plot (bm_em_710_seq)",
+        "gravitational_plot_bm_em_710.png",
+        biomass_supply=data,
+        scenario="bm_em_710_seq",
+    )
+    create_gravitational_plot(
+        "Gravitational Plot (bm_em_200_seq)",
+        "gravitational_plot_bm_em_200.png",
+        biomass_supply=data,
+        scenario="biomass_emissions",
+    )
+    create_gravitational_plot(
+        "Gravitational Plot (bm_em_150_seq)",
+        "gravitational_plot_bm_em_150.png",
+        biomass_supply=data,
+        scenario="bm_em_150_seq",
+    )
+    plot_efs()
