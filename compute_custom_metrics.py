@@ -23,10 +23,10 @@ def load_csvs(folderpath):
     """
     This function loads a csv file as a pandas dataframe.
     """
-    csv_files = [f for f in os.listdir(folder_path) if f.endswith(".csv")]
+    csv_files = [f for f in os.listdir(folderpath) if f.endswith(".csv")]
     dataframes = {}
     for file in csv_files:
-        file_path = os.path.join(folder_path, file)
+        file_path = os.path.join(folderpath, file)
         if "custom_metrics" not in file:
             df = pd.read_csv(file_path).drop(index=range(3))
             df.columns = list(string.ascii_uppercase[: len(df.columns)])
