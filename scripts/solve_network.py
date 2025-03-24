@@ -1181,6 +1181,39 @@ def solve_network(
         n.model.print_infeasibilities()
         raise RuntimeError("Solving status 'infeasible'")
 
+    mga = True
+    biomass_types = [
+        "agricultural waste",
+        "fuelwood residues",
+        "secondary forestry residues",
+        "sawdust",
+        "residues from landscape care",
+        "grasses",
+        "woody crops",
+        "fuelwoodRW",
+        "C&P_RW",
+        "manure",
+        "sludge",
+        "municipal solid waste",
+        "solid biomass import",
+    ]
+    if mga:
+        sense = "min"
+        slack = 0.1
+        weights = {
+            "Link": {
+                "p": pd.DataFrame(
+                    1,
+                    index=n.snapshots,
+                    columns=n.links.index[n.links.carrier.isin(biomass_types)],
+                )
+            }
+        }
+        logger.info(f"Solving MGA. Sense: {sense}. Slack: {slack}.")
+        status, condition = n.optimize.optimize_mga(
+            weights=weights, sense=sense, slack=slack, **kwargs
+        )
+
 
 # %%
 if __name__ == "__main__":
