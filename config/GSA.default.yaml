@@ -3,29 +3,53 @@
 #
 # SPDX-License-Identifier: MIT
 
-# only works for Greenfield scenarios, uniform distribution is used for all parameters
+# How to use this file:
+# 1. Define the parameters you want to sample in the "parameters" section below.
+#    - Specify the parameter name, its range (min and max), and its location in the config file.
+#    - Ensure the parameter is numerical and non-binary for sampling.
+#
+# 2. Generate the scenario file:
+#    - Run the script `prepare_GSA.py` to create a scenario file (`GSA_runs.yaml`) 
+#      based on the defined parameters.
+#    - This scenario file will follow the same structure as `scenario.yaml`.
+#
+# 3. Enable GSA scenarios in the main config:
+#    - In `config.yaml`, under the "run" section, set:
+#      scenarios:
+#        enable: true
+#        file: config/GSA_runs.yaml
+#    - Run the Snakemake workflow as you would for other scenarios.
+#
+# 4. Define the results to analyze:
+#    - Use the "results" section below to specify which metrics to extract from the output CSV files.
+#    - If you need custom metrics (e.g., sums or computed values), create them in a separate script 
+#      and store them in the CSV files for each run.
+#    - the script will select the rows that have the specified entries in the CSV files and use the last column of the CSV file to extract the values
+#
+# 5. Extract and analyze results:
+#    - Run the script `get_GSA_results.py` to extract the specified results from the CSV files.
+#    - The results, along with the parameter samples (e.g., Morris sample), will be stored in a folder named `GSA`.
+#
+# Notes:
+# - The script uses `config.yaml` to create the scenario file.
+# - You need to install `SALib` for the Morris sampling method.
+# - The `covariance_plot` option can be used to visualize parameter covariance.
+# - Currently the script only support unifrom distribution, but it can be changed to other distributions if needed as long as SALib supports it.
 
 general:
-  replicates: 3 #10 is standard
-  method: morris # Maybe other later
-  covariance_plot: false
+  replicates: 10 #10 is standard
+  method: morris
+  covariance_plot: false #can be used to plot the covariance of the parameters
 
-#they will get reorderd alphabetically, also, what about parameters that are spatially different? - I would need to alter the costs file instead
-parameters: #define parameter uncertainty ranges (what about the option of changing a paramter in the config file as the general method?)
+
+parameters: #define parameter uncertainty ranges, the script will identify the parameters in the config file and create a new config file with the parameters replaced by the sampling values
   seq_potential: #name of parameter only for reference
-    groupname: seq_potential #name of group for grouping the parameters, this one is used in the plots
+    groupname: seq_potential #name of group for grouping the parameters, this one is used in the plots; if there is one group for each parameter there is no grouping for that parameter
     min: 150
     max: 250
     config_file_location: #has to be a non-binary numerical value so that the sampling can be done
       sector:
         co2_sequestration_potential: 2050
-  ef_manure: #name of parameter only for reference
-    groupname: ef_manure #name of group for grouping the parameters
-    min: 0.027 # 7.5 g/MJ
-    max: 0.081 # 22.5 g/MJ
-    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
-      biomass:
-        emission_factors: manure
   biomass_costs: #needs to be done for every biomass type, changed via costs file (test if it works first)
     groupname: biomass_costs #name of group for grouping the parameters
     min: 0.5
@@ -37,13 +61,14 @@ parameters: #define parameter uncertainty ranges (what about the option of chang
             Generator:
               solid biomass: marginal_cost
 
-results: #define results from results folder (TODO: or from the network directly)
-  gas_capital_costs: #name of result
+results: #define results from results folders, by defining specified rows in the csv files, you can extract the results you want
+#if you want to extract values that are the sum of multiple rows (or need to be computed from the csvs) you need to first create those values with a different script, store for each run in the csv files like custom_metrics.csv and then refer to them here; then run the get_GSA_results.py script
+  gas_capital_costs: #custom name of result
     multiplier: 1 #to change the unit of the result or to change the sign if the output in the csv is negative
-    unit: € #unit of the result
+    unit: € #unit of the result (for the plotting)
     csv:
       filename: costs.csv #name of the file
-      identification_column_entries: generators,capital,gas #has to be unique (otherwise raise error)
+      identification_column_entries: capital,Generator,gas #has to be unique (otherwise raise error)
   system_costs: #name of result
     multiplier: 1e-6 #to change the unit of the result or to change the sign if the output in the csv is negative
     unit: million € #unit of the result

@@ -25,32 +25,47 @@ from matplotlib.ticker import MultipleLocator
 
 emission_factors = {
     "agricultural waste": 0.072,
-    "fuelwood residues": 0.09,
-    "secondary forestry residues": 0.144,
-    "sawdust": 0.108,
+    "fuelwood residues": 0.0792,
+    "secondary forestry residues": 0.2448,
+    "sawdust": 0.2448,
     "residues from landscape care": 0,
     "grasses": 0.216,
     "woody crops": 0.18,
-    "fuelwoodRW": 0.288,
+    "fuelwoodRW": 0.2448,
     "manure": 0.054,
     "sludge": 0,
-    "C&P_RW": 0.144,
+    "C&P_RW": 0.2448,
     "solid biomass import": 0.3667 * 0.59,
 }
 emission_factors_new_names = {
     "woody crops": 0.18,
     "grasses": 0.216,
-    "stemwood": 0.288,
-    "chips and pellets": 0.144,
-    "secondary forestry residues": 0.144,
-    "sawdust": 0.108,
-    "logging residues": 0.09,
-    "agricultural waste": 0.072,
+    "stemwood": 0.2448,
+    "chips and pellets": 0.2448,
+    "secondary forestry residues": 0.2448,
+    "sawdust": 0.2448,
+    "logging residues": 0.0792,
+    "crop residues": 0.072,
     "residues from landscape care": 0,
     "sludge": 0,
     "manure": 0.054,
     "imported biomass": 0.3667 * 0.59,
 }
+new_names_dict = {
+    "woody crops": "woody crops",
+    "grasses": "grasses",
+    "fuelwoodRW": "stemwood",
+    "C&P_RW": "chips and pellets",
+    "secondary forestry residues": "secondary forestry residues",
+    "sawdust": "sawdust",
+    "fuelwood residues": "logging residues",
+    "agricultural waste": "crop residues",
+    "residues from landscape care": "residues from landscape care",
+    "sludge": "sludge",
+    "manure": "manure",
+    "solid biomass import": "imported biomass",
+}
+
 biomass_potentials_TWh = {
     "agricultural waste": 290.4185038259868,
     "fuelwood residues": 547.1662388608518,
@@ -183,12 +198,14 @@ def create_gravitational_plot(
             linewidth=1,
         )
         location = emissions[i] + 2 * sizes[i] / max_potential * 0.01 + 0.01
-        if bt == "agricultural waste":  # below the point
+        if (
+            bt == "agricultural waste" or bt == "secondary forestry residues"
+        ):  # below the point
             location = emissions[i] - 2 * sizes[i] / max_potential * 0.01 - 0.015
         plt.text(
             costs[i],
             location,
-            bt,
+            new_names_dict[bt],
             fontsize=9,
             ha="center",
         )
@@ -1399,7 +1416,7 @@ def plot_biomass_use(df, title, x_label, y_label, file_path, year=2050):
 
 def plot_efs():
     biomass_costs = {  # Euro/MWh_LHV
-        "agricultural waste": 12.8786,
+        "crop residues": 12.8786,
         "logging residues": 15.3932,  # fuelwood residues
         "stemwood": 12.6498,
         "manure": 22.1119,

@@ -20,79 +20,49 @@
 #     - offwind-dc
 #     - hydro
 
-no_biomass_emissions:
-  biomass:
-    emission_factors:
-      agricultural waste: 0
-      fuelwood residues: 0
-      secondary forestry residues: 0
-      sawdust: 0
-      residues from landscape care: 0
-      grasses: 0
-      woody crops: 0
-      fuelwoodRW: 0
-      manure: 0
-      sludge: 0
-      C&P_RW: 0
+optimal:
+  solving:
+    mga:
+      enable: false
 
-biomass_emissions:
-  biomass:
-    emission_factors: #same as default
-      agricultural waste: 0.072
-      fuelwood residues: 0.09
-      secondary forestry residues: 0.144
-      sawdust: 0.108
-      residues from landscape care: 0
-      grasses: 0.216
-      woody crops: 0.18
-      fuelwoodRW: 0.288
-      manure: 0.054
-      sludge: 0
-      C&P_RW: 0.144
+min_0.05:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.05
 
-bm_em_150_seq:
-  sector:
-    co2_sequestration_potential:
-      2050: 150
+max_0.05:
+  solving:
+    mga:
+      enable: true
+      sense: max
+      slack: 0.05
 
-bm_em_710_seq:
-  sector:
-    co2_sequestration_potential:
-      2050: 710
+min_0.1:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.1
 
-no_bm_em_150_seq:
-  biomass:
-    emission_factors:
-      agricultural waste: 0
-      fuelwood residues: 0
-      secondary forestry residues: 0
-      sawdust: 0
-      residues from landscape care: 0
-      grasses: 0
-      woody crops: 0
-      fuelwoodRW: 0
-      manure: 0
-      sludge: 0
-      C&P_RW: 0
-  sector:
-    co2_sequestration_potential:
-      2050: 150
+max_0.1:
+  solving:
+    mga:
+      enable: true
+      sense: max
+      slack: 0.1
 
-no_bm_em_710_seq:
-  biomass:
-    emission_factors:
-      agricultural waste: 0
-      fuelwood residues: 0
-      secondary forestry residues: 0
-      sawdust: 0
-      residues from landscape care: 0
-      grasses: 0
-      woody crops: 0
-      fuelwoodRW: 0
-      manure: 0
-      sludge: 0
-      C&P_RW: 0
-  sector:
-    co2_sequestration_potential:
-      2050: 710
+min_0.15:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.15
 
+max_0.15:
+  solving:
+    mga:
+      enable: true
+      sense: max
+      slack: 0.15

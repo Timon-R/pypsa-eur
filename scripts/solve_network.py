@@ -1111,22 +1111,47 @@ def add_co2_atmosphere_constraint(n, snapshots):
 
     if glcs.empty:
         return
+
+    # Define capacity-related CO₂ emission factors (tons of CO₂ per MW)
+    capacity_emission_factors = {
+        "onwind": 10,  # Example: 10 tCO₂/MW for onshore wind
+        "solar": 20,  # Example: 20 tCO₂/MW for solar
+    }
+    include_capacity_emissions = True
+
     for name, glc in glcs.iterrows():
+        # Initialize the left-hand side (lhs) of the constraint
+        lhs = 0
+
+        if include_capacity_emissions:
+            # Add capacity-related emissions for specified carriers
+            for carrier, emission_factor in capacity_emission_factors.items():
+                gen_i = n.generators.index[n.generators.carrier == carrier]
+                if gen_i.empty:
+                    continue
+                # Add capacity-related emissions to the lhs
+                p_nom = n.model["Generator-p_nom"].loc[gen_i]
+                lhs += emission_factor * p_nom.sum()
+                logger.info(
+                    f"Added capacity-related CO₂ emissions for {carrier} generators"
+                )
+
+        # Add operational emissions if they exist
         carattr = glc.carrier_attribute
         emissions = n.carriers.query(f"{carattr} != 0")[carattr]
+        if not emissions.empty:
+            # Map stores to their corresponding buses and carriers
+            bus_carrier = n.stores.bus.map(n.buses.carrier)
+            stores = n.stores[bus_carrier.isin(emissions.index) & ~n.stores.e_cyclic]
+            if not stores.empty:
+                last_i = snapshots[-1]
+                lhs += n.model["Store-e"].loc[last_i, stores.index].sum()
 
-        if emissions.empty:
-            continue
+        # Define the right-hand side (rhs) of the constraint
+        rhs = glc.constant
 
-        # stores
-        bus_carrier = n.stores.bus.map(n.buses.carrier)
-        stores = n.stores[bus_carrier.isin(emissions.index) & ~n.stores.e_cyclic]
-        if not stores.empty:
-            last_i = snapshots[-1]
-            lhs = n.model["Store-e"].loc[last_i, stores.index]
-            rhs = glc.constant
-
-            n.model.add_constraints(lhs <= rhs, name=f"GlobalConstraint-{name}")
+        # Add the constraint to the model
+        n.model.add_constraints(lhs <= rhs, name=f"GlobalConstraint-{name}")
 
 
 def extra_functionality(
@@ -1357,7 +1382,6 @@ def solve_network(
         n.model.print_infeasibilities()
         raise RuntimeError("Solving status 'infeasible'. Infeasibilities computed.")
 
-    mga = True
     biomass_types = [
         "agricultural waste",
         "fuelwood residues",
@@ -1373,9 +1397,14 @@ def solve_network(
         "municipal solid waste",
         "solid biomass import",
     ]
-    if mga:
-        sense = "min"
-        slack = 0.1
+    mga = solving["mga"]
+    enable_mga = mga["enable"]
+    if enable_mga:
+        mga_kwargs = kwargs.copy()  # Create a copy of kwargs for MGA
+        mga_kwargs.pop("transmission_losses", None)  # Remove invalid parameters
+        mga_kwargs.pop("linearized_unit_commitment", None)
+        sense = mga["sense"]
+        slack = mga["slack"]
         weights = {
             "Link": {
                 "p": pd.DataFrame(
@@ -1387,7 +1416,7 @@ def solve_network(
         }
         logger.info(f"Solving MGA. Sense: {sense}. Slack: {slack}.")
         status, condition = n.optimize.optimize_mga(
-            weights=weights, sense=sense, slack=slack, **kwargs
+            weights=weights, sense=sense, slack=slack, **mga_kwargs
         )
 
 

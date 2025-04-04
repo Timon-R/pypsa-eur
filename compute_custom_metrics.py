@@ -113,10 +113,10 @@ if __name__ == "__main__":
         # compute the metrics needed
         metrics = calculate_custom_metric(
             results,
-            "supply_energy",
-            [["solid biomass", "links"], ["biogas", "links"]],
+            "energy_balance",
+            [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
             [[[""], "Biomass supply", None]],
-            "C",
+            "B",
             "D",
             filter_positive=True,
             remove_list=["biomass transport"],

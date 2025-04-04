@@ -4837,16 +4837,15 @@ def add_exogen_t_industry(n, nodes, industrial_demand, costs):
 
 
 def add_industry(
-    n,
-    costs,
-    industrial_demand_file,
-    shipping_demand_file,
-    pop_layout,
-    pop_weighted_energy_totals,
-    options,
-    spatial,
-    cf_industry,
-    investment_year,
+    n: pypsa.Network,
+    costs: pd.DataFrame,
+    industrial_demand_file: str,
+    pop_layout: pd.DataFrame,
+    pop_weighted_energy_totals: pd.DataFrame,
+    options: dict,
+    spatial: SimpleNamespace,
+    cf_industry: dict,
+    investment_year: int,
 ):
     """
     Add industry, shipping, aviation, and their corresponding carrier buses to the network.
@@ -4900,10 +4899,22 @@ def add_industry(
     - Process emission handling
     """
     logger.info("Add industrial demand")
-    # add oil buses for shipping, aviation and naptha for industry
-    add_carrier_buses(n, "oil")
-    # add methanol buses for industry
-    add_carrier_buses(n, "methanol")
+    add_carrier_buses(
+        n,
+        carrier="oil",
+        costs=costs,
+        spatial=spatial,
+        options=options,
+        cf_industry=cf_industry,
+    )
+    add_carrier_buses(
+        n,
+        carrier="methanol",
+        costs=costs,
+        spatial=spatial,
+        options=options,
+        cf_industry=cf_industry,
+    )
 
     nodes = pop_layout.index
     nhours = n.snapshot_weightings.generators.sum()

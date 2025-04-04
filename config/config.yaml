@@ -17,7 +17,7 @@ remote:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
   prefix: ""
-  name: test_min_0.1
+  name: test_optimal
   scenarios:
     enable: false
     file: config/scenarios.yaml   #config/GSA_runs.yaml
@@ -425,16 +425,16 @@ biomass:
     2050: 1
   emission_factors: #tCO2/MWh #municipal solid waste is not included in the emission factors
     agricultural waste: 0.072
-    fuelwood residues: 0.09
-    secondary forestry residues: 0.144
-    sawdust: 0.108
+    fuelwood residues: 0.0792
+    secondary forestry residues: 0.2448
+    sawdust: 0.2448
     residues from landscape care: 0
     grasses: 0.216
     woody crops: 0.18
-    fuelwoodRW: 0.288
+    fuelwoodRW: 0.2448
     manure: 0.054
     sludge: 0
-    C&P_RW: 0.144
+    C&P_RW: 0.2448
 
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#solar-thermal
@@ -794,6 +794,7 @@ sector:
       methanol: 121
       gas: 122
       oil: 125
+  replace_renewable_generators: true
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#industry
 industry:
@@ -888,7 +889,7 @@ industry:
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#costs
 costs:
-  year: 2050
+  year: 2040
   version: Timon-R/technology-data/v0.0.5 #v0.10.0
   social_discountrate: 0.02
   fill_values:
@@ -918,6 +919,10 @@ costs:
     enable: false
     co2: 0.
     co2_monthly_prices: false
+  emission_factors:
+    solar: 0.009
+    solar-hsat: 0.009
+    onwind: 0.5 #0.0009
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#clustering
 clustering:
@@ -994,6 +999,10 @@ solving:
         H2 pipeline: 0.3
         gas pipeline: 0.3
       fractional_last_unit_size: false
+  mga:
+    enable: false
+    slack: 0.1
+    sense: "max"
 
   agg_p_nom_limits:
     agg_offwind: false

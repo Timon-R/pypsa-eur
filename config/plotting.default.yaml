@@ -262,6 +262,7 @@ plotting:
   tech_colors:
     # wind
     onwind: "#235ebc"
+    onwind resource: "#235ebc"
     onshore wind: "#235ebc"
     offwind: "#6895dd"
     offshore wind: "#6895dd"
@@ -284,8 +285,10 @@ plotting:
     hydro+PHS: "#08ad97"
     # solar
     solar: "#f9d002"
+    solar resource: "#f9d002"
     solar PV: "#f9d002"
     solar-hsat: "#fdb915"
+    solar-hsat resource: "#fdb915"
     solar thermal: '#ffbf2b'
     residential rural solar thermal: '#f1c069'
     services rural solar thermal: '#eabf61'
