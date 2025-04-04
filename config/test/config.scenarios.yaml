@@ -12,8 +12,6 @@ run:
     enable: true
     file: "config/test/scenarios.yaml"
   disable_progressbar: true
-  shared_resources:
-    policy: base
   shared_cutouts: true
 
 scenario:
@@ -58,4 +56,4 @@ renewable:
 solving:
   solver:
     name: highs
-    options: highs-default
+    options: highs-simplex
