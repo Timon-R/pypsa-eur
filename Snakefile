@@ -11,6 +11,10 @@ from os.path import normpath, exists
 from shutil import copyfile, move, rmtree
 from snakemake.utils import min_version
 
+import sys
+
+print(sys.executable)
+
 min_version("8.11")
 
 from scripts._helpers import (

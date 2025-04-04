@@ -35,11 +35,13 @@
 # Notes:
 # - The script uses `config.yaml` to create the scenario file.
 # - You need to install `SALib` for the Morris sampling method.
+# - Condsider creating a new conda environment for the decoupled GSA workflow to avoid conflicts with other packages.
 # - The `covariance_plot` option can be used to visualize parameter covariance.
 # - Currently the script only support unifrom distribution, but it can be changed to other distributions if needed as long as SALib supports it.
+# - It is recommmended to set the shared_recources to policy: base (or true if applicable) in the config.yaml file to save computation time
 
 general:
-  replicates: 3 #10 is standard
+  replicates: 10 #10 is standard
   method: morris
   covariance_plot: false #can be used to plot the covariance of the parameters
 

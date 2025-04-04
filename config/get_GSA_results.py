@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: MIT
 
 """
-This script is used to generate the scenarios for the Global Sensitivity Analysis (GSA) using the SALib library.
-The script reads the parameters from the GSA.yaml file and generates the scenarios for the GSA.
-The scenarios are saved in the config/GSA_runs.yaml file.
+This script extracts the results of the GSA from the model runs and calculates the GSA metrics.
+
+Please see the file config/GSA.yaml for an explanation of the workflow.
 """
 
 from pathlib import Path
@@ -19,6 +19,14 @@ from SALib.plotting import morris as plot_morris
 
 
 def create_salib_problem(parameters: list) -> dict:
+    """
+    Load the GSA configuration from `config/GSA.yaml`.
+
+    Returns
+    -------
+    dict
+        GSA configuration dictionary.
+    """
     problem = {}
     problem["num_vars"] = len(
         parameters
@@ -51,17 +59,28 @@ def create_salib_problem(parameters: list) -> dict:
     return problem
 
 
-def get_GSA():
-    fn = Path("config/GSA.yaml")
-    if fn.exists():
-        with fn.open() as f:
-            return yaml.safe_load(f)
-    return {}
+def get_gsa_config() -> dict:
+    """
+    Load the GSA configuration from `config/GSA.yaml`.
+
+    Returns
+    -------
+    dict
+        GSA configuration dictionary.
+    """
+    config_path = Path("config/GSA.yaml")
+    if not config_path.exists():
+        raise FileNotFoundError(f"GSA configuration file not found: {config_path}")
+    with config_path.open() as f:
+        return yaml.safe_load(f)
 
 
 def extract_results():
+    """
+    Extract results from model runs and save them as CSV files for GSA analysis.
+    """
     resultsfolder = Path("results")
-    gsa_config = get_GSA()
+    gsa_config = get_gsa_config
     result_variables = gsa_config.get("results", [])
     results_dir = Path("GSA/results")
     results_dir.mkdir(parents=True, exist_ok=True)
@@ -117,7 +136,10 @@ def extract_results():
 
 
 def calculate_GSA_metrics():
-    gsa_config = get_GSA()
+    """
+    Calculate GSA metrics and generate sensitivity plots.
+    """
+    gsa_config = get_gsa_config()
     parameters = gsa_config["parameters"]
     sample = "GSA/morris_sample.txt"
 
@@ -143,12 +165,12 @@ def calculate_GSA_metrics():
             fig, axs = plt.subplots(2, figsize=(20, 20))
             plot_morris.horizontal_bar_plot(axs[0], Si, unit=unit)
             plot_morris.covariance_plot(axs[1], Si, unit=unit)
-            axs[1].set_xlabel(unit, fontsize=18)
+            axs[1].set_xlabel(f"µ in {unit}", fontsize=18)
             axs[1].tick_params(axis="both", which="major", labelsize=14)
         else:
             fig, axs = plt.subplots(1, figsize=(16, 10))
             plot_morris.horizontal_bar_plot(axs, Si, unit=unit)
-            axs.set_xlabel(unit, fontsize=18)
+            axs.set_xlabel(f"µ* in {unit}", fontsize=18)
             axs.tick_params(axis="both", which="major", labelsize=14)
         fig.suptitle(title, fontsize=24)
 

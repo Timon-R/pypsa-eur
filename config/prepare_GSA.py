@@ -6,6 +6,8 @@
 This script is used to generate the scenarios for the Global Sensitivity Analysis (GSA) using the SALib library.
 The script reads the parameters from the GSA.yaml file and generates the scenarios for the GSA.
 The scenarios are saved in the config/GSA_runs.yaml file.
+
+See the file config/GSA.yaml for an explanation of the workflow.
 """
 
 from pathlib import Path
@@ -16,6 +18,19 @@ from SALib.sample import morris
 
 
 def create_salib_problem(parameters: list) -> dict:
+    """
+    Create a SALib problem definition from the parameter configuration.
+
+    Parameters
+    ----------
+    parameters : dict
+        Dictionary of parameters with their ranges and group names.
+
+    Returns
+    -------
+    dict
+        SALib problem definition with names, bounds, and groups.
+    """
     problem = {}
     problem["num_vars"] = len(
         parameters
@@ -62,6 +77,18 @@ def extract_keys(d, keys):
 
 
 def generate_scenarios(sample, output_file: str, parameters: dict):
+    """
+    Generate GSA scenarios from the sampled parameter values and save them to a YAML file.
+
+    Parameters
+    ----------
+    sample : np.ndarray
+        Array of sampled parameter values.
+    output_file : str
+        Path to the output YAML file.
+    parameters : dict
+        Dictionary of parameter definitions.
+    """
     scenarios = {}
     for i, row in enumerate(sample):
         scenario = {}
@@ -89,16 +116,24 @@ def generate_scenarios(sample, output_file: str, parameters: dict):
         f.write(yaml_content)
 
 
-def get_GSA():
-    fn = Path("config/GSA.yaml")
-    if fn.exists():
-        with fn.open() as f:
-            return yaml.safe_load(f)
-    return {}
+def get_gsa_config() -> dict:
+    """
+    Load the GSA configuration from `config/GSA.yaml`.
+
+    Returns
+    -------
+    dict
+        GSA configuration dictionary.
+    """
+    config_path = Path("config/GSA.yaml")
+    if not config_path.exists():
+        raise FileNotFoundError(f"GSA configuration file not found: {config_path}")
+    with config_path.open() as f:
+        return yaml.safe_load(f)
 
 
 def main():
-    gsa_config = get_GSA()
+    gsa_config = get_gsa_config()
     sample_file = "GSA/morris_sample.txt"
 
     replicates = gsa_config["general"]["replicates"]
