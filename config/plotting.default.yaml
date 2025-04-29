@@ -571,3 +571,5 @@ plotting:
     import NH3: '#e2ed74'
     import oil: '#93eda2'
     import methanol: '#87d0e6'
+    onwind landuse emission: '#d2d2d2'
+    solar landuse emission: '#d2d2d2'
