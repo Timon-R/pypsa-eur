@@ -408,6 +408,20 @@ def add_retrofit_gas_boiler_constraint(
 
     n.model.add_constraints(lhs == rhs, name="gas_retrofit")
 
+def add_land_use_emission_generators(n: pypsa.Network) -> None:
+    carriers = ["onwind", "solar"]  # tCO2/MW, example values
+    for idx, row in n.generators.iterrows():
+        if row.carrier in carriers and row.p_nom_extendable:
+            emission_name = f"{idx} landuse emission"
+            if emission_name not in n.generators.index:
+                n.add("Generator",
+                        name=emission_name,
+                        bus="co2 atmosphere",
+                        carrier=f"{row.carrier} landuse emission",
+                        p_nom_extendable=True,
+                        marginal_cost=0,
+                        p_max_pu=1,
+                        p_nom_min=0)
 
 def prepare_network(
     n: pypsa.Network,
@@ -447,6 +461,8 @@ def prepare_network(
             n.storage_units_t.inflow,
         ):
             df.where(df > solve_opts["clip_p_max_pu"], other=0.0, inplace=True)
+
+    add_land_use_emission_generators(n)
 
     if load_shedding := solve_opts.get("load_shedding"):
         # intersect between macroeconomic and surveybased willingness to pay
@@ -1153,6 +1169,27 @@ def add_co2_atmosphere_constraint(n, snapshots):
         # Add the constraint to the model
         n.model.add_constraints(lhs <= rhs, name=f"GlobalConstraint-{name}")
 
+def add_land_use_emission_constraints(n):
+    # Emission factors in tCO2 per MW installed
+    emission_factors = {"onwind": 10, "solar": 20}  # example values
+
+    for idx, row in n.generators.iterrows():
+        if row.carrier in emission_factors and row.p_nom_extendable:
+            emission_name = f"{idx} landuse emission"
+            if emission_name in n.generators.index:
+                # Original generator capacity
+                p_nom_var = n.model["Generator-p_nom"].loc[idx]
+                # Emission generator's total dispatch across all snapshots
+                p_em_total = n.model["Generator-p"].loc[:, emission_name].sum(dim="snapshot")
+
+                # tCO2 per MW installed for the original generator
+                emission_factor = emission_factors[row.carrier]
+
+                # Force emission generator’s total output == p_nom × emission_factor
+                n.model.add_constraints(
+                    p_em_total == p_nom_var * emission_factor,
+                    name=f"landuse_emission_{idx}"
+                )
 
 def extra_functionality(
     n: pypsa.Network, snapshots: pd.DatetimeIndex, planning_horizons: str | None = None
@@ -1178,6 +1215,9 @@ def extra_functionality(
     """
     config = n.config
     constraints = config["solving"].get("constraints", {})
+
+    add_land_use_emission_constraints(n)
+
     if constraints["BAU"] and n.generators.p_nom_extendable.any():
         add_BAU_constraints(n, config)
     if constraints["SAFE"] and n.generators.p_nom_extendable.any():
