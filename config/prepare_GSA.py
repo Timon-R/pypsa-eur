@@ -127,7 +127,14 @@ def get_gsa_config() -> dict:
     """
     config_path = Path("config/GSA.yaml")
     if not config_path.exists():
-        raise FileNotFoundError(f"GSA configuration file not found: {config_path}")
+        config_path = Path("config/GSA.default.yaml")
+        if not config_path.exists():
+            raise FileNotFoundError(
+                "No GSA configuration file found. Please create a GSA.yaml file in the config directory."
+            )
+        print(
+            f"File config/GSA.yaml not found. Using default configuration ({config_path})."
+        )
     with config_path.open() as f:
         return yaml.safe_load(f)
 

@@ -4,6 +4,8 @@
 # SPDX-License-Identifier: MIT
 
 # How to use this file:
+# 0. Create a copy of this file and rename it to `GSA.yaml`. This one is used as a template and fallback option if no 'GSA.yaml' file exists.
+#
 # 1. Define the parameters you want to sample in the "parameters" section below.
 #    - Specify the parameter name, its range (min and max), and its location in the config file.
 #    - Ensure the parameter is numerical and non-binary for sampling.
@@ -32,9 +34,11 @@
 #
 # Notes:
 # - The script uses `config.yaml` to create the scenario file.
-# - You need to install `SALib` for the Morris sampling method.
+# - You need to install `SALib` for the Morris sampling method. (currently it requires an old version of numpy<2.0.0)
+# - Condsider creating a new conda environment for the decoupled GSA workflow to avoid conflicts with other packages.
 # - The `covariance_plot` option can be used to visualize parameter covariance.
 # - Currently the script only support unifrom distribution, but it can be changed to other distributions if needed as long as SALib supports it.
+# - Setting run.shared_resources.policy to base or true can reduce computation—unfortunately while it worked for me before, I currently have wildcard errors when using it (RuleException in file "[...]build_electricity.smk", line 310:Not all output, log and benchmark files of rule build_renewable_profiles contain the same wildcards. This is crucial though, in order to avoid that two or more jobs write to the same file.)
 
 general:
   replicates: 10 #10 is standard
@@ -79,8 +83,8 @@ results: #define results from results folders, by defining specified rows in the
     multiplier: 1e-6
     unit: TWh
     csv:
-      filename: supply_energy.csv
-      identification_column_entries: solid biomass,generators,solid biomass
+      filename: energy_balance.csv
+      identification_column_entries: Generator,solid biomass
 
 
 

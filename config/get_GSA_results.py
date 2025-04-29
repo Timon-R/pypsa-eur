@@ -70,7 +70,14 @@ def get_gsa_config() -> dict:
     """
     config_path = Path("config/GSA.yaml")
     if not config_path.exists():
-        raise FileNotFoundError(f"GSA configuration file not found: {config_path}")
+        config_path = Path("config/GSA.default.yaml")
+        if not config_path.exists():
+            raise FileNotFoundError(
+                "No GSA configuration file found. Please create a GSA.yaml file in the config directory."
+            )
+        print(
+            f"File config/GSA.yaml not found. Using default configuration ({config_path})."
+        )
     with config_path.open() as f:
         return yaml.safe_load(f)
 
@@ -80,7 +87,7 @@ def extract_results():
     Extract results from model runs and save them as CSV files for GSA analysis.
     """
     resultsfolder = Path("results")
-    gsa_config = get_gsa_config
+    gsa_config = get_gsa_config()
     result_variables = gsa_config.get("results", [])
     results_dir = Path("GSA/results")
     results_dir.mkdir(parents=True, exist_ok=True)
@@ -152,6 +159,10 @@ def calculate_GSA_metrics():
     for variable, params in gsa_config.get("results", {}).items():
         results = pd.read_csv(f"GSA/results/{variable}.csv")
         Y = results["value"].values
+        if len(X) != len(Y):
+            raise ValueError(
+                f"Length of sample ({len(X)}) and results ({len(Y)}) do not match. Try changing the identification_column_entries in the GSA.yaml file."
+            )
         print(f"GSA for {variable}: ")
         Si = analyze_morris.analyze(problem, X, Y, print_to_console=True)
         print("\n")
