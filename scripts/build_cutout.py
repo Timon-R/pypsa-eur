@@ -73,23 +73,21 @@ import logging
 import atlite
 import geopandas as gpd
 import pandas as pd
-from _helpers import configure_logging, set_scenario_config
+
+from scripts._helpers import configure_logging, set_scenario_config
 
 logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
     if "snakemake" not in globals():
-        from _helpers import mock_snakemake
+        from scripts._helpers import mock_snakemake
 
         snakemake = mock_snakemake("build_cutout", cutout="europe-2013-sarah3-era5")
     configure_logging(snakemake)
     set_scenario_config(snakemake)
 
     cutout_params = snakemake.params.cutouts[snakemake.wildcards.cutout]
-
-    snapshots = pd.date_range(freq="h", **snakemake.params.snapshots)
-    time = [snapshots[0], snapshots[-1]]
-    cutout_params["time"] = slice(*cutout_params.get("time", time))
+    cutout_params["time"] = slice(*cutout_params["time"])
 
     if {"x", "y", "bounds"}.isdisjoint(cutout_params):
         # Determine the bounds from bus regions with a buffer of two grid cells
