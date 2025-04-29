@@ -408,8 +408,7 @@ def add_retrofit_gas_boiler_constraint(
 
     n.model.add_constraints(lhs == rhs, name="gas_retrofit")
 
-def add_land_use_emission_generators(n: pypsa.Network) -> None:
-    carriers = ["onwind", "solar"]  # tCO2/MW, example values
+def add_land_use_emission_generators(n: pypsa.Network, carriers: list) -> None:
     for idx, row in n.generators.iterrows():
         if row.carrier in carriers and row.p_nom_extendable:
             emission_name = f"{idx} landuse emission"
@@ -430,6 +429,7 @@ def prepare_network(
     planning_horizons: str | None,
     co2_sequestration_potential: dict[str, float],
     limit_max_growth: dict[str, Any] | None = None,
+    config: dict | None = None,
 ) -> None:
     """
     Prepare network with various constraints and modifications.
@@ -462,7 +462,11 @@ def prepare_network(
         ):
             df.where(df > solve_opts["clip_p_max_pu"], other=0.0, inplace=True)
 
-    add_land_use_emission_generators(n)
+    renewable_emissions = config.get("sector", {}).get("renewable_emissions", {})
+    if renewable_emissions.get("enable", False):
+        # Remove the "enable" key from the dictionary
+        carriers = [k for k in renewable_emissions.keys() if k != "enable"]
+        add_land_use_emission_generators(n, carriers)
 
     if load_shedding := solve_opts.get("load_shedding"):
         # intersect between macroeconomic and surveybased willingness to pay
@@ -1171,10 +1175,8 @@ def add_co2_atmosphere_constraint(n, snapshots):
         # Add the constraint to the model
         n.model.add_constraints(lhs <= rhs, name=f"GlobalConstraint-{name}")
 
-def add_land_use_emission_constraints(n):
+def add_land_use_emission_constraints(n: pypsa.Network, emission_factors: dict) -> None:
     # Emission factors in tCO2 per MW installed
-    emission_factors = {"onwind": 10, "solar": 20}  # example values
-
     for idx, row in n.generators.iterrows():
         if row.carrier in emission_factors and row.p_nom_extendable:
             emission_name = f"{idx} landuse emission"
@@ -1218,7 +1220,10 @@ def extra_functionality(
     config = n.config
     constraints = config["solving"].get("constraints", {})
 
-    add_land_use_emission_constraints(n)
+    renewable_emissions = config.get("sector", {}).get("renewable_emissions", {})
+    if renewable_emissions.get("enable", False):
+        emission_factors = {k: v for k, v in renewable_emissions.items() if k != "enable"}
+        add_land_use_emission_constraints(n, emission_factors)
 
     if constraints["BAU"] and n.generators.p_nom_extendable.any():
         add_BAU_constraints(n, config)
@@ -1485,6 +1490,7 @@ if __name__ == "__main__":
         planning_horizons=planning_horizons,
         co2_sequestration_potential=snakemake.params["co2_sequestration_potential"],
         limit_max_growth=snakemake.params.get("sector", {}).get("limit_max_growth"),
+        config = snakemake.config,
     )
 
     logging_frequency = snakemake.config.get("solving", {}).get(

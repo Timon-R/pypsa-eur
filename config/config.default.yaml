@@ -808,6 +808,11 @@ sector:
       methanol: 121
       gas: 122
       oil: 125
+  renewable_emissions:
+    enable: false
+    solar: 10 #ton/MW
+    onwind: 10 #ton/MW
+    solar-hsat: 10 #ton/MW
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#industry
 industry:
