@@ -164,6 +164,25 @@ if __name__ == "__main__":
         boundaries=boundaries,
     )
 
+    if vmin >= vmax:
+        print(f"Fixing inverted colormap range: vmin={vmin}, vmax={vmax}")
+        
+        # For negative prices, we need to be careful with the adjustments
+        if regions.price.min() < 0:
+            # With negative prices, ensure proper ordering
+            price_mean = regions.price.mean()
+            # Create range around the mean
+            span = abs(price_mean) * 0.1  # 10% of the absolute value
+            vmin = price_mean - span
+            vmax = price_mean + span
+        else:
+            # For positive prices, simple fix
+            tmp = vmin
+            vmin = vmax
+            vmax = tmp
+        
+        print(f"Fixed range: vmin={vmin}, vmax={vmax}")
+
     regions.to_crs(crs.proj4_init).plot(
         ax=ax,
         column="price",
@@ -263,9 +282,16 @@ if __name__ == "__main__":
             patch_kw={"color": "#666"},
             legend_kw={"bbox_to_anchor": (0.25, 1), **legend_kwargs},
         )
-
-    fig.savefig(
-        snakemake.output[0],
-        dpi=400,
-        bbox_inches="tight",
-    )
+    try:
+        fig.savefig(
+            snakemake.output[0],
+            dpi=400,
+            bbox_inches="tight",
+        )
+    except Exception as e:
+        print(f"Error saving figure: {e}")
+        print(f"DEBUG: vmin={vmin}, vmax={vmax}")
+        print(f"DEBUG: min price={regions.price.min()}, max price={regions.price.max()}")
+        print(f"DEBUG: price values: {regions.price.unique()}")
+        print(f"DEBUG: shift={shift}")
+        raise

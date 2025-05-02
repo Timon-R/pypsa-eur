@@ -20,49 +20,33 @@
 #     - offwind-dc
 #     - hydro
 
-optimal:
-  solving:
-    mga:
-      enable: false
+no_biomass_emissions:
+  biomass:
+    emission_factors:
+      agricultural waste: 0
+      fuelwood residues: 0
+      secondary forestry residues: 0
+      sawdust: 0
+      residues from landscape care: 0
+      grasses: 0
+      woody crops: 0
+      fuelwoodRW: 0
+      manure: 0
+      sludge: 0
+      C&P_RW: 0
 
-min_0.05:
-  solving:
-    mga:
-      enable: true
-      sense: min
-      slack: 0.05
-
-max_0.05:
-  solving:
-    mga:
-      enable: true
-      sense: max
-      slack: 0.05
-
-min_0.1:
-  solving:
-    mga:
-      enable: true
-      sense: min
-      slack: 0.1
-
-max_0.1:
-  solving:
-    mga:
-      enable: true
-      sense: max
-      slack: 0.1
-
-min_0.15:
-  solving:
-    mga:
-      enable: true
-      sense: min
-      slack: 0.15
-
-max_0.15:
-  solving:
-    mga:
-      enable: true
-      sense: max
-      slack: 0.15
+biomass_emissions:
+  biomass:
+    emission_factors: #same as default
+      agricultural waste: 0.03528 # 9.8
+      fuelwood residues: 0.1476 #41
+      secondary forestry residues: 0.396 #110
+      sawdust: 0.396 #110
+      residues from landscape care: 0
+      grasses: 0.216
+      woody crops: 0.18
+      fuelwoodRW: 0.2844 #79
+      manure: 0.04932 #13.7
+      sludge: 0
+      C&P_RW: 0.414 #115
+      

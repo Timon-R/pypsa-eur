@@ -17,13 +17,13 @@ remote:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
   prefix: ""
-  name: test
+  name: all
   scenarios:
-    enable: false
+    enable: true
     file: config/scenarios.yaml
   disable_progressbar: false
   shared_resources:
-    policy: false
+    policy: base
     exclude: []
   shared_cutouts: true
   use_shadow_directory: true # Set to false if problems regarding missing directories occur
@@ -35,8 +35,8 @@ foresight: overnight
 # Wildcard docs in https://pypsa-eur.readthedocs.io/en/latest/wildcards.html
 scenario:
   clusters:
-  - 2
-  #- 39
+  #- 2
+  - 39
   #- 128
   #- 256
   opts:
@@ -50,8 +50,8 @@ scenario:
   - 2050
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#countries
-#countries: ['AL', 'AT', 'BA', 'BE', 'BG', 'CH', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GB', 'GR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'ME', 'MK', 'NL', 'NO', 'PL', 'PT', 'RO', 'RS', 'SE', 'SI', 'SK', 'XK']
-countries: ['SE']
+countries: ['AL', 'AT', 'BA', 'BE', 'BG', 'CH', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GB', 'GR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'ME', 'MK', 'NL', 'NO', 'PL', 'PT', 'RO', 'RS', 'SE', 'SI', 'SK', 'XK']
+#countries: ['SE']
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#snapshots
 snapshots:
@@ -430,17 +430,17 @@ biomass:
     2045: 1
     2050: 1
   emission_factors: #tCO2/MWh #municipal solid waste is not included in the emission factors
-    agricultural waste: 0.072
-    fuelwood residues: 0.0792
-    secondary forestry residues: 0.2448
-    sawdust: 0.2448
+    agricultural waste: 0.03528 # 9.8
+    fuelwood residues: 0.1476 #41
+    secondary forestry residues: 0.396 #110
+    sawdust: 0.396 #110
     residues from landscape care: 0
     grasses: 0.216
     woody crops: 0.18
-    fuelwoodRW: 0.2448
-    manure: 0.054
+    fuelwoodRW: 0.2844 #79
+    manure: 0.04932 #13.7
     sludge: 0
-    C&P_RW: 0.2448
+    C&P_RW: 0.414 #115
 
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#solar-thermal
@@ -812,9 +812,9 @@ sector:
       oil: 125
   renewable_emissions:
     enable: true
-    solar: 10 #ton/MW
-    onwind: 10 #ton/MW
-    solar-hsat: 10 #ton/MW
+    solar: 12.2 #ton/MW
+    onwind: 2.44 #ton/MW
+    solar-hsat: 12.2 #ton/MW
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#industry
 industry:

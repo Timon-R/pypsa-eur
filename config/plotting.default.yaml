@@ -601,3 +601,6 @@ plotting:
     waste CHP CC: '#e3d3ff'
     non-sequestered HVC: '#8f79b5'
     HVC to air: 'k'
+    solar landuse emission: '#f9d002'
+    onwind landuse emission: '#235ebc'
+    solar-hsat landuse emission: '#fdb915'

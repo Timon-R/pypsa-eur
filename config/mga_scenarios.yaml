@@ -1,0 +1,68 @@
+# -*- coding: utf-8 -*-
+# SPDX-FileCopyrightText: : 2017-2023 The PyPSA-Eur Authors
+#
+# SPDX-License-Identifier: MIT
+
+# This file is used to define the scenarios that are run by snakemake. Each entry on the first level is a scenario. Each scenario can contain configuration overrides with respect to the config/config.yaml settings.
+#
+# Example
+#
+# custom-scenario: # name of the scenario
+#   electricity:
+#       renewable_carriers: [wind, solar] # override the list of renewable carriers
+
+# normal:
+#   electricity:
+#     renewable_carriers:
+#     - solar
+#     - onwind
+#     - offwind-ac
+#     - offwind-dc
+#     - hydro
+
+optimal:
+  solving:
+    mga:
+      enable: false
+
+min_0.05:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.05
+
+max_0.05:
+  solving:
+    mga:
+      enable: true
+      sense: max
+      slack: 0.05
+
+min_0.1:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.1
+
+max_0.1:
+  solving:
+    mga:
+      enable: true
+      sense: max
+      slack: 0.1
+
+min_0.15:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.15
+
+max_0.15:
+  solving:
+    mga:
+      enable: true
+      sense: max
+      slack: 0.15
