@@ -409,18 +409,24 @@ def add_retrofit_gas_boiler_constraint(
     n.model.add_constraints(lhs == rhs, name="gas_retrofit")
 
 def add_land_use_emission_generators(n: pypsa.Network, carriers: list) -> None:
+    # First add all the emission carriers to the network
+    for carrier in carriers:
+        emission_carrier = f"{carrier} landuse emission"
+        if emission_carrier not in n.carriers.index:
+            n.add("Carrier", 
+                  emission_carrier)
     for idx, row in n.generators.iterrows():
         if row.carrier in carriers and row.p_nom_extendable:
             emission_name = f"{idx} landuse emission"
             if emission_name not in n.generators.index:
                 n.add("Generator",
-                        name=emission_name,
-                        bus="co2 atmosphere",
-                        carrier=f"{row.carrier} landuse emission",
-                        p_nom_extendable=True,
-                        marginal_cost=0,
-                        p_max_pu=1,
-                        p_nom_min=0)
+                      name=emission_name,
+                      bus="co2 atmosphere",
+                      carrier=f"{row.carrier} landuse emission",
+                      p_nom_extendable=True,
+                      marginal_cost=0,
+                      p_max_pu=1,
+                      p_nom_min=0)
 
 def prepare_network(
     n: pypsa.Network,
@@ -1133,63 +1139,40 @@ def add_co2_atmosphere_constraint(n, snapshots):
 
     if glcs.empty:
         return
-
-    # Define capacity-related CO₂ emission factors (tons of CO₂ per MW)
-    capacity_emission_factors = {
-        "onwind": 10,  # Example: 10 tCO₂/MW for onshore wind
-        "solar": 20,  # Example: 20 tCO₂/MW for solar
-    }
-    include_capacity_emissions = True
-
     for name, glc in glcs.iterrows():
-        # Initialize the left-hand side (lhs) of the constraint
-        lhs = 0
-
-        if include_capacity_emissions:
-            # Add capacity-related emissions for specified carriers
-            for carrier, emission_factor in capacity_emission_factors.items():
-                gen_i = n.generators.index[n.generators.carrier == carrier]
-                if gen_i.empty:
-                    continue
-                # Add capacity-related emissions to the lhs
-                p_nom = n.model["Generator-p_nom"].loc[gen_i]
-                lhs += emission_factor * p_nom.sum()
-                logger.info(
-                    f"Added capacity-related CO₂ emissions for {carrier} generators"
-                )
-
-        # Add operational emissions if they exist
         carattr = glc.carrier_attribute
         emissions = n.carriers.query(f"{carattr} != 0")[carattr]
-        if not emissions.empty:
-            # Map stores to their corresponding buses and carriers
-            bus_carrier = n.stores.bus.map(n.buses.carrier)
-            stores = n.stores[bus_carrier.isin(emissions.index) & ~n.stores.e_cyclic]
-            if not stores.empty:
-                last_i = snapshots[-1]
-                lhs += n.model["Store-e"].loc[last_i, stores.index].sum()
 
-        # Define the right-hand side (rhs) of the constraint
-        rhs = glc.constant
+        if emissions.empty:
+            continue
 
-        # Add the constraint to the model
-        n.model.add_constraints(lhs <= rhs, name=f"GlobalConstraint-{name}")
+        # stores
+        bus_carrier = n.stores.bus.map(n.buses.carrier)
+        stores = n.stores[bus_carrier.isin(emissions.index) & ~n.stores.e_cyclic]
+        if not stores.empty:
+            last_i = snapshots[-1]
+            lhs = n.model["Store-e"].loc[last_i, stores.index]
+            rhs = glc.constant
 
-def add_land_use_emission_constraints(n: pypsa.Network, emission_factors: dict) -> None:
-    # Emission factors in tCO2 per MW installed
+            n.model.add_constraints(lhs <= rhs, name=f"GlobalConstraint-{name}")
+
+def add_land_use_emission_constraints(n, emission_factors):
     for idx, row in n.generators.iterrows():
         if row.carrier in emission_factors and row.p_nom_extendable:
             emission_name = f"{idx} landuse emission"
             if emission_name in n.generators.index:
                 # Original generator capacity
                 p_nom_var = n.model["Generator-p_nom"].loc[idx]
-                # Emission generator's total dispatch across all snapshots
-                p_em_total = n.model["Generator-p"].loc[:, emission_name].sum(dim="snapshot")
+                
+                # Sum emission generator's dispatch across all snapshots WITH WEIGHTINGS
+                p_em_total = sum(n.model["Generator-p"].loc[snapshot, emission_name] * 
+                                 n.snapshot_weightings.loc[snapshot, "generators"]
+                                 for snapshot in n.snapshots)
 
                 # tCO2 per MW installed for the original generator
                 emission_factor = emission_factors[row.carrier]
 
-                # Force emission generator’s total output == p_nom × emission_factor
+                # Force TOTAL CO2 EMISSIONS (MWh) == p_nom × emission_factor
                 n.model.add_constraints(
                     p_em_total == p_nom_var * emission_factor,
                     name=f"landuse_emission_{idx}"

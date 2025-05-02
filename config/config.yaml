@@ -17,7 +17,7 @@ remote:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
   prefix: ""
-  name: ""
+  name: test
   scenarios:
     enable: false
     file: config/scenarios.yaml
@@ -1017,6 +1017,10 @@ solving:
     keep_files: false
     model_kwargs:
       solver_dir: "/tmp"
+  mga:
+    enable: false
+    slack: 0.1
+    sense: "max"
 
   agg_p_nom_limits:
     agg_offwind: false

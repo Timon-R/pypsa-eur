@@ -1015,6 +1015,10 @@ solving:
     keep_files: false
     model_kwargs:
       solver_dir: "/tmp"
+  mga:
+    enable: false
+    slack: 0.1
+    sense: "max"
 
   agg_p_nom_limits:
     agg_offwind: false
