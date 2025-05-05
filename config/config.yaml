@@ -430,17 +430,17 @@ biomass:
     2045: 1
     2050: 1
   emission_factors: #tCO2/MWh #municipal solid waste is not included in the emission factors
+    grasses: 0.216
+    woody crops: 0.18
     agricultural waste: 0.03528 # 9.8
+    fuelwoodRW: 0.2844 #79
+    C&P_RW: 0.414 #115
     fuelwood residues: 0.1476 #41
     secondary forestry residues: 0.396 #110
     sawdust: 0.396 #110
     residues from landscape care: 0
-    grasses: 0.216
-    woody crops: 0.18
-    fuelwoodRW: 0.2844 #79
     manure: 0.04932 #13.7
     sludge: 0
-    C&P_RW: 0.414 #115
 
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#solar-thermal

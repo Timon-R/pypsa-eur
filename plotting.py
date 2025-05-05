@@ -14,6 +14,8 @@ from matplotlib.legend_handler import HandlerPatch
 from matplotlib.path import Path
 from matplotlib.ticker import MultipleLocator
 
+from result_analysis import get_emission_factors, get_biomass_potentials
+
 # config_file_path = "config/config.yaml"
 
 # # Open and load the YAML file
@@ -23,34 +25,8 @@ from matplotlib.ticker import MultipleLocator
 # # Extract biomass types
 # biomass_types = list(config["biomass"]["classes"].keys())
 
-emission_factors = {
-    "agricultural waste": 0.072,
-    "fuelwood residues": 0.0792,
-    "secondary forestry residues": 0.2448,
-    "sawdust": 0.2448,
-    "residues from landscape care": 0,
-    "grasses": 0.216,
-    "woody crops": 0.18,
-    "fuelwoodRW": 0.2448,
-    "manure": 0.054,
-    "sludge": 0,
-    "C&P_RW": 0.2448,
-    "solid biomass import": 0.3667 * 0.59,
-}
-emission_factors_new_names = {
-    "woody crops": 0.18,
-    "grasses": 0.216,
-    "stemwood": 0.2448,
-    "chips and pellets": 0.2448,
-    "secondary forestry residues": 0.2448,
-    "sawdust": 0.2448,
-    "logging residues": 0.0792,
-    "crop residues": 0.072,
-    "residues from landscape care": 0,
-    "sludge": 0,
-    "manure": 0.054,
-    "imported biomass": 0.3667 * 0.59,
-}
+emission_factors = get_emission_factors(add_imported_biomass=True)
+emission_factors_new_names = get_emission_factors(new_names=True, add_imported_biomass=True)
 new_names_dict = {
     "woody crops": "woody crops",
     "grasses": "grasses",
@@ -81,6 +57,7 @@ biomass_potentials_TWh = {
     "sludge": 13.908196004274894,
     "solid biomass import": 1390,
 }
+
 biomass_costs = {  # Euro/MWh_LHV
     "agricultural waste": 12.8786,
     "fuelwood residues": 15.3932,
@@ -197,11 +174,11 @@ def create_gravitational_plot(
             edgecolors=color,
             linewidth=1,
         )
-        location = emissions[i] + 2 * sizes[i] / max_potential * 0.01 + 0.01
+        location = emissions[i] + 2 * sizes[i] / max_potential * 0.015 + 0.01
         if (
-            bt == "agricultural waste" or bt == "secondary forestry residues"
+            bt == "secondary forestry residues"
         ):  # below the point
-            location = emissions[i] - 2 * sizes[i] / max_potential * 0.01 - 0.015
+            location = emissions[i] - 2 * sizes[i] / max_potential * 0.015 - 0.015
         plt.text(
             costs[i],
             location,
@@ -621,7 +598,7 @@ def plot_costs_vs_prices(df, title, x_label, y_label, file_path, scenario, usage
                         edgecolors=color,
                         label=biomass,
                     )
-                elif usage == 100:
+                elif usage >= 99:
                     # Fully filled circle
                     ax.scatter(
                         row["Costs"],
@@ -637,7 +614,7 @@ def plot_costs_vs_prices(df, title, x_label, y_label, file_path, scenario, usage
                     theta2 = 90 - 360 * (usage / 100)
                     wedge = mpatches.Wedge(
                         (row["Costs"], row["Values"]),
-                        1.4,
+                        1.9,
                         theta2,
                         theta1,
                         facecolor=color,
@@ -645,15 +622,15 @@ def plot_costs_vs_prices(df, title, x_label, y_label, file_path, scenario, usage
                         alpha=0.8,
                     )
                     ax.add_patch(wedge)
-                    # ax.scatter(
-                    #     row["Costs"],
-                    #     row["Values"],
-                    #     s=100,
-                    #     facecolors="none",
-                    #     edgecolors=color,
-                    #     label=biomass,
-                    #     alpha=0.8,
-                    # )
+                    ax.scatter(
+                        row["Costs"],
+                        row["Values"],
+                        s=100,
+                        facecolors="none",
+                        edgecolors=color,
+                        label=biomass,
+                        alpha=0.8,
+                    )
 
                 # Add to legend handles
                 if usage == 0:
@@ -669,7 +646,7 @@ def plot_costs_vs_prices(df, title, x_label, y_label, file_path, scenario, usage
                             label=biomass,
                         )
                     )
-                elif usage == 100:
+                elif usage >= 99:
                     legend_handles.append(
                         mlines.Line2D(
                             [],
@@ -1297,7 +1274,7 @@ def plot_biomass_use(df, title, x_label, y_label, file_path, year=2050):
 
     for index, row in df_pivot.iterrows():
         biomass_type = row["Data Name"]
-        value_a = row["default"]
+        value_a = row["no_biomass_emissions"]
         value_b = row["biomass_emissions"]
         potential = biomass_potentials_TWh.get(biomass_type, 0)
         if value_a - value_b > -1:
@@ -1371,7 +1348,7 @@ def plot_biomass_use(df, title, x_label, y_label, file_path, year=2050):
     )
     a_patch = mpl.patches.Patch(
         facecolor="LightGreen",
-        label="Biomass use in scenario default (no biomass emissions)",
+        label="Biomass use in scenario no biomass emissions",
     )
     b_patch = mpl.patches.Patch(
         facecolor="none",
@@ -1401,7 +1378,7 @@ def plot_biomass_use(df, title, x_label, y_label, file_path, year=2050):
     ax2.set_yticks(ax.get_yticks() * mwh_to_pj / mwh_to_twh)
     ax2.set_ylabel("PJ")
 
-    secondary_locator = MultipleLocator(250)  # Adjust this value as needed
+    secondary_locator = MultipleLocator(500)  # Adjust this value as needed
     ax2.yaxis.set_major_locator(secondary_locator)
 
     plt.tight_layout()
@@ -1620,21 +1597,7 @@ def plot_bar_with_totals(
 
 
 def get_usage_dict(df, scenario, year=2050):
-    potentials = {  # TWh
-        "agricultural waste": 306,
-        "fuelwood residues": 541.7,
-        "fuelwoodRW": 75.4,
-        "grasses": 504,
-        "manure": 338.1,
-        "municipal solid waste": 151.2,
-        "residues from landscape care": 74.7,
-        "sawdust": 32.4,
-        "secondary forestry residues": 94.3,
-        "sludge": 9.2,
-        "woody crops": 117.3,
-        "solid biomass import": 1390,
-        "C&P_RW": 576.5,
-    }
+    potentials = biomass_potentials_TWh
     # remove 1 from data_name
     df["Data Name"] = df["Data Name"].str.replace("1", "")
     # filter year
@@ -1654,7 +1617,7 @@ def get_usage_dict(df, scenario, year=2050):
     return usage_dict
 
 
-def __main__():
+def main():
     # Define the desired folder order
     # custom_order = [
     #     "exogenous_0_ef",
@@ -1665,7 +1628,7 @@ def __main__():
     #     "endogenous_1_ef_2_gas",
     # ]
     # custom_order = ["default", "biomass_emissions", "150_seq", "400_seq"]
-    custom_order = ["default", "biomass_emissions"]
+    custom_order = ["no_biomass_emissions", "biomass_emissions"]
 
     data = load_csv("export/costs2050.csv")
     plot_data(
@@ -1701,7 +1664,6 @@ def __main__():
         "TWh",
         "oil_production_2050.png",
         custom_order,
-        remove_last_letters=1,
         width=10,
     )
 
@@ -1854,7 +1816,7 @@ def __main__():
     )
 
     supply_data = load_csv("export/biomass_supply.csv")
-    usage_dict_default = get_usage_dict(supply_data, "default")
+    usage_dict_default = get_usage_dict(supply_data, "no_biomass_emissions")
     usage_dict_biomass_emissions = get_usage_dict(supply_data, "biomass_emissions")
 
     data = load_csv("export/weighted_prices_2050.csv")
@@ -1871,7 +1833,7 @@ def __main__():
         "Costs in Euro/MWh",
         "Prices in EUR/MWh",
         "prices_costs_default_2050.png",
-        scenario="default",
+        scenario="no_biomass_emissions",
         usage_dict=usage_dict_default,
     )
     plot_costs_vs_prices(
@@ -1893,7 +1855,6 @@ def __main__():
         "co2_use.png",
         custom_order,
         multiplier=1e-6,
-        remove_last_letters=1,
     )
     data = load_csv("export/co2_capture.csv")
     plot_stacked_bar(
@@ -1904,7 +1865,6 @@ def __main__():
         "co2_capture.png",
         custom_order,
         multiplier=1e-6,
-        remove_last_letters=1,
     )
 
     data = load_csv("export/biomass_use_by_sector_2050.csv")
@@ -1958,36 +1918,35 @@ def __main__():
         scenario="biomass_emissions",
     )
     create_gravitational_plot(
-        "Gravitational Plot (default)",
-        "gravitational_plot_default.png",
+        "Gravitational Plot (no_biomass_emissions)",
+        "gravitational_plot_no_biomass_emissions.png",
         biomass_supply=data,
-        scenario="default",
+        scenario="no_biomass_emissions",
     )
 
 
 if __name__ == "__main__":
-    # __main__()
-    create_gravitational_plot(
-        "Gravitational Plot",
-        "gravitational_plot.png",
-    )
-    data = load_csv("export/biomass_supply.csv")
-    create_gravitational_plot(
-        "Gravitational Plot (bm_em_710_seq)",
-        "gravitational_plot_bm_em_710.png",
-        biomass_supply=data,
-        scenario="bm_em_710_seq",
-    )
-    create_gravitational_plot(
-        "Gravitational Plot (bm_em_200_seq)",
-        "gravitational_plot_bm_em_200.png",
-        biomass_supply=data,
-        scenario="biomass_emissions",
-    )
-    create_gravitational_plot(
-        "Gravitational Plot (bm_em_150_seq)",
-        "gravitational_plot_bm_em_150.png",
-        biomass_supply=data,
-        scenario="bm_em_150_seq",
-    )
-    plot_efs()
+    main()
+    # create_gravitational_plot(
+    #     "Gravitational Plot",
+    #     "gravitational_plot.png",
+    # )
+    # data = load_csv("export/biomass_supply.csv")
+    # create_gravitational_plot(
+    #     "Gravitational Plot (bm_em_710_seq)",
+    #     "gravitational_plot_bm_em_710.png",
+    #     biomass_supply=data,
+    #     scenario="bm_em_710_seq",
+    # )
+    # create_gravitational_plot(
+    #     "Gravitational Plot (bm_em_200_seq)",
+    #     "gravitational_plot_bm_em_200.png",
+    #     biomass_supply=data,
+    #     scenario="biomass_emissions",
+    # )
+    # create_gravitational_plot(
+    #     "Gravitational Plot (bm_em_150_seq)",
+    #     "gravitational_plot_bm_em_150.png",
+    #     biomass_supply=data,
+    #     scenario="bm_em_150_seq",
+    # )
