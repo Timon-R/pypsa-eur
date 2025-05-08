@@ -428,6 +428,26 @@ def add_land_use_emission_generators(n: pypsa.Network, carriers: list) -> None:
                       p_max_pu=1,
                       p_nom_min=0)
 
+def add_land_use_emission_generators_EU(n: pypsa.Network, carriers: list) -> None:
+    """Add one emission generator per carrier type at EU level instead of per node."""
+    # Add emission carriers to the network
+    for carrier in carriers:
+        emission_carrier = f"{carrier} landuse emission"
+        if emission_carrier not in n.carriers.index:
+            n.add("Carrier", emission_carrier)
+            
+        # Add just ONE emission generator per carrier type
+        emission_name = f"EU {carrier} landuse emission"
+        if emission_name not in n.generators.index:
+            n.add("Generator",
+                  name=emission_name,
+                  bus="co2 atmosphere",
+                  carrier=emission_carrier,
+                  p_nom_extendable=True,
+                  marginal_cost=0,
+                  p_max_pu=1,
+                  p_nom_min=0)
+
 def prepare_network(
     n: pypsa.Network,
     solve_opts: dict,
@@ -472,7 +492,7 @@ def prepare_network(
     if renewable_emissions.get("enable", False):
         # Remove the "enable" key from the dictionary
         carriers = [k for k in renewable_emissions.keys() if k != "enable"]
-        add_land_use_emission_generators(n, carriers)
+        add_land_use_emission_generators_EU(n, carriers)
 
     if load_shedding := solve_opts.get("load_shedding"):
         # intersect between macroeconomic and surveybased willingness to pay
@@ -1174,9 +1194,39 @@ def add_land_use_emission_constraints(n, emission_factors):
 
                 # Force TOTAL CO2 EMISSIONS per generator == p_nom (wind power generator capacity) × emission_factor
                 n.model.add_constraints(
-                    p_em_total == p_nom_var * emission_factor,
-                    name=f"landuse_emission_{idx}"
+                    p_em_total >= p_nom_var * emission_factor,
+                    name=f"landuse_emission_{idx}"                    
                 )
+
+def add_land_use_emission_constraints_EU(n, emission_factors):
+    """Constrain emission generators to total capacity of each carrier type."""
+    for carrier, emission_factor in emission_factors.items():
+        # Get all extendable generators of this carrier type
+        relevant_generators = n.generators[
+            (n.generators.carrier == carrier) & 
+            (n.generators.p_nom_extendable)
+        ].index
+        
+        if len(relevant_generators) == 0:
+            continue
+            
+        # Name of the single emission generator for this carrier
+        emission_name = f"EU {carrier} landuse emission"
+        
+        if emission_name in n.generators.index:
+            # Sum of all capacities of this carrier type
+            p_nom_sum = sum(n.model["Generator-p_nom"].loc[gen] for gen in relevant_generators)
+            
+            # Sum emission generator's dispatch across all snapshots WITH WEIGHTINGS
+            p_em_total = sum(n.model["Generator-p"].loc[snapshot, emission_name] * 
+                             n.snapshot_weightings.loc[snapshot, "generators"]
+                             for snapshot in n.snapshots)
+            
+            # Force TOTAL CO2 EMISSIONS to equal sum of capacities × emission_factor
+            n.model.add_constraints(
+                p_em_total >= p_nom_sum * emission_factor,
+                name=f"landuse_emission_{carrier}"
+            )
 
 def extra_functionality(
     n: pypsa.Network, snapshots: pd.DatetimeIndex, planning_horizons: str | None = None
@@ -1206,7 +1256,7 @@ def extra_functionality(
     renewable_emissions = config.get("sector", {}).get("renewable_emissions", {})
     if renewable_emissions.get("enable", False):
         emission_factors = {k: v for k, v in renewable_emissions.items() if k != "enable"}
-        add_land_use_emission_constraints(n, emission_factors)
+        add_land_use_emission_constraints_EU(n, emission_factors)
 
     if constraints["BAU"] and n.generators.p_nom_extendable.any():
         add_BAU_constraints(n, config)
