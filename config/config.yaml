@@ -20,7 +20,7 @@ run:
   name: all
   scenarios:
     enable: true
-    file: config/scenarios.yaml
+    file: config/mga_scenarios.yaml
   disable_progressbar: false
   shared_resources:
     policy: base
@@ -1017,6 +1017,7 @@ solving:
     keep_files: false
     model_kwargs:
       solver_dir: "/tmp"
+      
   mga:
     enable: false
     slack: 0.1
@@ -1076,6 +1077,8 @@ solving:
       ObjScale: -0.5
       threads: 8
       Seed: 123
+      ScaleFlag: 2
+      PreDual: 0 #solves the primal directly
     gurobi-fallback:        # Use gurobi defaults
       crossover: 0
       method: 2             # barrier

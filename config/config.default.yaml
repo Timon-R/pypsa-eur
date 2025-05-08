@@ -1015,6 +1015,7 @@ solving:
     keep_files: false
     model_kwargs:
       solver_dir: "/tmp"
+      
   mga:
     enable: false
     slack: 0.1

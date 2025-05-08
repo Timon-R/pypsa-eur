@@ -1172,7 +1172,7 @@ def add_land_use_emission_constraints(n, emission_factors):
                 # tCO2 per MW installed for the original generator
                 emission_factor = emission_factors[row.carrier]
 
-                # Force TOTAL CO2 EMISSIONS (MWh) == p_nom × emission_factor
+                # Force TOTAL CO2 EMISSIONS per generator == p_nom (wind power generator capacity) × emission_factor
                 n.model.add_constraints(
                     p_em_total == p_nom_var * emission_factor,
                     name=f"landuse_emission_{idx}"
@@ -1394,7 +1394,6 @@ def solve_network(
             logger.warning(
                 f"Solving status '{status}' with termination condition '{condition}'"
             )
-        check_objective_value(n, solving)
 
     if "warning" in condition:
         raise RuntimeError("Solving status 'warning'. Discarding solution.")
@@ -1441,6 +1440,18 @@ def solve_network(
         status, condition = n.optimize.optimize_mga(
             weights=weights, sense=sense, slack=slack, **mga_kwargs
         )
+        if not rolling_horizon:
+            if status != "ok":
+                logger.warning(
+                    f"Solving status '{status}' with termination condition '{condition}'"
+                )
+        if "warning" in condition:
+            raise RuntimeError("Solving status 'warning'. Discarding solution.")
+        if "infeasible" in condition:
+            labels = n.model.compute_infeasibilities()
+            logger.info(f"Labels:\n{labels}")
+            n.model.print_infeasibilities()
+            raise RuntimeError("Solving status 'infeasible'. Infeasibilities computed.")
 
 
 if __name__ == "__main__":

@@ -73,8 +73,15 @@ biomass_costs = {  # Euro/MWh_LHV
     "C&P_RW": 25.4661,
 }
 
+def configure_for_pgf():
+    mpl.rcParams.update({
+        "pgf.texsystem": "pdflatex",  # or 'xelatex'
+        "font.family": "serif",
+        "text.usetex": True,
+        "pgf.rcfonts": False,
+    })
 
-def load_csv(file_path):
+def load_csv(file_path, folder_path="export"):
     """
     Load a CSV file and return the data as a pandas DataFrame.
 
@@ -86,6 +93,7 @@ def load_csv(file_path):
     -------
     pd.DataFrame: The loaded data.
     """
+    file_path = os.path.join(folder_path, file_path)
     return pd.read_csv(file_path)
 
 
@@ -132,11 +140,17 @@ def create_elliptical_wedge(
 
 def create_gravitational_plot(
     title,
-    file_path,
+    file_name,
     multiplier=1e-6,
     biomass_supply=None,
     scenario=None,
+    export_dir="export/plots",
+    file_type="png", 
 ):
+
+    file_path = f"{file_name}.{file_type}"
+
+
     if biomass_supply is not None and scenario is not None:
         biomass_supply = biomass_supply[biomass_supply["Folder"] == scenario]
         # remove the 1 from the data_name
@@ -280,12 +294,16 @@ def create_gravitational_plot(
     plt.xlim(0, max(costs) + 5)
     plt.ylim(-0.02, max(emissions) + 0.05)
 
+    if file_path.endswith(".pgf"):
+        configure_for_pgf()
+
     # Save the plot to a file
-    export_dir = "export/plots"
     os.makedirs(export_dir, exist_ok=True)
     file_path = os.path.join(export_dir, file_path)
     plt.savefig(file_path)
     plt.close()
+
+    print(f"Gravitional plot saved to {file_path}")
 
 
 def plot_stacked_bar(
@@ -293,7 +311,7 @@ def plot_stacked_bar(
     title,
     x_label,
     y_label,
-    file_path,
+    file_name,
     custom_order=None,
     multiplier=1,
     remove_last_letters=0,
@@ -302,25 +320,11 @@ def plot_stacked_bar(
     index="Data Name",
     threshold=0.005,
     threshold_column="Share",
+    export_dir="export/plots",
+    file_type="png",
+    no_xticks=False,
 ):
-    """
-    Plot a stacked bar chart for each folder (scenario) using the provided DataFrame.
-
-    Parameters
-    ----------
-    df : DataFrame
-        The dataframe containing the data.
-    title : str
-        Title of the plot.
-    x_label : str
-        Label for the x-axis.
-    y_label : str
-        Label for the y-axis.
-    file_path : str
-        Path to save the plot.
-    custom_order : list, optional
-        Custom order of folders.
-    """
+    file_path = f"{file_name}.{file_type}"
     # rename data_name column to Data Name
     df.rename(columns={"data_name": "Data Name"}, inplace=True)
     if custom_order is not None:
@@ -365,16 +369,20 @@ def plot_stacked_bar(
     ax.legend(title="Legend", bbox_to_anchor=(1.05, 1), loc="upper left")
 
     # no x-ticks
-    ax.set_xticks([])
-    ax.set_xticklabels([])
+    if no_xticks:
+        ax.set_xticks([])
+        ax.set_xticklabels([])
+
+    if file_path.endswith(".pgf"):
+        configure_for_pgf()
 
     plt.tight_layout()
-    # Save the plot to a file
-    export_dir = "export/plots"
     os.makedirs(export_dir, exist_ok=True)
     file_path = os.path.join(export_dir, file_path)
     plt.savefig(file_path)
     plt.close()
+
+    print(f"Stacked bar plot saved to {file_path}")
 
 
 def plot_BECCUS(
@@ -382,11 +390,15 @@ def plot_BECCUS(
     title,
     x_label,
     y_label,
-    file_path,
+    file_name,
     custom_order=None,
     multiplier=1e-6,
     upstream_data=None,
+    export_dir="export/plots",
+    file_type="png",
 ):
+    file_path = f"{file_name}.{file_type}"
+
     if custom_order is not None:
         df = reorder_data(df, custom_order)
 
@@ -409,7 +421,7 @@ def plot_BECCUS(
         df_plot = df_plot.merge(upstream_total, on="Folder", how="left")
 
     # Convert the values to MtCO2
-    df_plot["Biogenic Carbon Stored"] = df_plot["Carbon Stored"] * multiplier
+    df_plot["Biogenic Carbon Sequestered"] = df_plot["Carbon Stored"] * multiplier
     df_plot["Biogenic Carbon Utilised"] = df_plot["Carbon Utilised"] * multiplier
     df_plot["Biogenic Carbon Not Captured"] = df_plot["Not Captured"] * multiplier
 
@@ -424,7 +436,7 @@ def plot_BECCUS(
     # Plot the stacked bars for carbon data
     bottom = np.zeros(len(df_plot.index))
     for column in [
-        "Biogenic Carbon Stored",
+        "Biogenic Carbon Sequestered",
         "Biogenic Carbon Utilised",
         "Biogenic Carbon Not Captured",
     ]:
@@ -445,14 +457,14 @@ def plot_BECCUS(
         )
 
     # Add labels and title
-    ax.set_xlabel(x_label)
-    ax.set_ylabel(y_label)
-    ax.set_title(title)
+    ax.set_xlabel(x_label, fontsize=16)
+    ax.set_ylabel(y_label, fontsize=16)
+    ax.set_title(title, fontsize=20)
     ax.set_xticks(x)
     ax.set_xticklabels(df_plot.index, rotation=45, ha="right")
 
     # Add legend
-    ax.legend(title="Legend", fontsize=14)
+    ax.legend(title="Legend", fontsize=16)
 
     # Add percentages on the bars
     for container in ax.containers[:-1]:
@@ -480,11 +492,15 @@ def plot_BECCUS(
 
     plt.tight_layout()
     # Save the plot to a file
-    export_dir = "export/plots"
+
+    if file_path.endswith(".pgf"):
+        configure_for_pgf()
     os.makedirs(export_dir, exist_ok=True)
     file_path = os.path.join(export_dir, file_path)
     plt.savefig(file_path)
     plt.close()
+
+    print(f"BECCUS plot saved to {file_path}")
 
 
 class HandlerWedge(HandlerPatch):
@@ -505,7 +521,7 @@ class HandlerWedge(HandlerPatch):
         return [p]
 
 
-def plot_costs_vs_prices(df, title, x_label, y_label, file_path, scenario, usage_dict):
+def plot_costs_vs_prices(df, title, x_label, y_label, file_name, scenario, usage_dict,export_dir="export/plots",file_type="png"):
     """
     Plot biomass types with costs on the x-axis and values on the y-axis for a specific scenario,
     with circle fill indicating usage percentage.
@@ -520,13 +536,14 @@ def plot_costs_vs_prices(df, title, x_label, y_label, file_path, scenario, usage
         Label for the x-axis.
     y_label : str
         Label for the y-axis.
-    file_path : str
-        Path to save the plot.
+    file_name : str
+        Name to save the plot.
     scenario : str
         Scenario (folder) to filter the data.
     usage_dict : dict
         Dictionary mapping biomass types to their usage percentage (0 to 100).
     """
+    file_path = f"{file_name}.{file_type}"
     # Filter data for the specified scenario
     scenario_df = df[(df["Folder"] == scenario)]
 
@@ -552,7 +569,6 @@ def plot_costs_vs_prices(df, title, x_label, y_label, file_path, scenario, usage
     ]
 
     # Create export directory
-    export_dir = "export/plots"
     os.makedirs(export_dir, exist_ok=True)
     file_path = os.path.join(export_dir, file_path)
 
@@ -693,12 +709,17 @@ def plot_costs_vs_prices(df, title, x_label, y_label, file_path, scenario, usage
     ax.set_title(f"{title} ({scenario})", loc="left")
     ax.grid(True)
 
+    if file_path.endswith(".pgf"):
+        configure_for_pgf()
+
     plt.tight_layout()
     plt.savefig(file_path, bbox_inches="tight", pad_inches=0.3)
     plt.close()
 
+    print(f"Costs vs Prices plot saved to {file_path}")
 
-def plot_feedstock_prices(df, title, x_label, y_label, file_path, custom_order=None):
+
+def plot_feedstock_prices(df, title, x_label, y_label, file_name, custom_order=None, export_dir="export/plots",file_type="png"):
     """
     Plot feedstock prices with aggregated categories and price ranges for each scenario (folder).
 
@@ -712,13 +733,14 @@ def plot_feedstock_prices(df, title, x_label, y_label, file_path, custom_order=N
         Label for the x-axis.
     y_label : str
         Label for the y-axis.
-    file_path : str
+    file_name : str
         Path to save the plot.
     custom_order : list, optional
         Custom order of feedstocks.
     axis2_ticks : int, optional
         Ticks for the secondary axis.
     """
+    file_path = f"{file_name}.{file_type}"
     # Remove unwanted feedstocks
     df = df[~df["Data Name"].isin(["solid biomass"])]
 
@@ -834,12 +856,16 @@ def plot_feedstock_prices(df, title, x_label, y_label, file_path, custom_order=N
     ax.legend(by_label.values(), by_label.keys(), title="Scenarios")
 
     plt.tight_layout()
+
+    if file_path.endswith(".pgf"):
+        configure_for_pgf()
     # Save the plot to a file
-    export_dir = "export/plots"
     os.makedirs(export_dir, exist_ok=True)
     file_path = os.path.join(export_dir, file_path)
     plt.savefig(file_path)
     plt.close()
+
+    print(f"Feedstock prices plot saved to {file_path}")
 
 
 def plot_difference_bar(
@@ -847,13 +873,16 @@ def plot_difference_bar(
     title,
     x_label,
     y_label,
-    file_path,
+    file_name,
     custom_order=None,
     remove_last_letters=0,
     axis2_ticks=500,
+    export_dir="export/plots",
+    file_type="png",
 ):
+    
+    file_path = f"{file_name}.{file_type}"
     # Pivot the DataFrame for plotting
-
     if custom_order is not None:
         df = reorder_data(df, custom_order)
 
@@ -935,11 +964,14 @@ def plot_difference_bar(
 
     plt.tight_layout()
     # Save the plot to a file
-    export_dir = "export/plots"
+    if file_path.endswith(".pgf"):
+        configure_for_pgf()
     os.makedirs(export_dir, exist_ok=True)
     file_path = os.path.join(export_dir, file_path)
     plt.savefig(file_path)
     plt.close()
+
+    print(f"Difference bar plot saved to {file_path}")
 
 
 def plot_bar_with_shares(
@@ -947,13 +979,16 @@ def plot_bar_with_shares(
     title,
     x_label,
     y_label,
-    file_path,
+    file_name,
     custom_order=None,
     axis2_ticks=500,
     remove_last_letters=0,
     width=14,
     threshold=0.001,
+    export_dir="export/plots",
+    file_type="png",
 ):
+    file_path = f"{file_name}.{file_type}"
     # Pivot the DataFrame for plotting
 
     plt.rcParams.update({"font.size": 14})
@@ -980,7 +1015,7 @@ def plot_bar_with_shares(
 
     # Define x-axis positions and bar width
     x = np.arange(len(values))  # Positions for each Data Name
-    bar_width = 0.35
+    bar_width = 0.35*2/len(custom_order)
 
     # Create the bar plot
     fig, ax = plt.subplots(figsize=(width, 6))
@@ -996,7 +1031,7 @@ def plot_bar_with_shares(
                 value + max(values.max()) * 0.01,
                 absolute_text + "\n" + share_text,
                 ha="center",
-                fontsize=8,
+                fontsize=8/(len(custom_order)/2),
             )
 
     # Adjust plot limits to add space for text
@@ -1019,15 +1054,19 @@ def plot_bar_with_shares(
     ax2.yaxis.set_major_locator(secondary_locator)
 
     plt.tight_layout()
+
+    if file_path.endswith(".pgf"):
+        configure_for_pgf()
     # Save the plot to a file
-    export_dir = "export/plots"
     os.makedirs(export_dir, exist_ok=True)
     file_path = os.path.join(export_dir, file_path)
     plt.savefig(file_path)
     plt.close()
 
+    print(f"Bar plot with shares saved to {file_path}")
 
-def plot_shares(df, title, x_label, y_label, file_path, custom_order=None):
+
+def plot_shares(df, title, x_label, y_label, file_name, custom_order=None, export_dir="export/plots",file_type="png"):
     """
     Creates a stacked bar chart based on the provided DataFrame and saves it to file.
 
@@ -1036,9 +1075,9 @@ def plot_shares(df, title, x_label, y_label, file_path, custom_order=None):
         title (str): Title of the chart.
         x_label (str): Label for the x-axis.
         y_label (str): Label for the y-axis.
-        file_path (str): The name of the image to save the plot.
+        file_name (str): The name of the image to save the plot.
     """
-
+    file_path = f"{file_name}.{file_type}"
     # Convert 'Folder' column to a categorical type with the specified order
     if custom_order is not None:
         df = reorder_data(df, custom_order)
@@ -1124,18 +1163,23 @@ def plot_shares(df, title, x_label, y_label, file_path, custom_order=None):
     # Layout adjustments
     plt.tight_layout()
 
+    if file_path.endswith(".pgf"):
+        configure_for_pgf()
+
     # Save the plot to a file
-    export_dir = "export/plots"
     os.makedirs(export_dir, exist_ok=True)
     full_file_path = os.path.join(export_dir, file_path)
     plt.savefig(full_file_path)
     plt.close()
 
+    print(f"Shares plot saved to {full_file_path}")
 
-def plot_costs(df, title, x_label, y_label, file_path):
+
+def plot_costs(df, title, x_label, y_label, file_name, export_dir="export/plots",file_type="png"):
     """
     Plot costs
     """
+    file_path = f"{file_name}.{file_type}"
     # convert to billion
     df["Difference"] = df["Difference"] / 1e9
     # remove all have an absolute value less than 1
@@ -1175,22 +1219,27 @@ def plot_costs(df, title, x_label, y_label, file_path):
     # Show the plot
     plt.tight_layout()
 
+    if file_path.endswith(".pgf"):
+        configure_for_pgf()
+
     # Save the plot to a file
-    export_dir = "export/plots"
     os.makedirs(export_dir, exist_ok=True)
     file_path = os.path.join(export_dir, file_path)
     plt.savefig(file_path)
     plt.close()
 
+    print(f"Costs plot saved to {file_path}")
+
 
 def plot_data(
-    data, title, x_label, y_label, file_path, custom_order=None, color_palette="viridis"
+    data, title, x_label, y_label, file_name, custom_order=None, color_palette="viridis", export_dir="export/plots", file_type="png"
 ):
     """
     Plot data
     """
+    file_path = f"{file_name}.{file_type}"
     if custom_order is not None:
-        reorder_data(data, custom_order)
+        data = reorder_data(data, custom_order)
     plt.rcParams.update({"font.size": 14})
     # Recreate the bar chart with the reordered folders
     plt.figure(figsize=(12, 6))
@@ -1217,16 +1266,20 @@ def plot_data(
     ax.set_xticks([])
     ax.set_xticklabels([])
 
+    if file_path.endswith(".pgf"):
+        configure_for_pgf()
+
     # Save the plot to a file
-    export_dir = "export/plots"
     os.makedirs(export_dir, exist_ok=True)
     file_path = os.path.join(export_dir, file_path)
     plt.savefig(file_path)
     plt.close()
 
+    print(f"Data plot saved to {file_path}")
 
-def plot_biomass_use(df, title, x_label, y_label, file_path, year=2050):
-    # Filter by year
+
+def plot_biomass_use(df, title, x_label, y_label, file_name, year=2050,export_dir="export/plots",file_type="png"):
+    file_path = f"{file_name}.{file_type}"
 
     plt.rcParams.update({"font.size": 18})
     df["Data Name"] = df["Data Name"].str.replace("1", "")
@@ -1383,15 +1436,19 @@ def plot_biomass_use(df, title, x_label, y_label, file_path, year=2050):
 
     plt.tight_layout()
 
+    if file_path.endswith(".pgf"):
+        configure_for_pgf()
+
     # Save the plot to a file
-    export_dir = "export/plots"
     os.makedirs(export_dir, exist_ok=True)
     file_path = os.path.join(export_dir, file_path)
     plt.savefig(file_path)
     plt.close()
 
+    print(f"Biomass use plot saved to {file_path}")
 
-def plot_efs():
+
+def plot_efs(export_dir="export/plots",file_type="png"):
     biomass_costs = {  # Euro/MWh_LHV
         "crop residues": 12.8786,
         "logging residues": 15.3932,  # fuelwood residues
@@ -1491,31 +1548,37 @@ def plot_efs():
 
     # Adjust plot limits to add space for text
     ylim = ax.get_ylim()
-    ax.set_ylim(ylim[0], ylim[1] + abs(ylim[1] * 0.1))
+    ax.set_ylim(ylim[0], ylim[1] + abs(ylim[1] * 0.3))
 
     plt.tight_layout()
 
+    file_path = f"emission_factors.{file_type}"
+    if file_path.endswith(".pgf"):
+        configure_for_pgf()
     # Save the plot to a file
-    export_dir = "export/plots"
     os.makedirs(export_dir, exist_ok=True)
-    file_path = os.path.join(export_dir, "emission_factors.png")
+    file_path = os.path.join(export_dir,file_path)
     plt.savefig(file_path)
     plt.close()
-
+    
+    print(f"Emission factors plot saved to {file_path}")
 
 def plot_bar_with_totals(
     df,
     title,
     x_label,
     y_label,
-    file_path,
+    file_name,
     custom_order=None,
     remove_letters=None,
     axis2_ticks=500,
     include_total=True,
+    export_dir="export/plots",
+    file_type="png",
 ):
     # plots the data in a bar chart and adds a sum of all values at the end
     # Pivot the DataFrame for plotting
+    file_path = f"{file_name}.{file_type}"
 
     if custom_order is not None:
         df = reorder_data(df, custom_order)
@@ -1589,11 +1652,16 @@ def plot_bar_with_totals(
 
     plt.tight_layout()
     # Save the plot to a file
-    export_dir = "export/plots"
+
+    if file_path.endswith(".pgf"):
+        configure_for_pgf()
+
     os.makedirs(export_dir, exist_ok=True)
     file_path = os.path.join(export_dir, file_path)
     plt.savefig(file_path)
     plt.close()
+
+    print(f"Bar plot with totals saved to {file_path}")
 
 
 def get_usage_dict(df, scenario, year=2050):
@@ -1618,310 +1686,365 @@ def get_usage_dict(df, scenario, year=2050):
 
 
 def main():
-    # Define the desired folder order
-    # custom_order = [
-    #     "exogenous_0_ef",
-    #     "endogenous_0_ef",
-    #     "endogenous_0_9_ef",
-    #     "endogenous_1_ef",
-    #     "endogenous_1_1_ef",
-    #     "endogenous_1_ef_2_gas",
-    # ]
-    # custom_order = ["default", "biomass_emissions", "150_seq", "400_seq"]
-    custom_order = ["no_biomass_emissions", "biomass_emissions"]
 
-    data = load_csv("export/costs2050.csv")
+    file_type = "png"
+    # file_type = "pgf"
+
+    custom_order = ["no_biomass_emissions", "biomass_emissions"]    
+    export_dir = "export/plots"
+    data_folder = "export"
+
+    # export_dir = "export/land_use_scenarios/plots"
+    # data_folder = "export/land_use_scenarios"
+    # custom_order= ["no_biomass_emissions", "no_biomass_emissions_re_em", "biomass_emissions_no_re_em", "biomass_emissions"]
+
+    data = load_csv("costs2050.csv",folder_path=data_folder)
     plot_data(
         data,
         "Total Costs",
         "",
         "Cost (Billion EUR)",
-        "total_costs.png",
+        "total_costs",
         custom_order,
+        export_dir=export_dir,
+        file_type=file_type,
     )
 
-    data = load_csv("export/biomass_supply.csv")
-    plot_biomass_use(data, "Biomass Use", "", "TWh", "biomass_supply.png")
+    data = load_csv("biomass_supply.csv",folder_path=data_folder)
+    plot_biomass_use(data, "Biomass Use", "", "TWh", "biomass_supply", export_dir=export_dir)
     plot_bar_with_totals(
         data,
         "Biomass Supply",
         "",
         "TWh",
-        "biomass_supply_totals.png",
+        "biomass_supply_totals",
         custom_order,
         remove_letters=[1],
         axis2_ticks=500,
         include_total=False,
+        export_dir=export_dir,
+        file_type=file_type,
     )
 
-    plot_efs()
+    plot_efs(export_dir=export_dir)
 
-    data = load_csv("export/oil_production_2050.csv")
+    data = load_csv("oil_production_2050.csv",folder_path=data_folder)
     plot_bar_with_shares(
         data,
         "Liquid Fuel Production in 2050",
         "",
         "TWh",
-        "oil_production_2050.png",
+        "oil_production_2050",
         custom_order,
         width=10,
+        export_dir=export_dir,
+        file_type=file_type,
     )
 
-    data = load_csv("export/electricity_generation_share_2050.csv")
+    data = load_csv("electricity_generation_share_2050.csv",folder_path=data_folder)
     plot_bar_with_shares(
         data,
         "Electricity Generation in 2050",
         "",
         "TWh",
-        "electricity_generation_share_2050.png",
+        "electricity_generation_share_2050",
         custom_order,
         axis2_ticks=5000,
         width=10,
+        export_dir=export_dir,
+        file_type=file_type,
     )
     # plot_difference_bar(
     #     data,
     #     "Difference in Electricity Generation Considering Biomass Emissions",
     #     "",
     #     "TWh",
-    #     "electricity_generation_share_2050_diff.png",
+    #     "electricity_generation_share_2050_diff",
     #     custom_order,
     # )
 
-    data = load_csv("export/beccs.csv")
+    data = load_csv("beccs.csv",folder_path=data_folder)
     plot_bar_with_totals(
         data,
         "BECCS",
         "",
         "TWh",
-        "beccs.png",
+        "beccs",
         custom_order,
         remove_letters=[1],
         axis2_ticks=500,
+        export_dir=export_dir,
+        file_type=file_type,
     )
 
-    data = load_csv("export/industrial_energy_2050.csv")
+    data = load_csv("industrial_energy_2050.csv",folder_path=data_folder)
     plot_bar_with_totals(
         data,
         "Industrial Heat Supply in 2050",
         "",
         "TWh",
-        "industrial_energy_2050.png",
+        "industrial_energy_2050",
         custom_order,
         axis2_ticks=500,
         include_total=False,
+        export_dir=export_dir,
+        file_type=file_type,
     )
 
-    data = load_csv("export/heating_energy_2050.csv")
+    data = load_csv("heating_energy_2050.csv",folder_path=data_folder)
     plot_bar_with_totals(
         data,
         "Heating Energy Supply in 2050",
         "",
         "TWh",
-        "heating_energy_2050.png",
+        "heating_energy_2050",
         custom_order,
         axis2_ticks=1000,
         include_total=False,
+        export_dir=export_dir,
+        file_type=file_type,
     )
 
-    data = load_csv("export/primary_energy_2050.csv")
+    data = load_csv("primary_energy_2050.csv",folder_path=data_folder)
     plot_bar_with_shares(
         data,
         "Primary Energy Supply in 2050",
         "",
         "TWh",
-        "primary_energy_2050.png",
+        "primary_energy_2050",
         custom_order,
         axis2_ticks=5000,
         width=10,
         threshold=0.0001,
+        export_dir=export_dir,
+        file_type=file_type,
     )
 
-    data = load_csv("export/biomass_use_by_sector_2050.csv")
+    data = load_csv("biomass_use_by_sector_2050.csv",folder_path=data_folder)
     plot_bar_with_shares(
         data,
         "Biomass Use by Sector in 2050",
         "",
         "TWh",
-        "biomass_use_by_sector_2050.png",
+        "biomass_use_by_sector_shares",
         custom_order,
         axis2_ticks=500,
         width=10,
+        export_dir=export_dir,
+        file_type=file_type,
     )
 
-    data = load_csv("export/fossil_fuel_supply.csv")
+    data = load_csv("fossil_fuel_supply.csv",folder_path=data_folder)
     plot_bar_with_totals(
         data,
         "Fossil Fuel Supply",
         "",
         "TWh",
-        "fossil_fuel_supply.png",
+        "fossil_fuel_supply",
         custom_order,
         include_total=False,
+        export_dir=export_dir,
+        file_type=file_type,
     )
 
-    data = load_csv("export/cost_difference.csv")
+    data = load_csv("cost_difference.csv",folder_path=data_folder)
     plot_costs(
         data,
         "Extra Costs Due to Biomass Emissions (bigger than 1 Billion EUR)",
         "",
         "Cost (Billion EUR)",
-        "cost_difference.png",
+        "cost_difference",
+        export_dir=export_dir,
+        file_type=file_type,
     )
 
-    data = load_csv("export/shadow_price_2050.csv")
+    data = load_csv("shadow_price_2050.csv",folder_path=data_folder)
     plot_data(
         data,
         "CO2 Shadow Prices",
         "",
         "Shadow Price (EUR/tonCO2)",
-        "shadow_prices.png",
+        "shadow_prices",
+        custom_order,
+        export_dir=export_dir,
+        file_type=file_type,
     )
 
-    data = load_csv("export/hydrogen_production_2050.csv")
+    data = load_csv("hydrogen_production_2050.csv",folder_path=data_folder)
     plot_bar_with_totals(
         data,
         "Hydrogen Production",
         "",
         "TWh",
-        "hydrogen_production_2050.png",
+        "hydrogen_production_2050",
         custom_order,
         remove_letters=[1],
         axis2_ticks=500,
         include_total=True,
+        export_dir=export_dir,
+        file_type=file_type,
     )
 
-    data = load_csv("export/heat_pumps_2050.csv")
+    data = load_csv("heat_pumps_2050.csv",folder_path=data_folder)
     plot_bar_with_totals(
         data,
         "Heat Pump Electricity Consumption",
         "",
         "TWh",
-        "heat_pumps_2050.png",
+        "heat_pumps_2050",
         custom_order,
         remove_letters=[0],
         axis2_ticks=500,
         include_total=True,
+        export_dir=export_dir,
+        file_type=file_type,
     )
 
-    data = load_csv("export/gas_use_2050.csv")
+    data = load_csv("gas_use_2050.csv",folder_path=data_folder)
     plot_bar_with_totals(
         data,
         "(Bio)Gas Use",
         "",
         "TWh",
-        "gas_use_2050.png",
+        "gas_use_2050",
         custom_order,
         axis2_ticks=500,
         include_total=False,
+        export_dir=export_dir,
+        file_type=file_type,
     )
 
-    supply_data = load_csv("export/biomass_supply.csv")
+    supply_data = load_csv("biomass_supply.csv",folder_path=data_folder)
     usage_dict_default = get_usage_dict(supply_data, "no_biomass_emissions")
     usage_dict_biomass_emissions = get_usage_dict(supply_data, "biomass_emissions")
 
-    data = load_csv("export/weighted_prices_2050.csv")
+    data = load_csv("weighted_prices_2050.csv",folder_path=data_folder)
     plot_feedstock_prices(
         data,
         "Weighted Feedstock Prices in 2050",
         "",
         "EUR/MWh",
-        "weighted_feedstock_prices_2050.png",
+        "weighted_feedstock_prices_2050",
+        export_dir=export_dir,
+        file_type=file_type,
     )
     plot_costs_vs_prices(
         data,
         "Weighted Feedstock Prices vs. Costs in 2050",
         "Costs in Euro/MWh",
         "Prices in EUR/MWh",
-        "prices_costs_default_2050.png",
+        "prices_costs_default_2050",
         scenario="no_biomass_emissions",
         usage_dict=usage_dict_default,
+        export_dir=export_dir,
+        file_type=file_type,
     )
     plot_costs_vs_prices(
         data,
         "Weighted Feedstock Prices vs. Costs in 2050",
         "Costs in Euro/MWh",
         "Prices in EUR/MWh",
-        "prices_costs_biomass_emissions_2050.png",
+        "prices_costs_biomass_emissions_2050",
         scenario="biomass_emissions",
         usage_dict=usage_dict_biomass_emissions,
+        export_dir=export_dir,
+        file_type=file_type,
     )
 
-    data = load_csv("export/co2_use.csv")
+    data = load_csv("co2_use.csv",folder_path=data_folder)
     plot_stacked_bar(
         data,
         "CO2 Use",
         "",
         "MtCO2",
-        "co2_use.png",
+        "co2_use",
         custom_order,
         multiplier=1e-6,
+        export_dir=export_dir,
+        file_type=file_type,
     )
-    data = load_csv("export/co2_capture.csv")
+    data = load_csv("co2_capture.csv",folder_path=data_folder)
     plot_stacked_bar(
         data,
         "CO2 Capture",
         "",
         "MtCO2",
-        "co2_capture.png",
+        "co2_capture",
         custom_order,
         multiplier=1e-6,
+        export_dir=export_dir,
+        file_type=file_type,
     )
 
-    data = load_csv("export/biomass_use_by_sector_2050.csv")
+    data = load_csv("biomass_use_by_sector_2050.csv",folder_path=data_folder)
     plot_stacked_bar(
         data,
         "Biomass Use by Sector in 2050",
         "",
         "TWh",
-        "biomass_use_by_sector_2050.png",
+        "biomass_use_by_sector_2050",
         custom_order,
         multiplier=1e-6,
+        export_dir=export_dir,
+        file_type=file_type,
     )
 
-    upstream_data = load_csv("export/upstream_emissions.csv")
+    upstream_data = load_csv("upstream_emissions.csv",folder_path=data_folder)
 
-    data = load_csv("export/CCUS.csv")
+    data = load_csv("CCUS.csv",folder_path=data_folder)
     plot_BECCUS(
         data,
-        "BECCUS",
+        "BECCUS—Biogenic CO2 Allocation",
         "",
         "Mt_CO2",
-        "beccus.png",
+        "beccus",
         upstream_data=upstream_data,
+        export_dir=export_dir,
+        file_type=file_type,
     )
 
-    data = load_csv("export/biomass_supply_difference.csv")
+    data = load_csv("biomass_supply_difference.csv",folder_path=data_folder)
+    data = data[data["data_name"] != "total"]
+    data
     plot_stacked_bar(
         data,
         "Additional CO2 Emissions Due to Biomass Use",
         "",
         "Mt_CO2",
-        "biomass_emission_difference.png",
+        "biomass_emission_difference",
         multiplier=1e-6,
         column="emission_difference",
         columns="year",
         index="Data Name",
         threshold=0.001,
         threshold_column="emission_difference",
+        export_dir=export_dir,
+        file_type=file_type,
     )
 
     create_gravitational_plot(
         "Gravitational Plot",
-        "gravitational_plot.png",
+        "gravitational_plot",
+        export_dir=export_dir,
+        file_type=file_type,
     )
 
-    data = load_csv("export/biomass_supply.csv")
+    data = load_csv("biomass_supply.csv",folder_path=data_folder)
     create_gravitational_plot(
         "Gravitational Plot (biomass_emissions)",
-        "gravitational_plot_biomass_emissions.png",
+        "gravitational_plot_biomass_emissions",
         biomass_supply=data,
         scenario="biomass_emissions",
+        export_dir=export_dir,
+        file_type=file_type,
     )
     create_gravitational_plot(
         "Gravitational Plot (no_biomass_emissions)",
-        "gravitational_plot_no_biomass_emissions.png",
+        "gravitational_plot_no_biomass_emissions",
         biomass_supply=data,
         scenario="no_biomass_emissions",
+        export_dir=export_dir,
+        file_type=file_type,
     )
 
 
@@ -1929,24 +2052,24 @@ if __name__ == "__main__":
     main()
     # create_gravitational_plot(
     #     "Gravitational Plot",
-    #     "gravitational_plot.png",
+    #     "gravitational_plot",
     # )
-    # data = load_csv("export/biomass_supply.csv")
+    # data = load_csv("biomass_supply.csv")
     # create_gravitational_plot(
     #     "Gravitational Plot (bm_em_710_seq)",
-    #     "gravitational_plot_bm_em_710.png",
+    #     "gravitational_plot_bm_em_710",
     #     biomass_supply=data,
     #     scenario="bm_em_710_seq",
     # )
     # create_gravitational_plot(
     #     "Gravitational Plot (bm_em_200_seq)",
-    #     "gravitational_plot_bm_em_200.png",
+    #     "gravitational_plot_bm_em_200",
     #     biomass_supply=data,
     #     scenario="biomass_emissions",
     # )
     # create_gravitational_plot(
     #     "Gravitational Plot (bm_em_150_seq)",
-    #     "gravitational_plot_bm_em_150.png",
+    #     "gravitational_plot_bm_em_150",
     #     biomass_supply=data,
     #     scenario="bm_em_150_seq",
     # )
