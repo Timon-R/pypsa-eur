@@ -2,6 +2,9 @@
 #
 # SPDX-License-Identifier: MIT
 import os
+import io
+
+from collections import defaultdict
 
 import matplotlib as mpl
 import matplotlib.lines as mlines
@@ -14,7 +17,10 @@ from matplotlib.legend_handler import HandlerPatch
 from matplotlib.path import Path
 from matplotlib.ticker import MultipleLocator
 
-from result_analysis import get_emission_factors, get_biomass_potentials
+import plotly.graph_objects as go
+import plotly.express as px
+from result_analysis import get_emission_factors
+
 
 # config_file_path = "config/config.yaml"
 
@@ -145,7 +151,14 @@ def create_gravitational_plot(
     biomass_supply=None,
     scenario=None,
     export_dir="export/plots",
-    file_type="png", 
+    file_type="png",
+    capacity_factors=None,
+    renewable_costs ={
+            "solar": 50, 
+            "onwind": 45,
+            "solar-hsat": 50
+        },
+    show_fossil_fuels=True 
 ):
 
     file_path = f"{file_name}.{file_type}"
@@ -190,7 +203,7 @@ def create_gravitational_plot(
         )
         location = emissions[i] + 2 * sizes[i] / max_potential * 0.015 + 0.01
         if (
-            bt == "secondary forestry residues"
+            bt == "secondary forestry residues" or "import" in bt
         ):  # below the point
             location = emissions[i] - 2 * sizes[i] / max_potential * 0.015 - 0.015
         plt.text(
@@ -201,12 +214,88 @@ def create_gravitational_plot(
             ha="center",
         )
 
+    # Add renewable energy crosses if capacity factors are provided
+    if capacity_factors is not None:
+        
+        # Define emission factors in ton/MW (from provided data)
+        renewable_ef_per_mw = {
+            "solar": 12.2,
+            "onwind": 2.44,
+            "solar-hsat": 73.2,
+        }
+        
+        # Filter capacity factors for the selected scenario
+        if scenario is not None:
+            scenario_cf = capacity_factors[capacity_factors["Folder"] == scenario]
+        else:
+            # Use default scenario if none specified
+            scenario_cf = capacity_factors[capacity_factors["Folder"] == "default"]
+        
+        # For each renewable technology, calculate emission factor in ton/MWh
+        for _, row in scenario_cf.iterrows():
+            tech = row["Data Name"]
+            if tech in renewable_ef_per_mw:
+                cf = row["Values"]
+                # Calculate emissions per MWh: ton/MW / (CF * 8760 hours/year) = ton/MWh
+                emissions_per_mwh = renewable_ef_per_mw[tech] / (cf * 8760)
+                
+                # Plot as a cross with different color
+                plt.scatter(
+                    renewable_costs[tech],
+                    emissions_per_mwh,
+                    marker='p',
+                    color='orange',
+                    s=100,
+                    linewidth=2,
+                    label="_nolegend_"
+                )
+                
+                # Add text label
+                plt.text(
+                    renewable_costs[tech],
+                    emissions_per_mwh + 0.01,
+                    f"{tech}",
+                    fontsize=9,
+                    ha="center",
+                    color='black'
+                )
+    
+    # Add fossil fuel markers
+    if show_fossil_fuels:
+        # Define fossil fuel data
+        fossil_fuels = {
+            "coal": {"cost": 9.55, "emission": 0.3361},
+            "gas": {"cost": 24.57, "emission": 0.198},
+            "oil": {"cost": 52.9, "emission": 0.2571}
+        }
+        
+        # Plot fossil fuel markers
+        for fuel, data in fossil_fuels.items():
+            plt.scatter(
+                data["cost"],
+                data["emission"],
+                marker='s',  # square marker to differentiate
+                color='black',
+                s=80,
+                label="_nolegend_"
+            )
+            
+            # Add text label
+            plt.text(
+                data["cost"],
+                data["emission"] + 0.02,
+                fuel,
+                fontsize=9,
+                ha="center",
+                color='black',
+            )
+
     # Set up the axes and draw to ensure limits are calculated
     plt.xlabel("Costs in Euro/MWh_LHV")
     plt.ylabel("Emission Factors in tonCO2/MWh")
     plt.title(title)
-    plt.xlim(0, max(costs) + 5)
-    plt.ylim(-0.02, max(emissions) + 0.05)
+    plt.xlim(0, max(costs) + 5)  # Ensure this considers fossil fuel costs too
+    plt.ylim(-0.02, max(emissions) + 0.05)  # Ensure this considers fossil fuel emissions too
     fig.canvas.draw()
 
     # Get the actual data ratio
@@ -240,7 +329,7 @@ def create_gravitational_plot(
 
             # Correctly convert from area (sizes[i]) to radius, matching the scatter plot circles
             # The scatter plot uses s=area, so we need sqrt(sizes[i]/pi) to get equivalent radius
-            circle_radius = np.sqrt(sizes[i] / np.pi)
+            circle_radius = np.sqrt(sizes[i] / np.pi)*0.95 #for some reason the circles are too big so they need to be scaled down
             width = circle_radius * 0.09  # Scale factor for visual appearance
             height = width * adjustment_factor
 
@@ -276,23 +365,14 @@ def create_gravitational_plot(
             edgecolors="black",
             facecolors="none",
             label=f"{size} TWh",
-        )
+        )    
     plt.legend(
         scatterpoints=1,
         frameon=False,
         labelspacing=1,
         title="Potential",
-        loc="lower right",
-        bbox_to_anchor=(1, 0),
+        loc="upper right",
     )
-
-    # # Add legend for biomass types
-    # handles = [plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='none', markeredgecolor=colors[i], markersize=10, label=bt) for i, bt in enumerate(biomass_types)]
-    # plt.legend(handles=handles, title='Biomass Types', bbox_to_anchor=(1.05, 1), loc='upper left')
-
-    # add some space to the top and left
-    plt.xlim(0, max(costs) + 5)
-    plt.ylim(-0.02, max(emissions) + 0.05)
 
     if file_path.endswith(".pgf"):
         configure_for_pgf()
@@ -451,7 +531,7 @@ def plot_BECCUS(
             x + bar_width / 2,
             df_plot["Upstream Emissions"],
             bar_width,
-            label="Upstream Emissions",
+            label="Land Carbon Costs of Biomass",
             color="grey",
             alpha=0.6,
         )
@@ -479,7 +559,7 @@ def plot_BECCUS(
             ax.text(
                 bar.get_x() + bar.get_width() / 2,
                 bar.get_y() + height / 2,
-                f"{percentage:.1f}%",
+                f"{percentage:.0f}%",
                 ha="center",
                 va="center",
                 fontsize=12,
@@ -933,7 +1013,7 @@ def plot_difference_bar(
         )
 
         # Share difference above or below the bars
-        delta_text = f"Δ {share_delta * 100:.1f}%"
+        delta_text = f"Δ {share_delta * 100:.0f}%"
         ax.text(
             x[i],
             value / 1e6 + 0.08 * max(value_diff) / 1e6,
@@ -1024,7 +1104,7 @@ def plot_bar_with_shares(
 
         # Add share values as labels above the bars
         for j, value in enumerate(values[folder]):
-            share_text = f"{shares[folder].iloc[j] * 100:.1f}%"
+            share_text = f"{shares[folder].iloc[j] * 100:.0f}%"
             absolute_text = f"{value:.0f}"
             ax.text(
                 x[j] + i * bar_width,
@@ -1278,7 +1358,7 @@ def plot_data(
     print(f"Data plot saved to {file_path}")
 
 
-def plot_biomass_use(df, title, x_label, y_label, file_name, year=2050,export_dir="export/plots",file_type="png"):
+def plot_biomass_use(df, title, x_label, y_label, file_name, year=2050,export_dir="export/plots",file_type="png", labels=True):
     file_path = f"{file_name}.{file_type}"
 
     plt.rcParams.update({"font.size": 18})
@@ -1327,8 +1407,8 @@ def plot_biomass_use(df, title, x_label, y_label, file_name, year=2050,export_di
 
     for index, row in df_pivot.iterrows():
         biomass_type = row["Data Name"]
-        value_a = row["no_biomass_emissions"]
-        value_b = row["biomass_emissions"]
+        value_a = row["default"]
+        value_b = row["carbon_costs"]
         potential = biomass_potentials_TWh.get(biomass_type, 0)
         if value_a - value_b > -1:
             color = "LightGreen"
@@ -1377,20 +1457,20 @@ def plot_biomass_use(df, title, x_label, y_label, file_name, year=2050,export_di
             linewidth=1.5,
             label="Potential" if index == 0 else "",
         )
-
-        # Add emission factor below the x-axis
-        emission_factor = emission_factors.get(biomass_type, "N/A")
-        ef_g_per_MJ = round(emission_factor / 0.0036)
-        if biomass_type == "solid biomass import":
-            potential = value_b
-        ax.text(
-            x_coords[index],
-            potential + 1,
-            f"{emission_factor} | {ef_g_per_MJ} \n ton/MWh | g/MJ",
-            ha="center",
-            va="bottom",
-            fontsize=10,
-        )
+        if labels:
+            # Add emission factor below the x-axis
+            emission_factor = emission_factors.get(biomass_type, "N/A")
+            ef_g_per_MJ = round(emission_factor / 0.0036)
+            if biomass_type == "solid biomass import":
+                potential = value_b
+            ax.text(
+                x_coords[index],
+                potential + 1,
+                f"{emission_factor} | {ef_g_per_MJ} \n ton/MWh | g/MJ",
+                ha="center",
+                va="bottom",
+                fontsize=10,
+            )
 
     # Add legend
     potential_patch = mpl.patches.Patch(
@@ -1684,19 +1764,426 @@ def get_usage_dict(df, scenario, year=2050):
         usage_dict[key] = usage_value
     return usage_dict
 
+def plot_co2(df, scenario, file_name, export_dir="export/plots",file_type="png", unit = "ton", multiplier=1):
+
+    major_sinks_colors = {
+        'atmosphere': 'rgba(255, 0, 0, 0.8)',        # Red for atmospheric CO2
+        'co2 captured': 'rgba(0, 0, 255, 0.8)',  # Blue for captured/stored CO2
+        'co2 sequestered': 'rgba(0, 128, 0, 0.8)' # Green for sequestered CO2
+    }
+    default_node_color = 'rgba(200, 200, 200, 0.8)' # Light grey for other nodes
+    link_color = 'rgba(180, 180, 180, 0.5)' # Light grey for links
+
+    # Filter the DataFrame for the specified scenario
+    df = df[df['folder'] == scenario]
+    #mulitply the values by the multiplier
+    df.loc[:, 'values'] = df['values'] * multiplier
+
+    all_nodes_labels_original = pd.concat([df['from_sink'], df['to_sink']]).unique().tolist()
+
+    # --- 2. Create a mapping from node label to index ---
+    node_map = {node: i for i, node in enumerate(all_nodes_labels_original)}
+
+    # --- 3. Prepare link data and calculate node in/out flows ---
+    sources_indices = [] # Renamed from 'sources' to avoid conflict with a common variable name
+    targets_indices = [] # Renamed from 'targets'
+    values_list = []     # Renamed from 'values'
+    link_hover_labels = []
+
+    # To accumulate total incoming and outgoing flow values for each node
+    node_in_values = defaultdict(float)  # Stores sum of flows INTO each node
+    node_out_values = defaultdict(float) # Stores sum of flows OUT OF each node
+
+    for _, row in df.iterrows():
+        source_node_label = row['from_sink']
+        target_node_label = row['to_sink']
+        value = row['values']
+
+        sources_indices.append(node_map[source_node_label])
+        targets_indices.append(node_map[target_node_label])
+        values_list.append(value)
+        link_hover_labels.append(f"{source_node_label} → {target_node_label}: {value:,.0f}{unit}")
+
+        node_out_values[source_node_label] += value
+        node_in_values[target_node_label] += value
+
+    # --- 4. Format node labels: Add total flow values to ALL nodes ---
+    all_nodes_labels_formatted = []
+    for node_label in all_nodes_labels_original:
+        total_incoming = node_in_values[node_label]
+        total_outgoing = node_out_values[node_label]
+        
+        # The display value for a node's throughput is max(in, out)
+        # This aligns with Plotly's %{value} for node hovertemplate
+        display_value_for_node = max(total_incoming, total_outgoing)
+        
+        if display_value_for_node > 0: # Only add value if there's flow
+            all_nodes_labels_formatted.append(f"{node_label}<br><i><span style='font-size: 9px;'>({display_value_for_node:,.0f}{unit})</span></i>")
+        else:
+            # If a node somehow has 0 total flow (should be rare if it's part of a link)
+            all_nodes_labels_formatted.append(node_label)
+
+    # --- 5. Assign colors to nodes ---
+    node_colors_list = []
+    for node_label in all_nodes_labels_original:
+        node_colors_list.append(major_sinks_colors.get(node_label, default_node_color))
+
+    # --- 6. Create the Sankey diagram ---
+    fig = go.Figure(data=[go.Sankey(
+        node=dict(
+            pad=30,
+            thickness=15,
+            line=dict(color="black", width=0.5),
+            label=all_nodes_labels_formatted, # Use selectively formatted labels
+            color=node_colors_list,
+            customdata=all_nodes_labels_original, # Original labels for hover
+            # Hovertemplate shows total throughput (max of in/out) for ALL nodes
+            hovertemplate='Node: %{customdata}<br>Total Flow: %{value:,.0f}{unit}<extra></extra>'
+        ),
+        link=dict(
+            source=sources_indices,
+            target=targets_indices,
+            value=values_list,
+            label=link_hover_labels,
+            color=link_color,
+            hovertemplate='Link: %{label}<extra></extra>'
+        ),
+        arrangement='freeform' # freeform, perpendicular, fixed, or snap
+    )])
+
+    fig.update_layout(
+        title_text=f"Carbon Flow: {scenario}",
+        font_size=10,
+        height=max(800, len(all_nodes_labels_original) * 30), # Increased multiplier for height
+        width=1200,
+        margin=dict(l=50, r=50, b=50, t=100, pad=4)
+    )
+
+    #fig.show()
+    # Save the plot to a file
+    file_path = f"{file_name}.{file_type}"
+    os.makedirs(export_dir, exist_ok=True)
+    file_path = os.path.join(export_dir, file_path)
+    fig.write_image(file_path, scale=2)
+    print(f"Sankey diagram saved to {file_path}")
+
+
+def plot_co2_sankey(
+    df,
+    scenario,
+    multiplier=1.0,
+    output_dir='plots',
+    unit_label="tonCO2",
+    colour_links_by_technology=True,
+    include_legend=True
+):
+    """
+    Generate a Sankey diagram from a DataFrame of carbon flows for a given scenario.
+
+    Parameters:
+        df (pd.DataFrame): Input data with [folder, data_name, values, from_sink, to_sink].
+        scenario (str): Scenario to plot (filters 'folder').
+        multiplier (float): Multiplier for value scaling.
+        output_dir (str): Output directory for the saved plot.
+        unit_label (str): Unit string shown in hover tooltips.
+        colour_links_by_technology (bool): Whether to colour flows by technology.
+        include_legend (bool): Whether to add legend entries for technologies and sinks.
+
+    Returns:
+        plotly.graph_objects.Figure
+    """
+    # Filter for selected scenario
+    scenario_data = df[df['folder'] == scenario].copy()
+    if scenario_data.empty:
+        raise ValueError(f"No data found for scenario: {scenario}")
+    scenario_data['values'] *= multiplier
+
+    # Distinct nodes
+    nodes = list(set(scenario_data['from_sink']) | set(scenario_data['to_sink']))
+    node_index = {label: i for i, label in enumerate(nodes)}
+
+    # Colour palette for technologies
+    tech_palette = px.colors.qualitative.Safe
+    tech_list = scenario_data['data_name'].unique()
+    tech_colors = {tech: tech_palette[i % len(tech_palette)] for i, tech in enumerate(tech_list)}
+
+    # Sink type node colouring
+    sink_type_colors = {
+        "Atmosphere": "#56B4E9",
+        "CO2 Captured": "#332288",
+        "CO2 Storage": "#117733",
+        "CO2 Utilization": "#D95F02",
+        "Other": "#AAAAAA"
+    }
+
+    def classify_sink(node):
+        n = node.lower()
+        if "atmosphere" in n:
+            return "Atmosphere"
+        elif "captured" in n or "capture" in n:
+            return "CO2 Captured"
+        elif "storage" in n or "sequester" in n:
+            return "CO2 Storage"
+        elif "utilization" in n or "utilised" in n or "utilized" in n:
+            return "CO2 Utilization"
+        else:
+            return "Other"
+
+    node_colors = [sink_type_colors[classify_sink(n)] for n in nodes]
+
+    # Prepare links
+    sources, targets, values, link_labels, link_colors = [], [], [], [], []
+
+    for _, row in scenario_data.iterrows():
+        sources.append(node_index[row['from_sink']])
+        targets.append(node_index[row['to_sink']])
+        values.append(row['values'])
+        link_labels.append(row['data_name'])
+        if colour_links_by_technology:
+            link_colors.append(tech_colors[row['data_name']])
+        else:
+            link_colors.append("rgba(150,150,150,0.4)")  # uniform grey if not coloured
+
+
+    # Node throughput for hover info
+    node_in = {i: 0 for i in range(len(nodes))}
+    node_out = {i: 0 for i in range(len(nodes))}
+    for s, t, v in zip(sources, targets, values):
+        node_out[s] += v
+        node_in[t] += v
+
+    throughput = [max(node_in[i], node_out[i]) for i in range(len(nodes))]
+
+    # Sankey diagram
+    fig = go.Figure(go.Sankey(
+        arrangement="perpendicular", # alternatives: 'snap', 'freeform', 'perpendicular', 'fixed'
+        node=dict(
+            label=[f"{n}<br><span style='font-size:10px'>({throughput[node_index[n]]:,.0f} {unit_label})</span>" for n in nodes],
+            color=node_colors,
+            pad=30,
+            thickness=20,
+            line=dict(color="black", width=0.5)
+        ),
+        link=dict(
+            source=sources,
+            target=targets,
+            value=values,
+            label=link_labels,
+            color=link_colors
+        )
+    ))
+
+    fig.update_traces(
+        selector=dict(type='sankey'),
+        node_customdata=throughput,
+        node_hovertemplate='%{label}: %{customdata:.2f} ' + unit_label + ' total<extra></extra>',
+        link_hovertemplate='%{label}: %{value:.2f} ' + unit_label + '<extra></extra>'
+    )
+
+    # Legend
+    if include_legend:
+        if colour_links_by_technology:
+            for tech, colour in tech_colors.items():
+                fig.add_trace(go.Scatter(
+                    x=[None], y=[None],
+                    mode="markers",
+                    marker=dict(size=10, color=colour, symbol="square"),
+                    name=tech,
+                    legendgroup="tech",
+                    legendgrouptitle_text="Technology"
+                ))
+        for cat, colour in sink_type_colors.items():
+            fig.add_trace(go.Scatter(
+                x=[None], y=[None],
+                mode="markers",
+                marker=dict(size=10, color=colour, symbol="circle"),
+                name=cat,
+                legendgroup="sink",
+                legendgrouptitle_text="Sink Type"
+            ))
+
+    # Layout and export
+    fig.update_layout(
+        title_text=f"CO2 Flow Sankey – Scenario: {scenario}",
+        font_size=10,
+        plot_bgcolor='white',
+        showlegend=True,
+        width=1700,  # wider canvas
+        height=1000, # taller if needed
+        #autosize=False,
+        margin=dict(l=100, r=400, t=80, b=200)  # add right margin for legend
+    )
+    fig.update_xaxes(visible=False)
+    fig.update_yaxes(visible=False)
+
+    os.makedirs(output_dir, exist_ok=True)
+    out_path = os.path.join(output_dir, f"sankey_{scenario}.png")
+    fig.write_image(out_path)
+    print(f"Sankey diagram saved to {out_path}")
+
+    return fig
+
+
+def plot_mga(df, file_name, title = "Near Optimal Biomass Use", export_dir='export/plots', file_type='png', unit='MWh', multiplier=1):
+    """
+    Plot the near-optimal solution space for biomass use under various cost deviations.
+
+    Parameters:
+    -----------
+    df : pandas.DataFrame
+        DataFrame with MGA results. Expected columns:
+        - 'Folder': scenario (e.g., 'optimal', 'max_0.05', 'min_0.05', etc.)
+        - 'Year': (optional) year or time period (not used in plotting)
+        - 'Data Name': (optional) metric name (should contain 'biomass' for biomass usage)
+        - 'Values': numeric values of the metric (biomass usage)
+        The DataFrame should include an 'optimal' scenario and matching 'max_X'/'min_X' pairs for each cost deviation X.
+    file_name : str
+        Base name for the saved plot file (without extension).
+    export_dir : str, optional
+        Directory to save the plot in (default is 'export/plots').
+    file_type : str, optional
+        File format for saving (e.g., 'png', 'pdf'; default 'png').
+    unit : str, optional
+        Unit of biomass values (for y-axis label, default 'MWh').
+    multiplier : float, optional
+        Factor to scale the biomass values by (useful for unit conversion; default 1).
+    """
+    # Ensure the output directory exists
+    os.makedirs(export_dir, exist_ok=True)
+    
+    # If DataFrame has a 'Data Name' column, filter to rows containing 'biomass' (case-insensitive)
+    if 'Data Name' in df.columns:
+        biomass_mask = df['Data Name'].str.contains('biomass', case=False, na=False)
+        df_plot = df[biomass_mask].copy() if biomass_mask.any() else df.copy()
+    else:
+        df_plot = df.copy()
+    
+    # Dictionaries to hold min and max biomass values for each cost deviation percentage
+    min_values = {}
+    max_values = {}
+    optimal_value = None  # to store the biomass value for the optimal scenario (0% deviation)
+    
+    # Process each scenario in the DataFrame
+    for _, row in df_plot.iterrows():
+        scenario = str(row['Folder']).lower()       # scenario name (e.g., 'optimal', 'max_0.05')
+        value = float(row['Values']) * multiplier   # apply unit scaling to the value
+        if 'optimal' in scenario:
+            # Cost-optimal scenario (0% cost deviation)
+            optimal_value = value
+            min_values[0] = value
+            max_values[0] = value
+        elif 'min_' in scenario:
+            # Scenario minimizing biomass at X% cost deviation
+            dev_str = scenario.split('min_', 1)[1]  # e.g., '0.05' from 'min_0.05'
+            # Convert the deviation string to a fraction (e.g., '0.05' -> 0.05)
+            try:
+                cost_dev_frac = float(dev_str)
+            except ValueError:
+                # Handle cases like 'min_5' or 'min_5%' by interpreting as percentage
+                dev_str_num = dev_str.strip('%')
+                cost_dev_frac = float(dev_str_num) / 100.0 if dev_str_num.replace('.', '', 1).isdigit() else None
+            if cost_dev_frac is not None:
+                cost_dev_percent = int(round(cost_dev_frac * 100))  # convert to percentage (float -> int)
+                min_values[cost_dev_percent] = value
+        elif 'max_' in scenario:
+            # Scenario maximizing biomass at X% cost deviation
+            dev_str = scenario.split('max_', 1)[1]
+            try:
+                cost_dev_frac = float(dev_str)
+            except ValueError:
+                dev_str_num = dev_str.strip('%')
+                cost_dev_frac = float(dev_str_num) / 100.0 if dev_str_num.replace('.', '', 1).isdigit() else None
+            if cost_dev_frac is not None:
+                cost_dev_percent = int(round(cost_dev_frac * 100))
+                max_values[cost_dev_percent] = value
+    
+    # Check that the optimal scenario was provided
+    if optimal_value is None:
+        raise ValueError("Optimal scenario data is missing in the DataFrame (expected a 'optimal' entry).")
+    
+    # Prepare sorted list of cost deviation percentages (e.g., [0, 5, 10, 15])
+    cost_devs = sorted(set(min_values.keys()) | set(max_values.keys()))
+    
+    # Build lists of y-values (biomass use) for min and max lines in order of cost_devs
+    x_vals = []
+    y_min = []
+    y_max = []
+    for dev in cost_devs:
+        if dev in min_values and dev in max_values:
+            x_vals.append(dev)
+            y_min.append(min_values[dev])
+            y_max.append(max_values[dev])
+    # (If any dev is missing a min or max, it will be skipped to avoid incomplete data plotting)
+    
+    # Create the figure and axis for plotting
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    # Fill the area between the min and max biomass usage curves (near-optimal solution space)
+    ax.fill_between(x_vals, y_min, y_max, color='grey', alpha=0.3, label='Near-optimal solution space')
+    # Plot the minimum biomass usage curve (blue solid line with circle markers)
+    ax.plot(x_vals, y_min, color='tab:blue', marker='o', label='Min biomass use')
+    # Plot the maximum biomass usage curve (orange solid line with triangle markers)
+    ax.plot(x_vals, y_max, color='tab:orange', marker='^', label='Max biomass use')
+    # Mark the cost-optimal solution (0% deviation) as a distinct point (black diamond marker)
+    ax.plot([0], [optimal_value], color='black', marker='D', markersize=8, linestyle='none',
+            label='Cost-optimal solution')
+    
+    # # Annotate each data point with its value and scenario label
+    # for dev in x_vals:
+    #     if dev == 0:
+    #         # Optimal point annotation (e.g., "100 MWh (optimal)")
+    #         ax.annotate(f'{optimal_value:.2f} {unit}\n(optimal)',
+    #                     xy=(dev, optimal_value), xytext=(5, 5), textcoords='offset points',
+    #                     ha='left', va='bottom', fontsize=9)
+    #     else:
+    #         # Annotate min point (e.g., "80 MWh (min 5%)") slightly below and to the right
+    #         if dev in min_values:
+    #             val_min = min_values[dev]
+    #             ax.annotate(f'{val_min:.2f} {unit}\n(min {dev}%)',
+    #                         xy=(dev, val_min), xytext=(5, -15), textcoords='offset points',
+    #                         ha='left', va='top', fontsize=8, color='tab:blue')
+    #         # Annotate max point (e.g., "120 MWh (max 5%)") slightly above and to the right
+    #         if dev in max_values:
+    #             val_max = max_values[dev]
+    #             ax.annotate(f'{val_max:.2f} {unit}\n(max {dev}%)',
+    #                         xy=(dev, val_max), xytext=(5, 5), textcoords='offset points',
+    #                         ha='left', va='bottom', fontsize=8, color='tab:orange')
+    
+    # Configure the axes labels and ticks
+    ax.set_xlabel('Cost deviation from optimal (%)')
+    ax.set_ylabel(f'Biomass use ({unit})')
+    ax.set_xticks(x_vals)
+    ax.set_xticklabels([f'{int(x)}%' for x in x_vals])  # show tick labels like 0%, 5%, 10%, ...
+    ax.set_yscale('linear')  # ensure y-axis is linear (it is by default)
+    ax.set_title(title, fontsize=20)
+    ax.grid(True, linestyle='--', alpha=0.5)  # add a light grid for readability
+    
+    # Add a legend to identify the plotted elements
+    handles, labels = ax.get_legend_handles_labels()
+    # Reorder legend entries for clarity
+    legend_order = ['Cost-optimal solution', 'Max biomass use', 'Min biomass use', 'Near-optimal solution space']
+    ordered = [(h, l) for h, l in zip(handles, labels) if l in legend_order]
+    ordered_handles, ordered_labels = zip(*sorted(ordered, key=lambda x: legend_order.index(x[1])))
+    ax.legend(ordered_handles, ordered_labels, loc='best')
+    
+    # Save the plot to a file in the specified directory and format
+    output_path = os.path.join(export_dir, f"{file_name}.{file_type}")
+    plt.savefig(output_path, format=file_type, bbox_inches='tight')
+    plt.close(fig)
+    print(f"MGA plot saved to {output_path}")
 
 def main():
 
     file_type = "png"
     # file_type = "pgf"
 
-    custom_order = ["no_biomass_emissions", "biomass_emissions"]    
+    custom_order = ["default", "carbon_costs", "default_710","carbon_costs_710"]   
     export_dir = "export/plots"
     data_folder = "export"
 
     # export_dir = "export/land_use_scenarios/plots"
     # data_folder = "export/land_use_scenarios"
-    # custom_order= ["no_biomass_emissions", "no_biomass_emissions_re_em", "biomass_emissions_no_re_em", "biomass_emissions"]
+    # custom_order= ["default", "default_re_em", "carbon_costs_no_re_em", "carbon_costs"]
 
     data = load_csv("costs2050.csv",folder_path=data_folder)
     plot_data(
@@ -1711,7 +2198,7 @@ def main():
     )
 
     data = load_csv("biomass_supply.csv",folder_path=data_folder)
-    plot_biomass_use(data, "Biomass Use", "", "TWh", "biomass_supply", export_dir=export_dir)
+    plot_biomass_use(data, "Biomass Use", "", "TWh", "biomass_supply", export_dir=export_dir,labels=False)
     plot_bar_with_totals(
         data,
         "Biomass Supply",
@@ -1728,26 +2215,26 @@ def main():
 
     plot_efs(export_dir=export_dir)
 
-    data = load_csv("oil_production_2050.csv",folder_path=data_folder)
+    data = load_csv("oil_production.csv",folder_path=data_folder)
     plot_bar_with_shares(
         data,
         "Liquid Fuel Production in 2050",
         "",
         "TWh",
-        "oil_production_2050",
+        "oil_production",
         custom_order,
         width=10,
         export_dir=export_dir,
         file_type=file_type,
     )
 
-    data = load_csv("electricity_generation_share_2050.csv",folder_path=data_folder)
+    data = load_csv("electricity_generation_share.csv",folder_path=data_folder)
     plot_bar_with_shares(
         data,
         "Electricity Generation in 2050",
         "",
         "TWh",
-        "electricity_generation_share_2050",
+        "electricity_generation_share",
         custom_order,
         axis2_ticks=5000,
         width=10,
@@ -1759,7 +2246,7 @@ def main():
     #     "Difference in Electricity Generation Considering Biomass Emissions",
     #     "",
     #     "TWh",
-    #     "electricity_generation_share_2050_diff",
+    #     "electricity_generation_share_diff",
     #     custom_order,
     # )
 
@@ -1777,13 +2264,13 @@ def main():
         file_type=file_type,
     )
 
-    data = load_csv("industrial_energy_2050.csv",folder_path=data_folder)
+    data = load_csv("industrial_energy.csv",folder_path=data_folder)
     plot_bar_with_totals(
         data,
         "Industrial Heat Supply in 2050",
         "",
         "TWh",
-        "industrial_energy_2050",
+        "industrial_energy",
         custom_order,
         axis2_ticks=500,
         include_total=False,
@@ -1791,13 +2278,13 @@ def main():
         file_type=file_type,
     )
 
-    data = load_csv("heating_energy_2050.csv",folder_path=data_folder)
+    data = load_csv("heating_energy.csv",folder_path=data_folder)
     plot_bar_with_totals(
         data,
         "Heating Energy Supply in 2050",
         "",
         "TWh",
-        "heating_energy_2050",
+        "heating_energy",
         custom_order,
         axis2_ticks=1000,
         include_total=False,
@@ -1805,13 +2292,13 @@ def main():
         file_type=file_type,
     )
 
-    data = load_csv("primary_energy_2050.csv",folder_path=data_folder)
+    data = load_csv("primary_energy.csv",folder_path=data_folder)
     plot_bar_with_shares(
         data,
         "Primary Energy Supply in 2050",
         "",
         "TWh",
-        "primary_energy_2050",
+        "primary_energy",
         custom_order,
         axis2_ticks=5000,
         width=10,
@@ -1820,7 +2307,7 @@ def main():
         file_type=file_type,
     )
 
-    data = load_csv("biomass_use_by_sector_2050.csv",folder_path=data_folder)
+    data = load_csv("biomass_use_by_sector.csv",folder_path=data_folder)
     plot_bar_with_shares(
         data,
         "Biomass Use by Sector in 2050",
@@ -1858,7 +2345,7 @@ def main():
         file_type=file_type,
     )
 
-    data = load_csv("shadow_price_2050.csv",folder_path=data_folder)
+    data = load_csv("shadow_price.csv",folder_path=data_folder)
     plot_data(
         data,
         "CO2 Shadow Prices",
@@ -1870,13 +2357,13 @@ def main():
         file_type=file_type,
     )
 
-    data = load_csv("hydrogen_production_2050.csv",folder_path=data_folder)
+    data = load_csv("hydrogen_production.csv",folder_path=data_folder)
     plot_bar_with_totals(
         data,
         "Hydrogen Production",
         "",
         "TWh",
-        "hydrogen_production_2050",
+        "hydrogen_production",
         custom_order,
         remove_letters=[1],
         axis2_ticks=500,
@@ -1885,13 +2372,13 @@ def main():
         file_type=file_type,
     )
 
-    data = load_csv("heat_pumps_2050.csv",folder_path=data_folder)
+    data = load_csv("heat_pumps.csv",folder_path=data_folder)
     plot_bar_with_totals(
         data,
         "Heat Pump Electricity Consumption",
         "",
         "TWh",
-        "heat_pumps_2050",
+        "heat_pumps",
         custom_order,
         remove_letters=[0],
         axis2_ticks=500,
@@ -1900,13 +2387,13 @@ def main():
         file_type=file_type,
     )
 
-    data = load_csv("gas_use_2050.csv",folder_path=data_folder)
+    data = load_csv("gas_use.csv",folder_path=data_folder)
     plot_bar_with_totals(
         data,
         "(Bio)Gas Use",
         "",
         "TWh",
-        "gas_use_2050",
+        "gas_use",
         custom_order,
         axis2_ticks=500,
         include_total=False,
@@ -1915,16 +2402,16 @@ def main():
     )
 
     supply_data = load_csv("biomass_supply.csv",folder_path=data_folder)
-    usage_dict_default = get_usage_dict(supply_data, "no_biomass_emissions")
-    usage_dict_biomass_emissions = get_usage_dict(supply_data, "biomass_emissions")
+    usage_dict_default = get_usage_dict(supply_data, "default")
+    usage_dict_carbon_costs = get_usage_dict(supply_data, "carbon_costs")
 
-    data = load_csv("weighted_prices_2050.csv",folder_path=data_folder)
+    data = load_csv("weighted_prices.csv",folder_path=data_folder)
     plot_feedstock_prices(
         data,
         "Weighted Feedstock Prices in 2050",
         "",
         "EUR/MWh",
-        "weighted_feedstock_prices_2050",
+        "weighted_feedstock_prices",
         export_dir=export_dir,
         file_type=file_type,
     )
@@ -1933,8 +2420,8 @@ def main():
         "Weighted Feedstock Prices vs. Costs in 2050",
         "Costs in Euro/MWh",
         "Prices in EUR/MWh",
-        "prices_costs_default_2050",
-        scenario="no_biomass_emissions",
+        "prices_costs_default",
+        scenario="default",
         usage_dict=usage_dict_default,
         export_dir=export_dir,
         file_type=file_type,
@@ -1944,9 +2431,9 @@ def main():
         "Weighted Feedstock Prices vs. Costs in 2050",
         "Costs in Euro/MWh",
         "Prices in EUR/MWh",
-        "prices_costs_biomass_emissions_2050",
-        scenario="biomass_emissions",
-        usage_dict=usage_dict_biomass_emissions,
+        "prices_costs_carbon_costs",
+        scenario="carbon_costs",
+        usage_dict=usage_dict_carbon_costs,
         export_dir=export_dir,
         file_type=file_type,
     )
@@ -1976,13 +2463,13 @@ def main():
         file_type=file_type,
     )
 
-    data = load_csv("biomass_use_by_sector_2050.csv",folder_path=data_folder)
+    data = load_csv("biomass_use_by_sector.csv",folder_path=data_folder)
     plot_stacked_bar(
         data,
         "Biomass Use by Sector in 2050",
         "",
         "TWh",
-        "biomass_use_by_sector_2050",
+        "biomass_use_by_sector",
         custom_order,
         multiplier=1e-6,
         export_dir=export_dir,
@@ -2020,56 +2507,67 @@ def main():
         threshold_column="emission_difference",
         export_dir=export_dir,
         file_type=file_type,
+        no_xticks=True,
     )
+
+    capacity_factors = load_csv("capacity_factors.csv",folder_path=data_folder)
 
     create_gravitational_plot(
         "Gravitational Plot",
         "gravitational_plot",
         export_dir=export_dir,
         file_type=file_type,
+        capacity_factors=capacity_factors,
     )
 
     data = load_csv("biomass_supply.csv",folder_path=data_folder)
     create_gravitational_plot(
-        "Gravitational Plot (biomass_emissions)",
-        "gravitational_plot_biomass_emissions",
+        "Gravitational Plot (carbon costs)",
+        "gravitational_plot_carbon_costs",
         biomass_supply=data,
-        scenario="biomass_emissions",
+        scenario="carbon_costs",
         export_dir=export_dir,
         file_type=file_type,
+        capacity_factors=capacity_factors,
     )
     create_gravitational_plot(
-        "Gravitational Plot (no_biomass_emissions)",
-        "gravitational_plot_no_biomass_emissions",
+        "Gravitational Plot (default)",
+        "gravitational_plot_default",
         biomass_supply=data,
-        scenario="no_biomass_emissions",
+        scenario="default",
         export_dir=export_dir,
         file_type=file_type,
+        capacity_factors=capacity_factors,
     )
 
 
 if __name__ == "__main__":
-    main()
-    # create_gravitational_plot(
-    #     "Gravitational Plot",
-    #     "gravitational_plot",
+    #main()
+
+
+    #mga_data = load_csv("all_biomass_supply.csv",folder_path="export/mga_carbon_costs")
+    # plot_mga(
+    #     mga_data,
+    #     "mga_carbon_costs",
+    #     title="Near Optimal Biomass Use (Scenario Carbon Costs)",
+    #     export_dir="export/plots",
+    #     file_type="png",
+    #     unit="TWh",
+    #     multiplier=1e-6,
     # )
-    # data = load_csv("biomass_supply.csv")
-    # create_gravitational_plot(
-    #     "Gravitational Plot (bm_em_710_seq)",
-    #     "gravitational_plot_bm_em_710",
-    #     biomass_supply=data,
-    #     scenario="bm_em_710_seq",
-    # )
-    # create_gravitational_plot(
-    #     "Gravitational Plot (bm_em_200_seq)",
-    #     "gravitational_plot_bm_em_200",
-    #     biomass_supply=data,
-    #     scenario="biomass_emissions",
-    # )
-    # create_gravitational_plot(
-    #     "Gravitational Plot (bm_em_150_seq)",
-    #     "gravitational_plot_bm_em_150",
-    #     biomass_supply=data,
-    #     scenario="bm_em_150_seq",
-    # )
+
+    co2_data = load_csv("co2_sankey.csv",folder_path="export")
+    plot_co2_sankey(
+        co2_data,
+        scenario="default",
+        multiplier=1e-6,
+        output_dir="export/plots",
+        unit_label="Mt CO2",
+    )
+    plot_co2_sankey(
+        co2_data,
+        scenario="carbon_costs",
+        multiplier=1e-6,
+        output_dir="export/plots",
+        unit_label="Mt CO2",
+    )

@@ -812,9 +812,9 @@ sector:
       oil: 125
   renewable_emissions:
     enable: true
-    solar: 12.2 #ton/MW
-    onwind: 2.44 #ton/MW
-    solar-hsat: 12.2 #ton/MW
+    solar: 12.2 #ton/MW, asssuming 10000 m2/MW
+    onwind: 2.44 #ton/MW assuming 2000 m2/MW
+    solar-hsat: 24.4 #ton/MW, assumming 20000 m2/MW, ammoritised over 30 years, carbon storage loss is 1.22 kgCO2/m2/year
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#industry
 industry:
