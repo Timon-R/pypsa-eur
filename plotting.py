@@ -1903,9 +1903,16 @@ def plot_co2_sankey(
     node_index = {label: i for i, label in enumerate(nodes)}
 
     # Colour palette for technologies
-    tech_palette = px.colors.qualitative.Safe
+    extended_palette = (
+        px.colors.qualitative.Safe +
+        px.colors.qualitative.Bold +
+        px.colors.qualitative.Vivid +
+        px.colors.qualitative.Pastel +
+        px.colors.qualitative.Set1 +
+        px.colors.qualitative.Set3
+    )
     tech_list = scenario_data['data_name'].unique()
-    tech_colors = {tech: tech_palette[i % len(tech_palette)] for i, tech in enumerate(tech_list)}
+    tech_colors = {tech: extended_palette[i % len(extended_palette)] for i, tech in enumerate(tech_list)}
 
     # Sink type node colouring
     sink_type_colors = {
@@ -1961,7 +1968,7 @@ def plot_co2_sankey(
             label=[f"{n}<br><span style='font-size:10px'>({throughput[node_index[n]]:,.0f} {unit_label})</span>" for n in nodes],
             color=node_colors,
             pad=30,
-            thickness=20,
+            thickness=15,
             line=dict(color="black", width=0.5)
         ),
         link=dict(
@@ -1969,7 +1976,7 @@ def plot_co2_sankey(
             target=targets,
             value=values,
             label=link_labels,
-            color=link_colors
+            color=link_colors,
         )
     ))
 
