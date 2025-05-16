@@ -380,7 +380,7 @@ energy:
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#biomass
 biomass:
-  year: 2050 #important
+  year: 2050 #important use costs for 2050 as they are fuel costs not investment costs
   scenario: ENS_Med
   classes:
     agricultural waste:
@@ -504,6 +504,9 @@ sector:
       relative_annual_temperature_reduction: 0.01
     ptes:
       dynamic_capacity: true
+      supplemental_heating:
+        enable: false
+        booster_heat_pump: true
       max_top_temperature: 90
       min_bottom_temperature: 35
     heat_source_cooling: 6 #K
@@ -518,9 +521,12 @@ sector:
         ignore_missing_regions: false
     direct_utilisation_heat_sources:
     - geothermal
+    temperature_limited_stores:
+    - ptes
   heat_pump_sources:
     urban central:
     - air
+    - ptes
     urban decentral:
     - air
     rural:
@@ -745,7 +751,7 @@ sector:
   conventional_generation:
     OCGT: gas
   industry_t:  # heat supply industry
-    endogen: true  # if heat supply for industry should be endogenously optimised
+    endogen: false  # if heat supply for industry should be endogenously optimised
     must_run: 0.8 # NB: industrial heat demand is in reality supplied at site by discrete plants
     # which follow the local demand and therefore cannot be dispatched too much.
     # Thus, p_min_pu is set to must run to avoid too much dispatch behaviour. Improvements welcome!
@@ -910,7 +916,7 @@ industry:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#costs
 costs:
   year: 2040
-  version: Timon-R/technology-data/v0.0.5 #v0.10.0
+  version: Timon-R/technology-data/v0.0.6 #v0.10.0
   social_discountrate: 0.02
   fill_values:
     FOM: 0
@@ -1078,7 +1084,7 @@ solving:
       threads: 8
       Seed: 123
       ScaleFlag: 2
-      PreDual: 0 #solves the primal directly
+      PreDual: 0 
     gurobi-fallback:        # Use gurobi defaults
       crossover: 0
       method: 2             # barrier
