@@ -22,6 +22,9 @@ import plotly.express as px
 from result_analysis import get_emission_factors
 
 
+import warnings
+
+
 # config_file_path = "config/config.yaml"
 
 # # Open and load the YAML file
@@ -158,7 +161,8 @@ def create_gravitational_plot(
             "onwind": 45,
             "solar-hsat": 50
         },
-    show_fossil_fuels=True 
+    show_fossil_fuels=True,
+    usage_threshold=False,
 ):
 
     file_path = f"{file_name}.{file_type}"
@@ -355,6 +359,105 @@ def create_gravitational_plot(
                     wedge_path, facecolor=color, edgecolor="none", alpha=1
                 )
                 ax.add_patch(wedge_patch)
+
+        # Plot usage threshold shading (if specified) behind all other elements
+        if usage_threshold:
+
+            # ----- 1.  input validation ------------------------------------
+            if not isinstance(usage_threshold, list):
+                raise ValueError("`usage_threshold` must be a list (max length = 2).")
+            if len(usage_threshold) > 2:
+                warnings.warn("Only the first two threshold specifications are used.")
+                usage_threshold = usage_threshold[:2]
+
+            # ----- 2.  build list of threshold descriptors -----------------
+            thresh_specs = []   # each element: {"kind": "vertical"|"sloped", ...}
+
+            for th in usage_threshold:
+                if not (isinstance(th, dict)
+                        and "biomass_type" in th
+                        and "emission_cost" in th):
+                    raise ValueError(
+                        "Each threshold must be a dict with keys "
+                        "'biomass_type' and 'emission_cost'."
+                    )
+
+                bt            = th["biomass_type"]
+                emission_cost = th["emission_cost"]
+
+                if bt not in biomass_types:
+                    warnings.warn(f"Biomass type '{bt}' not found – skipping.")
+                    continue
+
+                idx        = biomass_types.index(bt)
+                cost_ref   = costs[idx]          # €/MWh
+                emit_ref   = emissions[idx]      # tCO₂/MWh
+                total_ref  = cost_ref + emit_ref * emission_cost  # € per MWh
+                #print(f"biomass type: {bt}, cost_ref: {cost_ref}, emit_ref: {emit_ref}, total_ref: {total_ref}")
+
+                if emission_cost == 0:           # → vertical line
+                    thresh_specs.append(
+                        {"kind": "vertical", "x": cost_ref}
+                    )
+                else:                            # → sloped line
+                    thresh_specs.append(
+                        {"kind": "sloped",
+                        "x_ref": cost_ref,
+                        "total_ref": total_ref,
+                        "emission_cost": emission_cost}
+                    )
+
+            if not thresh_specs:
+                # nothing valid to plot
+                pass
+            else:
+                # ----- 3.  prepare axis-aligned helpers -------------------
+                x_min, x_max = ax.get_xlim()
+                y_min, y_max = ax.get_ylim()
+                x_vals = np.linspace(x_min, x_max, 300)
+
+                # build corresponding y arrays / vertical positions
+                y_arrays = []
+                for spec in thresh_specs:
+                    if spec["kind"] == "vertical":
+                        y_arrays.append(("vertical", spec["x"]))  # tag + x-pos
+                    else:
+                        ec   = spec["emission_cost"]
+                        y_sl = (spec["total_ref"] - x_vals) / ec   # y(x)
+                        y_arrays.append(y_sl)
+
+                # ----- 4.  draw threshold(s) ------------------------------
+                #  (always behind other plot elements → zorder=0)
+                if len(y_arrays) == 1:            # ── single threshold
+                    ya = y_arrays[0]
+                    if isinstance(ya, tuple):     # vertical
+                        ax.axvline(ya[1], color="grey",
+                                alpha=0.5, linewidth=1, zorder=0)
+                    else:                         # sloped “band” of zero height
+                        ax.fill_between(x_vals, ya, ya,
+                                        color="lightgrey", alpha=0.2,
+                                        linewidth=0, zorder=0)
+
+                else:                             # ── two thresholds
+                    ya1, ya2 = y_arrays
+
+                    # ---- case A: both vertical --------------------------
+                    if isinstance(ya1, tuple) and isinstance(ya2, tuple):
+                        x_left, x_right = sorted([ya1[1], ya2[1]])
+                        ax.fill_betweenx([y_min, y_max], x_left, x_right,
+                                        color="lightgrey", alpha=0.2, zorder=0)
+
+                    # ---- case B: one vertical, one sloped ---------------
+                    elif isinstance(ya1, tuple) ^ isinstance(ya2, tuple):
+                        vert_x = ya1[1] if isinstance(ya1, tuple) else ya2[1]
+                        y_sl   = ya2     if isinstance(ya1, tuple) else ya1
+                        ax.fill_betweenx(y_sl, vert_x, x_vals,
+                                        color="lightgrey", alpha=0.2, zorder=0)
+
+                    # ---- case C: both sloped ----------------------------
+                    else:
+                        ax.fill_between(x_vals, ya1, ya2,
+                                        color="lightgrey", alpha=0.2, zorder=0)
 
     # Add legend for circle sizes
     for size in [100, 200, 500]:  # Example sizes
@@ -2130,9 +2233,9 @@ def plot_mga(df, file_name, title = "Near Optimal Biomass Use", export_dir='expo
     # Plot the minimum biomass usage curve (blue solid line with circle markers)
     ax.plot(x_vals, y_min, color='tab:blue', marker='o', label='Min biomass use')
     # Plot the maximum biomass usage curve (orange solid line with triangle markers)
-    ax.plot(x_vals, y_max, color='tab:orange', marker='^', label='Max biomass use')
+    ax.plot(x_vals, y_max, color='tab:orange', marker='o', label='Max biomass use')
     # Mark the cost-optimal solution (0% deviation) as a distinct point (black diamond marker)
-    ax.plot([0], [optimal_value], color='black', marker='D', markersize=8, linestyle='none',
+    ax.plot([0], [optimal_value], color='black', marker='o', markersize=8, linestyle='none',
             label='Cost-optimal solution')
     
     # # Annotate each data point with its value and scenario label
@@ -2156,13 +2259,13 @@ def plot_mga(df, file_name, title = "Near Optimal Biomass Use", export_dir='expo
     #                         xy=(dev, val_max), xytext=(5, 5), textcoords='offset points',
     #                         ha='left', va='bottom', fontsize=8, color='tab:orange')
     
-    # Configure the axes labels and ticks
-    ax.set_xlabel('Cost deviation from optimal (%)')
+    # Configure the axes labels and ticks 
+    ax.set_xlabel('Cost deviation from optimal')
     ax.set_ylabel(f'Biomass use ({unit})')
     ax.set_xticks(x_vals)
     ax.set_xticklabels([f'{int(x)}%' for x in x_vals])  # show tick labels like 0%, 5%, 10%, ...
     ax.set_yscale('linear')  # ensure y-axis is linear (it is by default)
-    ax.set_title(title, fontsize=20)
+    ax.set_title(title, fontsize=16)
     ax.grid(True, linestyle='--', alpha=0.5)  # add a light grid for readability
     
     # Add a legend to identify the plotted elements
@@ -2179,18 +2282,7 @@ def plot_mga(df, file_name, title = "Near Optimal Biomass Use", export_dir='expo
     plt.close(fig)
     print(f"MGA plot saved to {output_path}")
 
-def main():
-
-    file_type = "png"
-    # file_type = "pgf"
-
-    custom_order = ["default", "carbon_costs", "default_710","carbon_costs_710"]   
-    export_dir = "export/plots"
-    data_folder = "export"
-
-    # export_dir = "export/land_use_scenarios/plots"
-    # data_folder = "export/land_use_scenarios"
-    # custom_order= ["default", "default_re_em", "carbon_costs_no_re_em", "carbon_costs"]
+def main(custom_order=["default", "carbon_costs"], file_type="png", export_dir="export/plots", data_folder="export"):
 
     data = load_csv("costs2050.csv",folder_path=data_folder)
     plot_data(
@@ -2528,53 +2620,110 @@ def main():
     )
 
     data = load_csv("biomass_supply.csv",folder_path=data_folder)
+
+    # for scenario in custom_order:
+    #     create_gravitational_plot(
+    #         f"Gravitational Plot ({scenario})",
+    #         f"gravitational_plot_{scenario}",
+    #         biomass_supply=data,
+    #         scenario=scenario,
+    #         export_dir=export_dir,
+    #         file_type=file_type,
+    #         capacity_factors=capacity_factors,
+    #     )
+    
+    usage_threshold = [
+        {
+            "biomass_type": "grasses",
+            "emission_cost": 265  # €/tonCO2
+        },
+        {
+            "biomass_type": "fuelwood residues",
+            "emission_cost": 869  # €/tonCO2
+        }
+    ]
     create_gravitational_plot(
-        "Gravitational Plot (carbon costs)",
+        "Gravitational Plot (carbon_costs)",
         "gravitational_plot_carbon_costs",
-        biomass_supply=data,
-        scenario="carbon_costs",
         export_dir=export_dir,
         file_type=file_type,
         capacity_factors=capacity_factors,
+        biomass_supply=data,
+        scenario="carbon_costs",
+        usage_threshold=usage_threshold,
     )
+
+    usage_threshold = [
+        {
+            "biomass_type": "C&P_RW",
+            "emission_cost": 0  # €/tonCO2
+        },
+        {
+            "biomass_type": "woody crops",   
+            "emission_cost": 0  # €/tonCO2
+        }
+    ]
     create_gravitational_plot(
         "Gravitational Plot (default)",
         "gravitational_plot_default",
-        biomass_supply=data,
-        scenario="default",
         export_dir=export_dir,
         file_type=file_type,
         capacity_factors=capacity_factors,
+        biomass_supply=data,
+        scenario="default",
+        usage_threshold=usage_threshold,
     )
 
 
 if __name__ == "__main__":
-    #main()
+
+    file_type = "png"
+    # file_type = "pgf"
+
+    # custom_order = ["default", "carbon_costs", "default_710","carbon_costs_710"]   
+    # export_dir = "export/seq_plots"
+    # data_folder = "export/seq"
+
+    custom_order = ["default", "carbon_costs"]
+    export_dir = "export/plots"
+    data_folder = "export"
+
+    #main(custom_order=custom_order, file_type=file_type, export_dir=export_dir, data_folder=data_folder)
 
 
-    #mga_data = load_csv("all_biomass_supply.csv",folder_path="export/mga_carbon_costs")
-    # plot_mga(
-    #     mga_data,
-    #     "mga_carbon_costs",
-    #     title="Near Optimal Biomass Use (Scenario Carbon Costs)",
-    #     export_dir="export/plots",
-    #     file_type="png",
-    #     unit="TWh",
+    mga_data = load_csv("biomass_use_carbon_costs_710.csv",folder_path="export/mga")
+    plot_mga(
+        mga_data,
+        "mga_carbon_costs_710",
+        title="Near Optimal Biomass Use (Scenario Carbon Costs 710)",
+        export_dir="export/mga",
+        file_type="png",
+        unit="TWh",
+        multiplier=1e-6,
+    )
+    mga_data = load_csv("biomass_use_carbon_costs.csv",folder_path="export/mga")
+    plot_mga(
+        mga_data,
+        "mga_carbon_costs",
+        title="Near Optimal Biomass Use (Scenario Carbon Costs)",
+        export_dir="export/mga",
+        file_type="png",
+        unit="TWh",
+        multiplier=1e-6,
+    )
+
+    # co2_data = load_csv("co2_sankey.csv",folder_path="export")
+    # plot_co2_sankey(
+    #     co2_data,
+    #     scenario="default",
     #     multiplier=1e-6,
+    #     output_dir="export/plots",
+    #     unit_label="Mt CO2",
     # )
-
-    co2_data = load_csv("co2_sankey.csv",folder_path="export")
-    plot_co2_sankey(
-        co2_data,
-        scenario="default",
-        multiplier=1e-6,
-        output_dir="export/plots",
-        unit_label="Mt CO2",
-    )
-    plot_co2_sankey(
-        co2_data,
-        scenario="carbon_costs",
-        multiplier=1e-6,
-        output_dir="export/plots",
-        unit_label="Mt CO2",
-    )
+    # plot_co2_sankey(
+    #     co2_data,
+    #     scenario="carbon_costs",
+    #     multiplier=1e-6,
+    #     output_dir="export/plots",
+    #     unit_label="Mt CO2",
+    # )

@@ -1096,6 +1096,9 @@ def modify_co2_data(data, threshold=0):
         "C&P_RW": "indirect emissions from biomass",
         "gas for highT industry CC": "gas",
         "gas for mediumT industry CC": "gas",
+        "lowT industry solid biomass CC": "solid biomass",
+        "urban central solid biomass CHP CC": "solid biomass",
+        "urban central gas CHP CC": "gas",
     }
     for key, content in data.items():
         if abs(content["values"]) < threshold:
@@ -1260,18 +1263,7 @@ def merge_data(data_dict, merge_fields, data_name_key, value_key, excepted_keys,
     
     return new_data
 
-def main():
-    results_dir = "results"
-
-    # scenarios = ["default", "carbon_costs", "default_710","carbon_costs_710"]
-    # export_dir = "export/seq"
-
-    scenarios = ["default", "carbon_costs"]
-    export_dir = "export"
-
-    # scenarios = ["optimal", "max_0.05","max_0.1","max_0.15","min_0.05","min_0.1","min_0.15"]
-    # export_dir = "export/mga_carbon_costs"
-
+def main(results_dir="results", export_dir="export",scenarios=["default", "carbon_costs"]):
 
     results = load_results(results_dir, scenarios)
 
@@ -1895,100 +1887,57 @@ def main():
         simply_print=True,
     )
 
-    # merge_fields = [
-    #     [["kerosene for aviation", "shipping methanol","agriculture machinery oil","industry methanol","oil refining"], "liquid fuels", None],
-    #     [["urban central gas CHP", "urban central gas boiler","urban decentral gas boiler","rural gas boiler","gas for highT industry","gas for mediumT industry CC","gas for highT industry CC","OCGT"], "gas burning", None],
-    #     [["onwind landuse emission","solar landuse emission","solar-hsat landuse emission"],"wind and solar carbon costs", None],
-    #     [["manure", "sludge","agricultural waste","fuelwood residues","secondary forestry residues","sawdust","residues from landscape care","grasses","woody crops","fuelwoodRW","C&P_RW"], "biomass carbon costs", None],
-    # ]
-
-    # co2_sankey = merge_data(
-    #     co2_sankey,
-    #     merge_fields,
-    #     "data_name",
-    #     "values",
-    #     ["from_sink"],
-    #     rename_key="from_sink",
-    #     combine_key="data_name",
-    # )
-
-    # merge_fields = [
-    #     [["biomass to liquid CC", "biogas to gas CC","solid biomass for mediumT industry CC"], "BECCS", None],
-    # ]
-
-    # co2_sankey = merge_data(
-    #     co2_sankey,
-    #     merge_fields,
-    #     "data_name",
-    #     "values",
-    #     ["to_sink"],
-    #     rename_key="to_sink",
-    #     combine_key="data_name",
-    # )
-    # co2_sankey = merge_data(
-    #     co2_sankey,
-    #     merge_fields,
-    #     "data_name",
-    #     "values",
-    #     ["from_sink"],
-    #     rename_key="from_sink",
-    #     combine_key="data_name",
-    # )
-
-    # export_results(
-    #     co2_sankey,
-    #     "co2_sankey_merged.csv",
-    #     include_share=False,
-    #     export_dir=export_dir,
-    #     simply_print=True,
-    # )
+    results = load_results(results_dir, scenarios)
+    capacity_factors = get_data(
+        results,
+        scenarios,
+        "capacity_factors",
+        [["Generator", "solar"],["Generator", "solar-hsat"],["Generator", "onwind"]],
+        [],
+        "C",
+        "B",
+        "2050",
+        filter_positive=True,
+        remove_list=["urban central solar thermal","urban decentral solar thermal","solar rooftop","rural solar thermal","onwind landuse emission","solar landuse emission","solar-hsat landuse emission"],
+        round_digits =3,
+    )
+    export_results(
+        capacity_factors,
+        "capacity_factors.csv",
+        export_dir=export_dir,
+        round_digits = 3,
+    )
 
 
 if __name__ == "__main__":
-    main()
+    results_dir = "results"
+
+    # scenarios = ["default", "carbon_costs", "default_710","carbon_costs_710"]
+    # export_dir = "export/seq"
+
+    # scenarios = ["default", "carbon_costs"]
+    # export_dir = "export"
+
+    # main(results_dir=results_dir, export_dir=export_dir, scenarios=scenarios)
 
     # results_dir = "results"
-    # export_dir = "export"
-    # scenarios = ["default", "carbon_costs", "default_710","carbon_costs_710"]
+    scenarios = ["optimal", "max_0.05","max_0.1","max_0.15","min_0.05","min_0.1","min_0.15"]
+    scenarios = ["710_optimal", "710_max_0.05","710_max_0.1","710_max_0.15","710_min_0.05","710_min_0.1","710_min_0.15"]
+    export_dir = "export/mga"
+    results = load_results(results_dir, scenarios)
 
-    # results = load_results(results_dir, scenarios)
-    # capacity_factors = get_data(
-    #     results,
-    #     scenarios,
-    #     "capacity_factors",
-    #     [["Generator", "solar"],["Generator", "solar-hsat"],["Generator", "onwind"]],
-    #     [],
-    #     "C",
-    #     "B",
-    #     "2050",
-    #     filter_positive=True,
-    #     remove_list=["urban central solar thermal","urban decentral solar thermal","solar rooftop","rural solar thermal","onwind landuse emission","solar landuse emission","solar-hsat landuse emission"],
-    #     round_digits =3,
-    # )
-    # export_results(
-    #     capacity_factors,
-    #     "capacity_factors.csv",
-    #     export_dir=export_dir,
-    #     round_digits = 3,
-    # )
-
-
-    # scenarios = ["optimal", "max_0.05","max_0.1","max_0.15","min_0.05","min_0.1","min_0.15"]
-    # export_dir = "export/mga_carbon_costs"
-    # results = load_results(results_dir, scenarios)
-
-    # all_biomass_supply = get_data(
-    #     results,
-    #     scenarios,
-    #     "energy_balance",
-    #     [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
-    #     [
-    #         [[""], "biomass", None],
-    #     ],
-    #     "D",
-    #     "B",
-    #     "2050",
-    #     filter_positive=True,
-    #     remove_list=["biomass transport"],
-    # )
-    # export_results(all_biomass_supply, "all_biomass_supply.csv", export_dir=export_dir)
+    all_biomass_supply = get_data(
+        results,
+        scenarios,
+        "energy_balance",
+        [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
+        [
+            [[""], "biomass", None],
+        ],
+        "D",
+        "B",
+        "2050",
+        filter_positive=True,
+        remove_list=["biomass transport"],
+    )
+    export_results(all_biomass_supply, "biomass_use_carbon_costs_710.csv", export_dir=export_dir)
