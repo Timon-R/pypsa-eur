@@ -1921,8 +1921,27 @@ if __name__ == "__main__":
     # main(results_dir=results_dir, export_dir=export_dir, scenarios=scenarios)
 
     # results_dir = "results"
-    scenarios = ["optimal", "max_0.05","max_0.1","max_0.15","min_0.05","min_0.1","min_0.15"]
-    scenarios = ["710_optimal", "710_max_0.05","710_max_0.1","710_max_0.15","710_min_0.05","710_min_0.1","710_min_0.15"]
+    scenarios = ["optimal", "max_0.025", "max_0.05","max_0.1","max_0.15","min_0.025","min_0.05","min_0.1","min_0.15"]
+    export_dir = "export/mga"
+    results = load_results(results_dir, scenarios)
+
+    all_biomass_supply = get_data(
+        results,
+        scenarios,
+        "energy_balance",
+        [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
+        [
+            [[""], "biomass", None],
+        ],
+        "D",
+        "B",
+        "2050",
+        filter_positive=True,
+        remove_list=["biomass transport"],
+    )
+    export_results(all_biomass_supply, "biomass_use_carbon_costs.csv", export_dir=export_dir)
+
+    scenarios = ["710_optimal", "710_max_0.025", "710_max_0.05","710_max_0.1","710_max_0.15","710_min_0.025","710_min_0.05","710_min_0.1","710_min_0.15"]
     export_dir = "export/mga"
     results = load_results(results_dir, scenarios)
 

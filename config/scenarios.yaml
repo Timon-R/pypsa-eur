@@ -38,24 +38,6 @@ default:
     renewable_emissions:
       enable: false
 
-# default_re_em:
-#   biomass:
-#     emission_factors:
-#       agricultural waste: 0
-#       fuelwood residues: 0
-#       secondary forestry residues: 0
-#       sawdust: 0
-#       residues from landscape care: 0
-#       grasses: 0
-#       woody crops: 0
-#       fuelwoodRW: 0
-#       manure: 0
-#       sludge: 0
-#       C&P_RW: 0
-#   sector:
-#     renewable_emissions:
-#       enable: true 
-
 default_710:
   biomass:
     emission_factors:
@@ -76,7 +58,6 @@ default_710:
     co2_sequestration_potential:
       2050: 710
 
-
 carbon_costs:
   biomass:
     emission_factors: #same as default
@@ -94,24 +75,6 @@ carbon_costs:
   sector:
     renewable_emissions:
       enable: true
-
-# carbon_costs_no_re_em:
-#   biomass:
-#     emission_factors: #same as default
-#       agricultural waste: 0.03528 # 9.8
-#       fuelwood residues: 0.1476 #41
-#       secondary forestry residues: 0.396 #110
-#       sawdust: 0.396 #110
-#       residues from landscape care: 0
-#       grasses: 0.216
-#       woody crops: 0.18
-#       fuelwoodRW: 0.2844 #79
-#       manure: 0.04932 #13.7
-#       sludge: 0
-#       C&P_RW: 0.414 #115
-#   sector:
-#     renewable_emissions:
-#       enable: false
 
 carbon_costs_710:
   biomass:
@@ -133,3 +96,38 @@ carbon_costs_710:
     co2_sequestration_potential:
       2050: 710
 
+# carbon_costs_no_re_em:
+#   biomass:
+#     emission_factors: #same as default
+#       agricultural waste: 0.03528 # 9.8
+#       fuelwood residues: 0.1476 #41
+#       secondary forestry residues: 0.396 #110
+#       sawdust: 0.396 #110
+#       residues from landscape care: 0
+#       grasses: 0.216
+#       woody crops: 0.18
+#       fuelwoodRW: 0.2844 #79
+#       manure: 0.04932 #13.7
+#       sludge: 0
+#       C&P_RW: 0.414 #115
+#   sector:
+#     renewable_emissions:
+#       enable: false
+
+# default_re_em:
+#   biomass:
+#     emission_factors:
+#       agricultural waste: 0
+#       fuelwood residues: 0
+#       secondary forestry residues: 0
+#       sawdust: 0
+#       residues from landscape care: 0
+#       grasses: 0
+#       woody crops: 0
+#       fuelwoodRW: 0
+#       manure: 0
+#       sludge: 0
+#       C&P_RW: 0
+#   sector:
+#     renewable_emissions:
+#       enable: true 

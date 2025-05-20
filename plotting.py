@@ -156,11 +156,6 @@ def create_gravitational_plot(
     export_dir="export/plots",
     file_type="png",
     capacity_factors=None,
-    renewable_costs ={
-            "solar": 50, 
-            "onwind": 45,
-            "solar-hsat": 50
-        },
     show_fossil_fuels=True,
     usage_threshold=False,
 ):
@@ -207,7 +202,7 @@ def create_gravitational_plot(
         )
         location = emissions[i] + 2 * sizes[i] / max_potential * 0.015 + 0.01
         if (
-            bt == "secondary forestry residues" or "import" in bt
+            bt == "secondary forestry residues" or bt == "sludge" or "import" in bt
         ):  # below the point
             location = emissions[i] - 2 * sizes[i] / max_potential * 0.015 - 0.015
         plt.text(
@@ -220,14 +215,7 @@ def create_gravitational_plot(
 
     # Add renewable energy crosses if capacity factors are provided
     if capacity_factors is not None:
-        
-        # Define emission factors in ton/MW (from provided data)
-        renewable_ef_per_mw = {
-            "solar": 12.2,
-            "onwind": 2.44,
-            "solar-hsat": 73.2,
-        }
-        
+
         # Filter capacity factors for the selected scenario
         if scenario is not None:
             scenario_cf = capacity_factors[capacity_factors["Folder"] == scenario]
@@ -235,6 +223,51 @@ def create_gravitational_plot(
             # Use default scenario if none specified
             scenario_cf = capacity_factors[capacity_factors["Folder"] == "default"]
         
+        # Define emission factors in ton/MW (from provided data)
+        renewable_ef_per_mw = {
+            "solar": 12.2,
+            "onwind": 2.44,
+            "solar-hsat": 73.2,
+        }
+
+        # Calc renewable costs LCOE with discounting
+        investment_costs = {  # Euro/kW
+            "solar": 320.8,
+            "onwind": 1034.48,
+            "solar-hsat": 384.3,
+        }
+
+        # Fixed O&M costs (Euro/MWh)
+        marginal_costs = {
+            "solar": 0.01,
+            "onwind": 0.015,
+            "solar-hsat": 0.01,
+        }
+
+        lifetimes = {  # years
+            "solar": 40,
+            "onwind": 30,
+            "solar-hsat": 40,
+        }
+
+        discount_rate = 0.07
+
+        lcoe = {}
+        for tech in ["solar", "onwind", "solar-hsat"]:
+            if tech in scenario_cf["Data Name"].values:
+                cf = scenario_cf[scenario_cf["Data Name"] == tech]["Values"].values[0]
+                invest = investment_costs[tech] * 1000  # Euro/kW → Euro/MW
+                om = marginal_costs[tech]               # Euro/MWh
+                lifetime = lifetimes[tech]
+
+                # Capital Recovery Factor (CRF)
+                crf = (discount_rate * (1 + discount_rate) ** lifetime) / ((1 + discount_rate) ** lifetime - 1)
+
+                # LCOE formula with discounting
+                lcoe[tech] = (invest * crf) / (cf * 8760) + om
+
+                print(f"LCOE for {tech}: {lcoe[tech]:.2f} Euro/MWh")
+
         # For each renewable technology, calculate emission factor in ton/MWh
         for _, row in scenario_cf.iterrows():
             tech = row["Data Name"]
@@ -245,7 +278,7 @@ def create_gravitational_plot(
                 
                 # Plot as a cross with different color
                 plt.scatter(
-                    renewable_costs[tech],
+                    lcoe[tech],
                     emissions_per_mwh,
                     marker='p',
                     color='orange',
@@ -253,11 +286,13 @@ def create_gravitational_plot(
                     linewidth=2,
                     label="_nolegend_"
                 )
-                
+                location = emissions_per_mwh + 0.01
+                if tech == "solar-hsat":  # below the point
+                    location = emissions_per_mwh - 0.02                
                 # Add text label
                 plt.text(
-                    renewable_costs[tech],
-                    emissions_per_mwh + 0.01,
+                    lcoe[tech],
+                    location,
                     f"{tech}",
                     fontsize=9,
                     ha="center",
@@ -295,7 +330,7 @@ def create_gravitational_plot(
             )
 
     # Set up the axes and draw to ensure limits are calculated
-    plt.xlabel("Costs in Euro/MWh_LHV")
+    plt.xlabel("Costs in Euro/MWh")
     plt.ylabel("Emission Factors in tonCO2/MWh")
     plt.title(title)
     plt.xlim(0, max(costs) + 5)  # Ensure this considers fossil fuel costs too
@@ -2193,7 +2228,7 @@ def plot_mga(df, file_name, title = "Near Optimal Biomass Use", export_dir='expo
                 dev_str_num = dev_str.strip('%')
                 cost_dev_frac = float(dev_str_num) / 100.0 if dev_str_num.replace('.', '', 1).isdigit() else None
             if cost_dev_frac is not None:
-                cost_dev_percent = int(round(cost_dev_frac * 100))  # convert to percentage (float -> int)
+                cost_dev_percent = cost_dev_frac * 100  # convert to percentage (float -> int)
                 min_values[cost_dev_percent] = value
         elif 'max_' in scenario:
             # Scenario maximizing biomass at X% cost deviation
@@ -2204,7 +2239,7 @@ def plot_mga(df, file_name, title = "Near Optimal Biomass Use", export_dir='expo
                 dev_str_num = dev_str.strip('%')
                 cost_dev_frac = float(dev_str_num) / 100.0 if dev_str_num.replace('.', '', 1).isdigit() else None
             if cost_dev_frac is not None:
-                cost_dev_percent = int(round(cost_dev_frac * 100))
+                cost_dev_percent = cost_dev_frac * 100
                 max_values[cost_dev_percent] = value
     
     # Check that the optimal scenario was provided
@@ -2263,7 +2298,7 @@ def plot_mga(df, file_name, title = "Near Optimal Biomass Use", export_dir='expo
     ax.set_xlabel('Cost deviation from optimal')
     ax.set_ylabel(f'Biomass use ({unit})')
     ax.set_xticks(x_vals)
-    ax.set_xticklabels([f'{int(x)}%' for x in x_vals])  # show tick labels like 0%, 5%, 10%, ...
+    ax.set_xticklabels([f'{x:.1f}%' if x % 1 else f'{int(x)}%' for x in x_vals])
     ax.set_yscale('linear')  # ensure y-axis is linear (it is by default)
     ax.set_title(title, fontsize=16)
     ax.grid(True, linestyle='--', alpha=0.5)  # add a light grid for readability
@@ -2688,29 +2723,29 @@ if __name__ == "__main__":
     export_dir = "export/plots"
     data_folder = "export"
 
-    #main(custom_order=custom_order, file_type=file_type, export_dir=export_dir, data_folder=data_folder)
+    main(custom_order=custom_order, file_type=file_type, export_dir=export_dir, data_folder=data_folder)
 
 
-    mga_data = load_csv("biomass_use_carbon_costs_710.csv",folder_path="export/mga")
-    plot_mga(
-        mga_data,
-        "mga_carbon_costs_710",
-        title="Near Optimal Biomass Use (Scenario Carbon Costs 710)",
-        export_dir="export/mga",
-        file_type="png",
-        unit="TWh",
-        multiplier=1e-6,
-    )
-    mga_data = load_csv("biomass_use_carbon_costs.csv",folder_path="export/mga")
-    plot_mga(
-        mga_data,
-        "mga_carbon_costs",
-        title="Near Optimal Biomass Use (Scenario Carbon Costs)",
-        export_dir="export/mga",
-        file_type="png",
-        unit="TWh",
-        multiplier=1e-6,
-    )
+    # mga_data = load_csv("biomass_use_carbon_costs_710.csv",folder_path="export/mga")
+    # plot_mga(
+    #     mga_data,
+    #     "mga_carbon_costs_710",
+    #     title="Near Optimal Biomass Use (Scenario Carbon Costs 710)",
+    #     export_dir="export/mga",
+    #     file_type="png",
+    #     unit="TWh",
+    #     multiplier=1e-6,
+    # )
+    # mga_data = load_csv("biomass_use_carbon_costs.csv",folder_path="export/mga")
+    # plot_mga(
+    #     mga_data,
+    #     "mga_carbon_costs",
+    #     title="Near Optimal Biomass Use (Scenario Carbon Costs)",
+    #     export_dir="export/mga",
+    #     file_type="png",
+    #     unit="TWh",
+    #     multiplier=1e-6,
+    # )
 
     # co2_data = load_csv("co2_sankey.csv",folder_path="export")
     # plot_co2_sankey(

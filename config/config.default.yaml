@@ -504,7 +504,7 @@ sector:
       dynamic_capacity: true
       supplemental_heating:
         enable: false
-        booster_heat_pump: true
+        booster_heat_pump: false # has to be false if enable is false
       max_top_temperature: 90
       min_bottom_temperature: 35
     heat_source_cooling: 6 #K
