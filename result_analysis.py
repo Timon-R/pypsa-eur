@@ -386,9 +386,7 @@ def get_data(
             for fields in fields_list:
                 field_condition = pd.Series([True] * len(data_df))
                 for i, field in enumerate(fields):
-                    field_condition &= data_df.iloc[:, i].str.contains(
-                        field, case=False, na=False
-                    )
+                    field_condition &= (data_df.iloc[:, i] == field) | (field == "")
                 condition |= field_condition
 
             data_df["condition"] = condition.fillna(False)
@@ -399,9 +397,7 @@ def get_data(
             # Apply remove_list filter
             if remove_list:
                 data = data[
-                    ~data[data_name_column].str.contains(
-                        "|".join(remove_list), na=False
-                    )
+                    ~data[data_name_column].isin(remove_list)  # Use exact match instead of contains
                 ]
 
             # Ensure value_column is numeric
@@ -419,28 +415,12 @@ def get_data(
             total_sum = data[value_column].sum()
 
             # Merge the values using the merge_fields
-            for merge_conditions, new_name, is_cc in merge_fields:
+            for merge_conditions, new_name in merge_fields:
                 merged_data = pd.DataFrame()
                 for merge_condition in merge_conditions:
                     added_data = data[
-                        data[data_name_column].str.contains(merge_condition, na=False)
+                        data[data_name_column] == merge_condition
                     ]
-                    if is_cc:  # CC case sensitive must be in the data_name
-                        added_data = added_data[
-                            added_data[data_name_column].str.contains(
-                                "CC", case=True, na=False
-                            )
-                        ]
-                    elif (
-                        is_cc == False
-                    ):  # CC case sensitive must not be in the data_name
-                        added_data = added_data[
-                            ~added_data[data_name_column].str.contains(
-                                "CC", case=True, na=False
-                            )
-                        ]
-                    else:
-                        added_data = added_data
                     merged_data = pd.concat([merged_data, added_data])
 
                     # Remove the added data from the original data
@@ -1099,6 +1079,13 @@ def modify_co2_data(data, threshold=0):
         "lowT industry solid biomass CC": "solid biomass",
         "urban central solid biomass CHP CC": "solid biomass",
         "urban central gas CHP CC": "gas",
+        "BioSNG CC": "gas",
+        "gas for industry": "gas",
+        "solid biomass for industry CC": "solid biomass",
+        "solid biomass to hydrogen": "solid biomass",
+        "Sabatier": "gas",
+        "gas for industry CC": "gas",
+        "solid biomass import": "solid biomass",
     }
     for key, content in data.items():
         if abs(content["values"]) < threshold:
@@ -1274,24 +1261,23 @@ def main(results_dir="results", export_dir="export",scenarios=["default", "carbo
         [
             ["Generator", "", "AC"],
             ["Generator", "solar rooftop", "low voltage"],
-            ["Link", "CHP", "AC"],
-
-            ["Link", "OCGT", "AC"],
+            ["Link", "", "AC"],
             ["StorageUnit", "hydro", "AC"],
         ],
         [
-            [["wind"], "wind", False],
-            [["solar"], "solar", False],
-            [["hydro", "ror"], "hydro", False],
-            [["biomass CHP"], "biomass CHP", None],
-            [["waste CHP"], "waste CHP", None],
-            [["urban central CHP"], "gas CHP", None],
+            [["wind"], "wind"],
+            [["solar","solar-hsat","solar rooftop"], "solar"],
+            [["hydro", "ror"], "hydro"],
+            [["urban central solid biomass CHP","urban central solid biomass CHP CC"], "biomass CHP"],
+            [["waste CHP","waste CHP CC"], "waste CHP"],
+            [["urban central gas CHP","urban central gas CHP CC"], "gas CHP"],
         ],  # merge_fields
         "D",
         "B",
         "2050",
         filter_positive=True,
         calculate_share=True,
+        remove_list=["H2 Fuel Cell","battery discharger"],
     )
     export_results(
         electricity_generation_share,
@@ -1299,7 +1285,6 @@ def main(results_dir="results", export_dir="export",scenarios=["default", "carbo
         include_share=True,
         export_dir=export_dir
     )
-
 
     fields_list = [
         ["Generator", "", "bioliquids"],
@@ -1331,12 +1316,11 @@ def main(results_dir="results", export_dir="export",scenarios=["default", "carbo
                 "C&P_RW",
             ],
             "solid biomass",
-            False,
         ],
-        [["manure", "sludge"], "biogas", False],
-        [["wind"], "wind", False],
-        [["solar"], "solar", False],
-        [["hydro", "ror"], "hydro", False],
+        [["manure", "sludge"], "biogas"],
+        [["onwind","offwind-ac","offwind-dc","offwind-float"], "wind"],
+        [["solar","solar-hsat","solar rooftop"], "solar"],
+        [["hydro", "ror"], "hydro"],
     ]
     remove_list = ["biomass transport", "waste CHP"]
     primary_energy = get_data(
@@ -1358,7 +1342,7 @@ def main(results_dir="results", export_dir="export",scenarios=["default", "carbo
         scenarios,
         "metrics",
         [["total costs"]],
-        [[["total costs"], "Total costs (Billion €)", None]],
+        [[["total costs"], "Total costs (Billion €)"]],
         "B",
         "A",
         "2050",
@@ -1377,7 +1361,7 @@ def main(results_dir="results", export_dir="export",scenarios=["default", "carbo
         "B",
         "2050",
         filter_positive=True,
-        remove_list=["biomass transport"],
+        remove_list=["biomass transport", "solid biomass for industry","solid biomass for industry CC"],
     )
     export_results(biomass_supply, "biomass_supply.csv", export_dir=export_dir)
     difference = calculate_supply_difference_and_emission_difference(
@@ -1460,503 +1444,551 @@ def main(results_dir="results", export_dir="export",scenarios=["default", "carbo
     )
     export_results(cost_difference, "cost_difference.csv", include_difference=True, export_dir=export_dir)
 
-    shadow_price = get_data(
-        results,
-        scenarios,
-        "metrics",
-        [["co2_shadow"]],
-        [[["co2_shadow"], "CO2 shadow price", None]],
-        "B",
-        "A",
-        "2050",
-        multiplier=-1,
-        filter_positive=False,
-    )
-    export_results(shadow_price, "shadow_price.csv", export_dir=export_dir)
+    # shadow_price = get_data(
+    #     results,
+    #     scenarios,
+    #     "metrics",
+    #     [["co2_shadow"]],
+    #     [[["co2_shadow"], "CO2 shadow price", None]],
+    #     "B",
+    #     "A",
+    #     "2050",
+    #     multiplier=-1,
+    #     filter_positive=False,
+    # )
+    # export_results(shadow_price, "shadow_price.csv", export_dir=export_dir)
 
-    hydrogen_production = get_data(
-        results,
-        scenarios,
-        "energy_balance",
-        [["Link", "", "H2"]],
-        [],
-        "D",
-        "B",
-        "2050",
-        filter_positive=True,
-        remove_list=["pipeline"],
-    )
-    export_results(hydrogen_production, "hydrogen_production.csv", export_dir=export_dir)
+    # hydrogen_production = get_data(
+    #     results,
+    #     scenarios,
+    #     "energy_balance",
+    #     [["Link", "", "H2"]],
+    #     [],
+    #     "D",
+    #     "B",
+    #     "2050",
+    #     filter_positive=True,
+    #     remove_list=["pipeline"],
+    # )
+    # export_results(hydrogen_production, "hydrogen_production.csv", export_dir=export_dir)
 
-    heat_pumps = get_data(
-        results,
-        scenarios,
-        "energy_balance",
-        [["Link", "heat pump", "low voltage"]],
-        [],
-        "D",
-        "B",
-        "2050",
-        filter_positive=False,
-        multiplier=-1,
-    )
-    export_results(heat_pumps, "heat_pumps.csv", export_dir=export_dir)
+    # heat_pumps = get_data(
+    #     results,
+    #     scenarios,
+    #     "energy_balance",
+    #     [["Link", "heat pump", "low voltage"]],
+    #     [],
+    #     "D",
+    #     "B",
+    #     "2050",
+    #     filter_positive=False,
+    #     multiplier=-1,
+    # )
+    # export_results(heat_pumps, "heat_pumps.csv", export_dir=export_dir)
 
-    gas_use = get_data(
-        results,
-        scenarios,
-        "energy_balance",
-        [["link", "", "gas"]],
-        [
-            [["biogas"], "biogas upgrading with CC", True],
-            [["biogas"], "biogas upgrading without CC", False],
-            [[""], "gas use with CC", True],
-            [[""], "gas use without CC", False],
-        ],
-        "D",
-        "B",
-        "2050",
-        filter_positive=False,
-        multiplier=-1,
-        remove_list=["pipeline"],
-    )
-    export_results(gas_use, "gas_use.csv", export_dir=export_dir)
+    # gas_use = get_data(
+    #     results,
+    #     scenarios,
+    #     "energy_balance",
+    #     [["link", "", "gas"]],
+    #     [
+    #         [["biogas"], "biogas upgrading with CC", True],
+    #         [["biogas"], "biogas upgrading without CC", False],
+    #         [[""], "gas use with CC", True],
+    #         [[""], "gas use without CC", False],
+    #     ],
+    #     "D",
+    #     "B",
+    #     "2050",
+    #     filter_positive=False,
+    #     multiplier=-1,
+    #     remove_list=["pipeline"],
+    # )
+    # export_results(gas_use, "gas_use.csv", export_dir=export_dir)
 
-    weighted_prices = get_data(
-        results,
-        scenarios,
-        "weighted_prices",
-        [
-            ["agricultural waste"],
-            ["fuelwood residues"],
-            ["secondary forestry residues"],
-            ["sawdust"],
-            ["residues from landscape care"],
-            ["grasses"],
-            ["woody crops"],
-            ["fuelwoodRW"],
-            ["manure"],
-            ["sludge"],
-            ["C&P_RW"],
-            ["oil"],
-            ["gas"],
-            ["coal"],
-            ["biomass import"],
-            ["solid biomass"],
-            ["biogas"],
-        ],
-        [],
-        "B",
-        "A",
-        "2050",
-        filter_positive=None,
-        remove_list=["agriculture machinery oil"],
-    )
+    # weighted_prices = get_data(
+    #     results,
+    #     scenarios,
+    #     "weighted_prices",
+    #     [
+    #         ["agricultural waste"],
+    #         ["fuelwood residues"],
+    #         ["secondary forestry residues"],
+    #         ["sawdust"],
+    #         ["residues from landscape care"],
+    #         ["grasses"],
+    #         ["woody crops"],
+    #         ["fuelwoodRW"],
+    #         ["manure"],
+    #         ["sludge"],
+    #         ["C&P_RW"],
+    #         ["oil"],
+    #         ["gas"],
+    #         ["coal"],
+    #         ["biomass import"],
+    #         ["solid biomass"],
+    #         ["biogas"],
+    #     ],
+    #     [],
+    #     "B",
+    #     "A",
+    #     "2050",
+    #     filter_positive=None,
+    #     remove_list=["agriculture machinery oil"],
+    # )
 
-    weighted_prices = add_costs(weighted_prices)
-    export_results(weighted_prices, "weighted_prices.csv", add_costs=True, export_dir=export_dir)
+    # weighted_prices = add_costs(weighted_prices)
+    # export_results(weighted_prices, "weighted_prices.csv", add_costs=True, export_dir=export_dir)
 
-    solid_biomass_supply = get_data(
-        results,
-        scenarios,
-        "energy_balance",
-        [["Link", "", "solid biomass"]],
-        [],
-        "D",
-        "B",
-        "2050",
-        filter_positive=True,
-        remove_list=["biomass transport"],
-    )
-    digestable_biomass_supply = get_data(
-        results,
-        scenarios,
-        "energy_balance",
-        [["Link", "","biogas"]],
-        [],
-        "D",
-        "B",
-        "2050",
-        filter_positive=True,
-    )
-    all_gas_generation = get_data(
-        results,
-        scenarios,
-        "energy_balance",
-        [["Generator", "", "gas"], ["Link", "", "gas"]],
-        [],
-        "D",
-        "B",
-        "2050",
-        filter_positive=True,
-        remove_list=["gas pipeline"],
-    )
+    # solid_biomass_supply = get_data(
+    #     results,
+    #     scenarios,
+    #     "energy_balance",
+    #     [["Link", "", "solid biomass"]],
+    #     [],
+    #     "D",
+    #     "B",
+    #     "2050",
+    #     filter_positive=True,
+    #     remove_list=["biomass transport"],
+    # )
+    # digestable_biomass_supply = get_data(
+    #     results,
+    #     scenarios,
+    #     "energy_balance",
+    #     [["Link", "","biogas"]],
+    #     [],
+    #     "D",
+    #     "B",
+    #     "2050",
+    #     filter_positive=True,
+    # )
+    # all_gas_generation = get_data(
+    #     results,
+    #     scenarios,
+    #     "energy_balance",
+    #     [["Generator", "", "gas"], ["Link", "", "gas"]],
+    #     [],
+    #     "D",
+    #     "B",
+    #     "2050",
+    #     filter_positive=True,
+    #     remove_list=["gas pipeline"],
+    # )
 
-    co2_use = get_data(
-        results,
-        scenarios,
-        "energy_balance",
-        [["Link", "","co2 stored"]],
-        [],
-        "D",
-        "B",
-        "2050",
-        filter_positive=False,
-        multiplier=-1,
-    )
-    export_results(co2_use, "co2_use.csv", include_share=True, export_dir=export_dir)
-
-
-
-    co2_capture = get_data(
-        results,
-        scenarios,
-        "energy_balance",
-        [["Link", "","co2 stored"]],
-        [],
-        "D",
-        "B",
-        "2050",
-        filter_positive=True,
-    )
-    export_results(co2_capture, "co2_capture.csv", include_share=True, export_dir=export_dir)
+    # co2_use = get_data(
+    #     results,
+    #     scenarios,
+    #     "energy_balance",
+    #     [["Link", "","co2 stored"]],
+    #     [],
+    #     "D",
+    #     "B",
+    #     "2050",
+    #     filter_positive=False,
+    #     multiplier=-1,
+    # )
+    # export_results(co2_use, "co2_use.csv", include_share=True, export_dir=export_dir)
 
 
-    gas_shares = calc_gas_share(all_gas_generation, scenarios)
-    share_sequestered = calculate_share_of_sequestration(co2_use, scenarios)
 
-    carbon_utilisation = calc_beccus(
-        results,
-        scenarios,
-        solid_biomass_supply,
-        digestable_biomass_supply,
-        gas_shares,
-        share_sequestered,
-    )
+    # co2_capture = get_data(
+    #     results,
+    #     scenarios,
+    #     "energy_balance",
+    #     [["Link", "","co2 stored"]],
+    #     [],
+    #     "D",
+    #     "B",
+    #     "2050",
+    #     filter_positive=True,
+    # )
+    # export_results(co2_capture, "co2_capture.csv", include_share=True, export_dir=export_dir)
+
+
+    # gas_shares = calc_gas_share(all_gas_generation, scenarios)
+    # share_sequestered = calculate_share_of_sequestration(co2_use, scenarios)
+
+    # carbon_utilisation = calc_beccus(
+    #     results,
+    #     scenarios,
+    #     solid_biomass_supply,
+    #     digestable_biomass_supply,
+    #     gas_shares,
+    #     share_sequestered,
+    # )
     
-    export_carbon_removal(carbon_utilisation, "CCUS.csv", export_dir=export_dir)
+    # export_carbon_removal(carbon_utilisation, "CCUS.csv", export_dir=export_dir)
 
-    all_biomass_supply = get_data(
-        results,
-        scenarios,
-        "energy_balance",
-        [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
-        [
-            [[""], "biomass", None],
-        ],
-        "D",
-        "B",
-        "2050",
-        filter_positive=True,
-        remove_list=["biomass transport"],
-    )
-    export_results(all_biomass_supply, "all_biomass_supply.csv", export_dir=export_dir)
+    # all_biomass_supply = get_data(
+    #     results,
+    #     scenarios,
+    #     "energy_balance",
+    #     [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
+    #     [
+    #         [[""], "biomass", None],
+    #     ],
+    #     "D",
+    #     "B",
+    #     "2050",
+    #     filter_positive=True,
+    #     remove_list=["biomass transport", "solid biomass for industry","solid biomass for industry CC"],
+    # )
+    # export_results(all_biomass_supply, "all_biomass_supply.csv", export_dir=export_dir)
 
-    # use "gas_shares"
+    # # use "gas_shares"
 
-    merge_fields = [
-        [["to liquid", "electrobiofuels"], "conversion to liquid fuels", None],
-        [["industry", "boiler"], "heat production", None],
-        [["CHP"], "CHP", None],
-        [["hydrogen", "SMR"], "hydrogen production", None],
-        [["OCGT"], "electricity production", None],
-    ]
-    solid_biomass_use_by_sector = (
-        get_data(  # this doesn't account for the gas share yet
-            results,
-            scenarios,
-            "energy_balance",
-            [["Link", "", "solid biomass"]],
-            merge_fields,
-            "D",
-            "B",
-            "2050",
-            filter_positive=False,
-            multiplier=-1,
-            calculate_share=False,
-            remove_list=["transport", "import", "pipeline", "biogas to gas", "SNG"],
-        )
-    )
-    digestable_biomass_use_by_sector = (
-        get_data(  # this doesn't account for the gas share yet
-            results,
-            scenarios,
-            "energy_balance",
-            [["Link", "", "gas"]],
-            merge_fields,
-            "D",
-            "B",
-            "2050",
-            filter_positive=False,
-            multiplier=-1,
-            calculate_share=False,
-            remove_list=["transport", "import", "pipeline", "biogas to gas"],
-        )
-    )
-    for key, content in digestable_biomass_use_by_sector.items():
-        # mulitply the values by the 1-gas share
-        content["values"] = content["values"] * (
-            1 - gas_shares[content["folder"]]["share"]
-        )
+    # merge_fields = [
+    #     [["to liquid", "electrobiofuels","methanol"], "conversion to liquid fuels", None],
+    #     [["industry", "boiler"], "heat production", None],
+    #     [["CHP"], "CHP", None],
+    #     [["hydrogen", "SMR"], "hydrogen production", None],
+    #     [["OCGT"], "electricity production", None],
+    # ]
+    # solid_biomass_use_by_sector = (
+    #     get_data(  # this doesn't account for the gas share yet
+    #         results,
+    #         scenarios,
+    #         "energy_balance",
+    #         [["Link", "", "solid biomass"]],
+    #         merge_fields,
+    #         "D",
+    #         "B",
+    #         "2050",
+    #         filter_positive=False,
+    #         multiplier=-1,
+    #         calculate_share=False,
+    #         remove_list=["transport", "import", "pipeline", "biogas to gas", "BioSNG","BioSNG CC"],
+    #     )
+    # )
+    # digestable_biomass_use_by_sector = (
+    #     get_data(  # this doesn't account for the gas share yet
+    #         results,
+    #         scenarios,
+    #         "energy_balance",
+    #         [["Link", "", "gas"]],
+    #         merge_fields,
+    #         "D",
+    #         "B",
+    #         "2050",
+    #         filter_positive=False,
+    #         multiplier=-1,
+    #         calculate_share=False,
+    #         remove_list=["transport", "import", "pipeline", "biogas to gas"],
+    #     )
+    # )
+    # for key, content in digestable_biomass_use_by_sector.items():
+    #     # mulitply the values by the 1-gas share
+    #     content["values"] = content["values"] * (
+    #         1 - gas_shares[content["folder"]]["share"]
+    #     )
 
-    biomass_use_by_sector = solid_biomass_use_by_sector.copy()
-    for key, value in digestable_biomass_use_by_sector.items():
-        if key in biomass_use_by_sector:
-            biomass_use_by_sector[key]["values"] += value["values"]
-        else:
-            biomass_use_by_sector[key] = value
-    biomass_use_by_sector = calculate_share(biomass_use_by_sector)
-    biomass_use_by_sector = split_CHP(biomass_use_by_sector)
+    # biomass_use_by_sector = solid_biomass_use_by_sector.copy()
+    # for key, value in digestable_biomass_use_by_sector.items():
+    #     if key in biomass_use_by_sector:
+    #         biomass_use_by_sector[key]["values"] += value["values"]
+    #     else:
+    #         biomass_use_by_sector[key] = value
+    # biomass_use_by_sector = calculate_share(biomass_use_by_sector)
+    # biomass_use_by_sector = split_CHP(biomass_use_by_sector)
 
-    export_results(
-        biomass_use_by_sector, "biomass_use_by_sector.csv", include_share=True, export_dir=export_dir
-    )
-    solid_biomass_use = (
-        get_data(  # this doesn't account for the gas share yet
-            results,
-            scenarios,
-            "energy_balance",
-            [["Link", "", "solid biomass"]],
-            [],
-            "D",
-            "B",
-            "2050",
-            filter_positive=False,
-            multiplier=-1,
-            calculate_share=False,
-            remove_list=["transport", "import", "pipeline", "biogas to gas", "SNG"],
-        )
-    )
-    digestable_biomass_use = (
-        get_data(  # this doesn't account for the gas share yet
-            results,
-            scenarios,
-            "energy_balance",
-            [["Link", "", "gas"]],
-            [],
-            "D",
-            "B",
-            "2050",
-            filter_positive=False,
-            multiplier=-1,
-            calculate_share=False,
-            remove_list=["transport", "import", "pipeline", "biogas to gas"],
-        )
-    )
-    for key, content in digestable_biomass_use.items():
-        # mulitply the values by the 1-gas share
-        content["values"] = content["values"] * (
-            1 - gas_shares[content["folder"]]["share"]
-        )
+    # export_results(
+    #     biomass_use_by_sector, "biomass_use_by_sector.csv", include_share=True, export_dir=export_dir
+    # )
+    # solid_biomass_use = (
+    #     get_data(  # this doesn't account for the gas share yet
+    #         results,
+    #         scenarios,
+    #         "energy_balance",
+    #         [["Link", "", "solid biomass"]],
+    #         [],
+    #         "D",
+    #         "B",
+    #         "2050",
+    #         filter_positive=False,
+    #         multiplier=-1,
+    #         calculate_share=False,
+    #         remove_list=["transport", "import", "pipeline", "biogas to gas", "SNG"],
+    #     )
+    # )
+    # digestable_biomass_use = (
+    #     get_data(  # this doesn't account for the gas share yet
+    #         results,
+    #         scenarios,
+    #         "energy_balance",
+    #         [["Link", "", "gas"]],
+    #         [],
+    #         "D",
+    #         "B",
+    #         "2050",
+    #         filter_positive=False,
+    #         multiplier=-1,
+    #         calculate_share=False,
+    #         remove_list=["transport", "import", "pipeline", "biogas to gas"],
+    #     )
+    # )
+    # for key, content in digestable_biomass_use.items():
+    #     # mulitply the values by the 1-gas share
+    #     content["values"] = content["values"] * (
+    #         1 - gas_shares[content["folder"]]["share"]
+    #     )
 
-    #merge digestable and solid biomass use by sector and sort dict
-    biomass_use = calculate_share({**digestable_biomass_use, **solid_biomass_use})
-    biomass_use = dict(sorted(biomass_use.items()))
+    # #merge digestable and solid biomass use by sector and sort dict
+    # biomass_use = calculate_share({**digestable_biomass_use, **solid_biomass_use})
+    # biomass_use = dict(sorted(biomass_use.items()))
 
-    export_results(
-        biomass_use, "biomass_use.csv", include_share=True, export_dir=export_dir
-    )
+    # export_results(
+    #     biomass_use, "biomass_use.csv", include_share=True, export_dir=export_dir
+    # )
 
-    upstream_emissions = calculate_upstream_emissions(biomass_supply, scenarios)
-    export_results(upstream_emissions, "upstream_emissions.csv", simply_print=True, export_dir=export_dir)
+    # upstream_emissions = calculate_upstream_emissions(biomass_supply, scenarios)
+    # export_results(upstream_emissions, "upstream_emissions.csv", simply_print=True, export_dir=export_dir)
 
-    #get_biomass_potentials(export_dir=export_dir)
+    # #get_biomass_potentials(export_dir=export_dir)
 
-    remove_list = ["agriculture machinery oil1"]
-    oil_production = get_data(
-        results,
-        scenarios,
-        "energy_balance",
-        [["Link", "","oil"]],
-        [],
-        "D",
-        "B",
-        "2050",
-        filter_positive=True,
-        remove_list=remove_list,
-        calculate_share=True,
-    )
-    export_results(oil_production, "oil_production.csv", include_share=True, export_dir=export_dir)
+    # remove_list = ["agriculture machinery oil1"]
+    # oil_production = get_data(
+    #     results,
+    #     scenarios,
+    #     "energy_balance",
+    #     [["Link", "","oil"]],
+    #     [],
+    #     "D",
+    #     "B",
+    #     "2050",
+    #     filter_positive=True,
+    #     remove_list=remove_list,
+    #     calculate_share=True,
+    # )
+    # export_results(oil_production, "oil_production.csv", include_share=True, export_dir=export_dir)
 
-    beccs = get_data(
-        results,
-        scenarios,
-        "energy_balance",
-        [
-            ["Link", "CC", "solid biomass"],
-        ],
-        [],
-        "D",
-        "B",
-        "2050",
-        multiplier=-1,
-        filter_positive=False,
-        calculate_share=True,
-    )
-    export_results(beccs, "beccs.csv", export_dir=export_dir)
+    # beccs = get_data(
+    #     results,
+    #     scenarios,
+    #     "energy_balance",
+    #     [
+    #         ["Link", "CC", "solid biomass"],
+    #     ],
+    #     [],
+    #     "D",
+    #     "B",
+    #     "2050",
+    #     multiplier=-1,
+    #     filter_positive=False,
+    #     calculate_share=True,
+    # )
+    # export_results(beccs, "beccs.csv", export_dir=export_dir)
 
-    fields_list = [
-        ["Link", "", "highT industry"],
-        ["Link", "", "mediumT industry"],
-        ["Link", "", "lowT industry"],
-    ]  # all industries
-    merge_fields = [
-        [["biomass"], "biomass", False],
-        [["biomass"], "biomass CC", True],
-        [["gas", "methane"], "gas", False],
-        [["gas", "methane"], "gas CC", True],
-        [["hydrogen"], "hydrogen", False],
-        [["heat pump", "electricity"], "electricity/heat pump", False],
-    ]
-    industrial_energy = get_data(
-        results,
-        scenarios,
-        "energy_balance",
-        fields_list,
-        merge_fields,
-        "D",
-        "B",
-        "2050",
-        filter_positive=True,
-    )
-    export_results(
-        industrial_energy, "industrial_energy.csv", include_share=True, export_dir=export_dir
-    )
+    # fields_list = [
+    #     ["Link", "", "highT industry"],
+    #     ["Link", "", "mediumT industry"],
+    #     ["Link", "", "lowT industry"],
+    # ]  # all industries
+    # merge_fields = [
+    #     [["biomass"], "biomass", False],
+    #     [["biomass"], "biomass CC", True],
+    #     [["gas", "methane"], "gas", False],
+    #     [["gas", "methane"], "gas CC", True],
+    #     [["hydrogen"], "hydrogen", False],
+    #     [["heat pump", "electricity"], "electricity/heat pump", False],
+    # ]
+    # industrial_energy = get_data(
+    #     results,
+    #     scenarios,
+    #     "energy_balance",
+    #     fields_list,
+    #     merge_fields,
+    #     "D",
+    #     "B",
+    #     "2050",
+    #     filter_positive=True,
+    # )
+    # export_results(
+    #     industrial_energy, "industrial_energy.csv", include_share=True, export_dir=export_dir
+    # )
 
-    fields_list = [
-        ["Link", "", "rural heat"],
-        ["Link", "", "urban central heat"],
-        ["Link", "", "urban decentral heat"],
-    ]
-    merge_fields = [
-        [["biomass"], "biomass", False],
-        [["biomass"], "biomass CC", True],
-        [["waste"], "waste", False],
-        [["waste"], "waste CC", True],
-        [["gas", "CHP"], "gas", False],
-        [["gas", "CHP"], "gas CC", True],
-        [["H2"], "hydrogen", False],
-        [["heat pump", "resistive"], "electricity/heat pump", False],
-        [["water tanks discharger"], "water tank discharger", False],
-    ]
-    heating_energy = get_data(
-        results,
-        scenarios,
-        "energy_balance",
-        fields_list,
-        merge_fields,
-        "D",
-        "B",
-        "2050",
-        filter_positive=True,
-    )
-    export_results(heating_energy, "heating_energy.csv", include_share=True, export_dir=export_dir)
+    # fields_list = [
+    #     ["Link", "", "rural heat"],
+    #     ["Link", "", "urban central heat"],
+    #     ["Link", "", "urban decentral heat"],
+    # ]
+    # merge_fields = [
+    #     [["biomass"], "biomass", False],
+    #     [["biomass"], "biomass CC", True],
+    #     [["waste"], "waste", False],
+    #     [["waste"], "waste CC", True],
+    #     [["gas", "CHP"], "gas", False],
+    #     [["gas", "CHP"], "gas CC", True],
+    #     [["H2"], "hydrogen", False],
+    #     [["heat pump", "resistive"], "electricity/heat pump", False],
+    #     [["water tanks discharger"], "water tank discharger", False],
+    # ]
+    # heating_energy = get_data(
+    #     results,
+    #     scenarios,
+    #     "energy_balance",
+    #     fields_list,
+    #     merge_fields,
+    #     "D",
+    #     "B",
+    #     "2050",
+    #     filter_positive=True,
+    # )
+    # export_results(heating_energy, "heating_energy.csv", include_share=True, export_dir=export_dir)
 
-    co2 = get_data(
-        results,
-        scenarios,
-        "energy_balance",
-        [["Link", "", "co2"],["Generator", "", "co2"]],
-        [],
-        "D",
-        "B",
-        "2050",
-        filter_positive=None,
-        optional_columns=[["emission_type", "C"]],
-    )
+    # co2 = get_data(
+    #     results,
+    #     scenarios,
+    #     "energy_balance",
+    #     [["Link", "", "co2"],["Generator", "", "co2"]],
+    #     [],
+    #     "D",
+    #     "B",
+    #     "2050",
+    #     filter_positive=None,
+    #     optional_columns=[["emission_type", "C"]],
+    # )
 
-    #remove the share and the year keys
-    for key, content in co2.items():
-        if "share" in content:
-            del content["share"]
-        if "year" in content:
-            del content["year"]
+    # #remove the share and the year keys
+    # for key, content in co2.items():
+    #     if "share" in content:
+    #         del content["share"]
+    #     if "year" in content:
+    #         del content["year"]
 
-    export_results(co2, "co2.csv", include_share=False, export_dir=export_dir, simply_print=True)
+    # export_results(co2, "co2.csv", include_share=False, export_dir=export_dir, simply_print=True)
 
-    co2_sankey = modify_co2_data(co2,100)
-    for key, content in co2.items():
-        if "emission_type" in content:
-            del content["emission_type"]
+    # co2_sankey = modify_co2_data(co2,100)
+    # for key, content in co2.items():
+    #     if "emission_type" in content:
+    #         del content["emission_type"]
 
-    export_results(
-        co2_sankey,
-        "co2_sankey.csv",
-        include_share=False,
-        export_dir=export_dir,
-        simply_print=True,
-    )
+    # export_results(
+    #     co2_sankey,
+    #     "co2_sankey.csv",
+    #     include_share=False,
+    #     export_dir=export_dir,
+    #     simply_print=True,
+    # )
 
-    results = load_results(results_dir, scenarios)
-    capacity_factors = get_data(
-        results,
-        scenarios,
-        "capacity_factors",
-        [["Generator", "solar"],["Generator", "solar-hsat"],["Generator", "onwind"]],
-        [],
-        "C",
-        "B",
-        "2050",
-        filter_positive=True,
-        remove_list=["urban central solar thermal","urban decentral solar thermal","solar rooftop","rural solar thermal","onwind landuse emission","solar landuse emission","solar-hsat landuse emission"],
-        round_digits =3,
-    )
-    export_results(
-        capacity_factors,
-        "capacity_factors.csv",
-        export_dir=export_dir,
-        round_digits = 3,
-    )
+    # results = load_results(results_dir, scenarios)
+    # capacity_factors = get_data(
+    #     results,
+    #     scenarios,
+    #     "capacity_factors",
+    #     [["Generator", "solar"],["Generator", "solar-hsat"],["Generator", "onwind"]],
+    #     [],
+    #     "C",
+    #     "B",
+    #     "2050",
+    #     filter_positive=True,
+    #     remove_list=["urban central solar thermal","urban decentral solar thermal","solar rooftop","rural solar thermal","onwind landuse emission","solar landuse emission","solar-hsat landuse emission"],
+    #     round_digits =3,
+    # )
+    # export_results(
+    #     capacity_factors,
+    #     "capacity_factors.csv",
+    #     export_dir=export_dir,
+    #     round_digits = 3,
+    # )
 
 
 if __name__ == "__main__":
     results_dir = "results"
 
-    # scenarios = ["default", "carbon_costs", "default_710","carbon_costs_710"]
+    # scenarios = ["default_optimal", "optimal", default_710_optimal, "710_optimal"]
     # export_dir = "export/seq"
+    # TODO add a function to rename the scenarios in export_results (give dict for renaming)
+
+    scenarios = ["default", "carbon_costs", "default_710","carbon_costs_710"]
+    export_dir = "export/seq"
 
     # scenarios = ["default", "carbon_costs"]
-    # export_dir = "export"
+    # export_dir = "export/basic"
 
-    # main(results_dir=results_dir, export_dir=export_dir, scenarios=scenarios)
+    main(results_dir=results_dir, export_dir=export_dir, scenarios=scenarios)
+
+
+
+    #################### MGA ####################
+    # results_dir = "results"
+    # scenarios = ["optimal", "max_0.025", "max_0.05","max_0.1","max_0.15","min_0.025","min_0.05","min_0.1","min_0.15"]
+    # export_dir = "export/mga"
+    # results = load_results(results_dir, scenarios)
+
+    # all_biomass_supply = get_data(
+    #     results,
+    #     scenarios,
+    #     "energy_balance",
+    #     [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
+    #     [
+    #         [[""], "biomass", None],
+    #     ],
+    #     "D",
+    #     "B",
+    #     "2050",
+    #     filter_positive=True,
+    #     remove_list=["biomass transport"],
+    # )
+    # export_results(all_biomass_supply, "biomass_use_carbon_costs.csv", export_dir=export_dir)
+
+    # scenarios = ["710_optimal", "710_max_0.025", "710_max_0.05","710_max_0.1","710_max_0.15","710_min_0.025","710_min_0.05","710_min_0.1","710_min_0.15"]
+    # export_dir = "export/mga"
+    # results = load_results(results_dir, scenarios)
+
+    # all_biomass_supply = get_data(
+    #     results,
+    #     scenarios,
+    #     "energy_balance",
+    #     [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
+    #     [
+    #         [[""], "biomass", None],
+    #     ],
+    #     "D",
+    #     "B",
+    #     "2050",
+    #     filter_positive=True,
+    #     remove_list=["biomass transport"],
+    # )
+    # export_results(all_biomass_supply, "biomass_use_carbon_costs_710.csv", export_dir=export_dir)
 
     # results_dir = "results"
-    scenarios = ["optimal", "max_0.025", "max_0.05","max_0.1","max_0.15","min_0.025","min_0.05","min_0.1","min_0.15"]
-    export_dir = "export/mga"
-    results = load_results(results_dir, scenarios)
+    # scenarios = ["default_optimal", "default_max_0.025", "default_max_0.05","default_max_0.1","default_max_0.15","default_min_0.025","default_min_0.05","default_min_0.1","default_min_0.15"]
+    # export_dir = "export/mga"
+    # results = load_results(results_dir, scenarios)
 
-    all_biomass_supply = get_data(
-        results,
-        scenarios,
-        "energy_balance",
-        [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
-        [
-            [[""], "biomass", None],
-        ],
-        "D",
-        "B",
-        "2050",
-        filter_positive=True,
-        remove_list=["biomass transport"],
-    )
-    export_results(all_biomass_supply, "biomass_use_carbon_costs.csv", export_dir=export_dir)
+    # all_biomass_supply = get_data(
+    #     results,
+    #     scenarios,
+    #     "energy_balance",
+    #     [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
+    #     [
+    #         [[""], "biomass", None],
+    #     ],
+    #     "D",
+    #     "B",
+    #     "2050",
+    #     filter_positive=True,
+    #     remove_list=["biomass transport"],
+    # )
+    # export_results(all_biomass_supply, "biomass_use_default.csv", export_dir=export_dir)
 
-    scenarios = ["710_optimal", "710_max_0.025", "710_max_0.05","710_max_0.1","710_max_0.15","710_min_0.025","710_min_0.05","710_min_0.1","710_min_0.15"]
-    export_dir = "export/mga"
-    results = load_results(results_dir, scenarios)
+    # scenarios = ["default_710_optimal", "default_710_max_0.025", "default_710_max_0.05","default_710_max_0.1","default_710_max_0.15","default_710_min_0.025","default_710_min_0.05","default_710_min_0.1","default_710_min_0.15"]
+    # export_dir = "export/mga"
+    # results = load_results(results_dir, scenarios)
 
-    all_biomass_supply = get_data(
-        results,
-        scenarios,
-        "energy_balance",
-        [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
-        [
-            [[""], "biomass", None],
-        ],
-        "D",
-        "B",
-        "2050",
-        filter_positive=True,
-        remove_list=["biomass transport"],
-    )
-    export_results(all_biomass_supply, "biomass_use_carbon_costs_710.csv", export_dir=export_dir)
+    # all_biomass_supply = get_data(
+    #     results,
+    #     scenarios,
+    #     "energy_balance",
+    #     [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
+    #     [
+    #         [[""], "biomass", None],
+    #     ],
+    #     "D",
+    #     "B",
+    #     "2050",
+    #     filter_positive=True,
+    #     remove_list=["biomass transport"],
+    # )
+    # export_results(all_biomass_supply, "biomass_use_default_710.csv", export_dir=export_dir)

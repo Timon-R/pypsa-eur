@@ -26,7 +26,7 @@ run:
     policy: base
     exclude: []
   shared_cutouts: true
-  use_shadow_directory: true # Set to false if problems regarding missing directories occur
+  use_shadow_directory: false
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#foresight
 foresight: overnight
@@ -306,6 +306,7 @@ lines:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#links
 links:
   p_max_pu: 1.0
+  p_min_pu: -1.0
   p_nom_max: .inf
   max_extension: 30000 #MW
   length_factor: 1.25
@@ -337,8 +338,10 @@ transformers:
 
 # docs-load in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#load
 load:
-  interpolate_limit: 3
-  time_shift_for_large_gaps: 1w
+  fill_gaps:
+    enable: true
+    interpolate_limit: 3
+    time_shift_for_large_gaps: 1w
   manual_adjustments: true # false
   scaling_factor: 1.0
   fixed_year: false # false or year (e.g. 2013)
@@ -430,14 +433,14 @@ biomass:
     2045: 1
     2050: 1
   emission_factors: #tCO2/MWh #municipal solid waste is not included in the emission factors
-    grasses: 0.216
-    woody crops: 0.18
-    agricultural waste: 0.03528 # 9.8
-    fuelwoodRW: 0.2844 #79
-    C&P_RW: 0.414 #115
-    fuelwood residues: 0.1476 #41
-    secondary forestry residues: 0.396 #110
-    sawdust: 0.396 #110
+    grasses: 0.216 # 60
+    woody crops: 0.216 # 60
+    agricultural waste: 0.03528 # 9.8 , cerial straw
+    fuelwoodRW: 0.3384 #79 , fuelwood
+    C&P_RW: 0.3924 #109 ef used for woodchips 
+    fuelwood residues: 0.1512 #42 , logging residues
+    secondary forestry residues: 0.3132 #87 ef used for pellets
+    sawdust: 0.3636 #101
     residues from landscape care: 0
     manure: 0.04932 #13.7
     sludge: 0
@@ -509,6 +512,17 @@ sector:
         booster_heat_pump: true
       max_top_temperature: 90
       min_bottom_temperature: 35
+    ates:
+      enable: false
+      suitable_aquifer_types: ['Highly productive porous aquifers']
+      aquifer_volumetric_heat_capacity: 2600
+      fraction_of_aquifer_area_available: 0.2
+      effective_screen_length: 20
+      dh_area_buffer: 1000
+      capex_as_fraction_of_geothermal_heat_source: 0.75
+      recovery_factor: 0.6
+      marginal_cost_charger: 0.035
+      ignore_missing_regions: false
     heat_source_cooling: 6 #K
     heat_pump_cop_approximation:
       refrigerant: ammonia
@@ -751,7 +765,7 @@ sector:
   conventional_generation:
     OCGT: gas
   industry_t:  # heat supply industry
-    endogen: false  # if heat supply for industry should be endogenously optimised
+    endogen: true  # if heat supply for industry should be endogenously optimised
     must_run: 0.8 # NB: industrial heat demand is in reality supplied at site by discrete plants
     # which follow the local demand and therefore cannot be dispatched too much.
     # Thus, p_min_pu is set to must run to avoid too much dispatch behaviour. Improvements welcome!
@@ -1022,7 +1036,7 @@ solving:
       fractional_last_unit_size: false
     keep_files: false
     model_kwargs:
-      solver_dir: "/tmp"
+      solver_dir: ""
       
   mga:
     enable: false
@@ -1083,8 +1097,6 @@ solving:
       ObjScale: -0.5
       threads: 8
       Seed: 123
-      ScaleFlag: 2
-      PreDual: 0 
     gurobi-fallback:        # Use gurobi defaults
       crossover: 0
       method: 2             # barrier

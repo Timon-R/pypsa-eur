@@ -16,6 +16,7 @@ import seaborn as sns
 from matplotlib.legend_handler import HandlerPatch
 from matplotlib.path import Path
 from matplotlib.ticker import MultipleLocator
+from matplotlib.lines import Line2D
 
 import plotly.graph_objects as go
 import plotly.express as px
@@ -83,12 +84,16 @@ biomass_costs = {  # Euro/MWh_LHV
 }
 
 def configure_for_pgf():
+    print("Configuring matplotlib for PGF output...")
     mpl.rcParams.update({
-        "pgf.texsystem": "pdflatex",  # or 'xelatex'
+        "pgf.texsystem": "xelatex",  # or 'xelatex'
         "font.family": "serif",
         "text.usetex": True,
         "pgf.rcfonts": False,
     })
+def configure_to_default():
+    print("Configuring matplotlib to default...")    
+    mpl.rcParams.update(mpl.rcParamsDefault)
 
 def load_csv(file_path, folder_path="export"):
     """
@@ -158,17 +163,20 @@ def create_gravitational_plot(
     capacity_factors=None,
     show_fossil_fuels=True,
     usage_threshold=False,
+    variant_plot=False,
 ):
 
     file_path = f"{file_name}.{file_type}"
 
 
     if biomass_supply is not None and scenario is not None:
-        biomass_supply = biomass_supply[biomass_supply["Folder"] == scenario]
+        biomass = biomass_supply[biomass_supply["Folder"] == scenario]
         # remove the 1 from the data_name
-        biomass_supply.loc[:, "Data Name"] = biomass_supply["Data Name"].str.replace(
+        biomass.loc[:, "Data Name"] = biomass["Data Name"].str.replace(
             "1", ""
         )
+    if variant_plot:
+        biomass_variant = biomass_supply[biomass_supply["Folder"] == f"{scenario}_710"]
 
     # Extract data for plotting
     biomass_types = list(emission_factors.keys())
@@ -350,13 +358,58 @@ def create_gravitational_plot(
 
     # Now draw the wedges with the proper adjustment
     for i, bt in enumerate(biomass_types):
+        if variant_plot:
+            if bt in ["manure", "sludge"]:
+                color = "lightblue"
+            else:
+                color = "lightgreen"
+            if biomass_variant is not None and bt in biomass_variant["Data Name"].values:
+                supply = (
+                    biomass_variant[biomass_variant["Data Name"] == bt]["Values"].values[0]
+                    * multiplier
+                )
+                potential = biomass_potentials_TWh[bt]
+                usage = supply / potential * 100
+                if usage > 99:
+                    usage = 100
+                theta1 = 90
+                theta2 = 90 - 360 * (usage / 100)
+
+                # Correctly convert from area (sizes[i]) to radius, matching the scatter plot circles
+                # The scatter plot uses s=area, so we need sqrt(sizes[i]/pi) to get equivalent radius
+                circle_radius = np.sqrt(sizes[i] / np.pi)*0.95
+                width = circle_radius * 0.09  # Scale factor for visual appearance
+                height = width * adjustment_factor
+                if usage >= 99.5:  # Special case for (nearly) 100% usage
+                    # Draw a filled ellipse instead of a wedge
+                    ellipse = mpatches.Ellipse(
+                        (costs[i], emissions[i]),
+                        width=width * 2,  # Diameter = 2*radius
+                        height=height * 2,
+                        facecolor=color,
+                        edgecolor="none",
+                        alpha=1,
+                    )
+                    ax.add_patch(ellipse)
+                else:
+                    # Normal case: draw a wedge
+                    theta1 = 90
+                    theta2 = 90 - 360 * (usage / 100)
+                    wedge_path = create_elliptical_wedge(
+                        costs[i], emissions[i], width, height, theta1, theta2
+                    )
+                    wedge_patch = mpatches.PathPatch(
+                        wedge_path, facecolor=color, edgecolor="none", alpha=1
+                    )
+                    ax.add_patch(wedge_patch)
+
         if bt in ["manure", "sludge"]:
             color = dig_biomass_color
         else:
             color = solid_biomass_color
-        if biomass_supply is not None and bt in biomass_supply["Data Name"].values:
+        if biomass_supply is not None and bt in biomass["Data Name"].values:
             supply = (
-                biomass_supply[biomass_supply["Data Name"] == bt]["Values"].values[0]
+                biomass[biomass["Data Name"] == bt]["Values"].values[0]
                 * multiplier
             )
             potential = biomass_potentials_TWh[bt]
@@ -494,22 +547,44 @@ def create_gravitational_plot(
                         ax.fill_between(x_vals, ya1, ya2,
                                         color="lightgrey", alpha=0.2, zorder=0)
 
-    # Add legend for circle sizes
-    for size in [100, 200, 500]:  # Example sizes
-        plt.scatter(
-            [],
-            [],
-            s=max_potential * (size / max_potential),
-            edgecolors="black",
-            facecolors="none",
-            label=f"{size} TWh",
-        )    
-    plt.legend(
+    # First legend: for circle sizes (potential)
+    size_handles = [
+        plt.scatter([], [], s=max_potential * (size / max_potential), 
+                    edgecolors="black", facecolors="none", label=f"{size} TWh")
+        for size in [100, 200, 500]
+    ]
+    # dummy_entry = plt.Line2D([0], [0], linestyle="none", marker= '',label="", alpha=0)
+    # size_handles.append(dummy_entry)
+
+    legend1 = ax.legend(
+        handles=size_handles,
         scatterpoints=1,
-        frameon=False,
+        frameon=True,
         labelspacing=1,
         title="Potential",
         loc="upper right",
+        borderpad=1.2,
+    )
+    ax.add_artist(legend1)  # Keep this legend when adding the next one
+
+    colour_legend_elements = [
+        Line2D([0], [0], marker='o', color='none', markerfacecolor='green',
+            markeredgecolor='green', label='Solid biomass', markersize=10, linewidth=0),
+        Line2D([0], [0], marker='o', color='none', markerfacecolor='lightgreen',
+            markeredgecolor='lightgreen', label='Additional solid biomass use\nwith high co2 seq. potential', markersize=10, linewidth=0),
+        Line2D([0], [0], marker='o', color='none', markerfacecolor='blue',
+            markeredgecolor='blue', label='Digestible biomass', markersize=10, linewidth=0),
+        Line2D([0], [0], marker='s', color='none', markerfacecolor='black',
+            markeredgecolor='black', label='Fossil fuels', markersize=10, linewidth=0),
+        Line2D([0], [0], marker='p', color='none', markerfacecolor='orange',
+            markeredgecolor='orange', label='Renewable energy', markersize=10, linewidth=0),
+    ]
+
+    legend2 = ax.legend(
+        handles=colour_legend_elements,
+        loc="lower right",
+        bbox_to_anchor=(1, 0),
+        frameon=True,
     )
 
     if file_path.endswith(".pgf"):
@@ -2317,6 +2392,65 @@ def plot_mga(df, file_name, title = "Near Optimal Biomass Use", export_dir='expo
     plt.close(fig)
     print(f"MGA plot saved to {output_path}")
 
+def plot_stacked_biomass_with_errorbars(data, export_dir="export/plots", file_name="biomass_stacked_errorbar", file_type="png"):
+    # Filter for year 2050
+    df = data[data["Year"] == 2050].copy()
+
+    # Select relevant scenarios
+    scenarios = ["default", "carbon_costs"]
+    variant_suffix = "_710"
+    sectors = df["Data Name"].unique()
+
+    # Aggregate values per scenario and sector
+    scenario_totals = {}
+    for scen in scenarios + [s + variant_suffix for s in scenarios]:
+        scenario_df = df[df["Folder"] == scen]
+        sector_values = scenario_df.set_index("Data Name")["Values"].reindex(sectors, fill_value=0)
+        scenario_totals[scen] = sector_values / 1e6  # Convert to TWh
+
+    # Calculate total biomass and error bars
+    total_biomass = {s: scenario_totals[s].sum() for s in scenarios}
+    total_variants = {s: scenario_totals[s + variant_suffix].sum() for s in scenarios}
+    diffs = {s: total_variants[s] - total_biomass[s] for s in scenarios}
+
+    # Plotting
+    x = np.arange(len(scenarios))
+    fig, ax = plt.subplots(figsize=(12, 8))
+
+    bottom = np.zeros(len(scenarios))
+    for sector in sectors:
+        heights = [scenario_totals[s][sector] for s in scenarios]
+        ax.bar(x, heights, bottom=bottom, label=sector)
+        bottom += heights
+
+    # Error bars
+    y = [total_biomass[s] for s in scenarios]
+    yerr = np.array([
+        [abs(diffs[s]) if diffs[s] < 0 else 0 for s in scenarios],  # lower
+        [diffs[s] if diffs[s] > 0 else 0 for s in scenarios]        # upper
+    ])
+    ax.errorbar(x, y, yerr=yerr, fmt="none", ecolor="black", capsize=6, linewidth=1.5)
+
+    # Customise plot
+    ax.set_xticks(x)
+    ax.set_xticklabels(["Default", "Carbon Costs"])
+    ax.set_ylabel("Total Biomass Use (TWh)")
+    ax.set_title("Biomass Use by Sector in 2050")
+    ax.legend(title="Sector", bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.tight_layout()
+
+    # Save
+    os.makedirs(export_dir, exist_ok=True)
+    file_path = os.path.join(export_dir, f"{file_name}.{file_type}")
+
+    if file_path.endswith(".pgf"):
+        configure_for_pgf()
+
+    plt.savefig(file_path)
+    plt.close()
+
+    print(f"Plot saved to {file_path}")
+
 def main(custom_order=["default", "carbon_costs"], file_type="png", export_dir="export/plots", data_folder="export"):
 
     data = load_csv("costs2050.csv",folder_path=data_folder)
@@ -2709,6 +2843,40 @@ def main(custom_order=["default", "carbon_costs"], file_type="png", export_dir="
         usage_threshold=usage_threshold,
     )
 
+def specific_plots():
+    """
+    Create specific plots for the project.
+    """
+    data = load_csv("biomass_supply.csv",folder_path="export/seq")
+    capacity_factors = load_csv("capacity_factors.csv",folder_path="export")
+    create_gravitational_plot(
+        "Cost vs CO2 Emissions (default)",
+        "gravitational_plot_default",
+        biomass_supply=data,
+        scenario="default",
+        export_dir="export/plots",
+        file_type="png",
+        capacity_factors=capacity_factors,
+        variant_plot=True,
+    )
+    create_gravitational_plot(
+        "Cost vs CO2 Emissions (carbon costs)",
+        "gravitational_plot_carbon_costs",
+        biomass_supply=data,
+        scenario="carbon_costs",
+        export_dir="export/plots",
+        file_type="png",
+        capacity_factors=capacity_factors,
+        variant_plot=True,
+    )
+    data = load_csv("biomass_use_by_sector.csv",folder_path="export/seq")
+    plot_stacked_biomass_with_errorbars(
+        data,
+        export_dir="export/plots",
+        file_name="biomass_stacked_errorbar",
+        file_type="png"
+    )
+
 
 if __name__ == "__main__":
 
@@ -2722,10 +2890,11 @@ if __name__ == "__main__":
     custom_order = ["default", "carbon_costs"]
     export_dir = "export/plots"
     data_folder = "export"
+    #main(custom_order=custom_order, file_type=file_type, export_dir=export_dir, data_folder=data_folder)
 
-    main(custom_order=custom_order, file_type=file_type, export_dir=export_dir, data_folder=data_folder)
+    specific_plots()
 
-
+    ########## MGA Plots ###########
     # mga_data = load_csv("biomass_use_carbon_costs_710.csv",folder_path="export/mga")
     # plot_mga(
     #     mga_data,
@@ -2746,7 +2915,33 @@ if __name__ == "__main__":
     #     unit="TWh",
     #     multiplier=1e-6,
     # )
+    # mga_data = load_csv("biomass_use_default_710.csv",folder_path="export/mga")
+    # plot_mga(
+    #     mga_data,
+    #     "mga_default_710",
+    #     title="Near Optimal Biomass Use (Scenario Default 710)",
+    #     export_dir="export/mga",
+    #     file_type="png",
+    #     unit="TWh",
+    #     multiplier=1e-6,
+    # )
+    # mga_data = load_csv("biomass_use_default.csv",folder_path="export/mga")
+    # plot_mga(
+    #     mga_data,
+    #     "mga_default",
+    #     title="Near Optimal Biomass Use (Scenario Default)",
+    #     export_dir="export/mga",
+    #     file_type="png",
+    #     unit="TWh",
+    #     multiplier=1e-6,
+    # )
 
+
+
+
+
+
+    ########### Sankey Diagrams ###########
     # co2_data = load_csv("co2_sankey.csv",folder_path="export")
     # plot_co2_sankey(
     #     co2_data,
