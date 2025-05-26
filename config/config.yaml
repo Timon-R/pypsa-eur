@@ -437,9 +437,9 @@ biomass:
     woody crops: 0.216 # 60
     agricultural waste: 0.03528 # 9.8 , cerial straw
     fuelwoodRW: 0.3384 #79 , fuelwood
-    C&P_RW: 0.3924 #109 ef used for woodchips 
+    C&P_RW: 0.3132 #87
     fuelwood residues: 0.1512 #42 , logging residues
-    secondary forestry residues: 0.3132 #87 ef used for pellets
+    secondary forestry residues: 0.3132 #87
     sawdust: 0.3636 #101
     residues from landscape care: 0
     manure: 0.04932 #13.7
@@ -818,7 +818,7 @@ sector:
     enable: true
     price: 54 #EUR/MWh
     max_amount: 1390 # TWh
-    upstream_emissions_factor: .59 #share of solid biomass CO2 emissions at full combustion
+    upstream_emissions_factor: .59 #share of solid biomass CO2 emissions at full combustion, equals 0.216/0.3667 (60 g/MJ)
   non-edible_crops: true
   imports:
     enable: false

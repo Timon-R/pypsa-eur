@@ -95,7 +95,7 @@ def configure_to_default():
     print("Configuring matplotlib to default...")    
     mpl.rcParams.update(mpl.rcParamsDefault)
 
-def load_csv(file_path, folder_path="export"):
+def load_csv(file_path, folder_path="export", rename_scenarios=True):
     """
     Load a CSV file and return the data as a pandas DataFrame.
 
@@ -108,7 +108,18 @@ def load_csv(file_path, folder_path="export"):
     pd.DataFrame: The loaded data.
     """
     file_path = os.path.join(folder_path, file_path)
-    return pd.read_csv(file_path)
+    data = pd.read_csv(file_path)
+    # Define the mapping for renaming
+    if rename_scenarios:
+        rename_dict = {
+            "default_optimal": "Default",
+            "optimal": "Carbon Costs",
+            "default_710_optimal": "Default 710",
+            "710_optimal": "Carbon Costs 710",
+        }
+        # Replace values in the entire DataFrame
+        data = data.replace(rename_dict)
+    return data
 
 
 def reorder_data(data, custom_order):
@@ -229,7 +240,7 @@ def create_gravitational_plot(
             scenario_cf = capacity_factors[capacity_factors["Folder"] == scenario]
         else:
             # Use default scenario if none specified
-            scenario_cf = capacity_factors[capacity_factors["Folder"] == "default"]
+            scenario_cf = capacity_factors[capacity_factors["Folder"] == "Default"]
         
         # Define emission factors in ton/MW (from provided data)
         renewable_ef_per_mw = {
@@ -1620,8 +1631,8 @@ def plot_biomass_use(df, title, x_label, y_label, file_name, year=2050,export_di
 
     for index, row in df_pivot.iterrows():
         biomass_type = row["Data Name"]
-        value_a = row["default"]
-        value_b = row["carbon_costs"]
+        value_a = row["Default"]
+        value_b = row["Carbon Costs"]
         potential = biomass_potentials_TWh.get(biomass_type, 0)
         if value_a - value_b > -1:
             color = "LightGreen"
@@ -2397,7 +2408,7 @@ def plot_stacked_biomass_with_errorbars(data, export_dir="export/plots", file_na
     df = data[data["Year"] == 2050].copy()
 
     # Select relevant scenarios
-    scenarios = ["default", "carbon_costs"]
+    scenarios = ["Default", "Carbon Costs"]
     variant_suffix = "_710"
     sectors = df["Data Name"].unique()
 
@@ -2451,7 +2462,7 @@ def plot_stacked_biomass_with_errorbars(data, export_dir="export/plots", file_na
 
     print(f"Plot saved to {file_path}")
 
-def main(custom_order=["default", "carbon_costs"], file_type="png", export_dir="export/plots", data_folder="export"):
+def main(custom_order=["Default", "Carbon Costs"], file_type="png", export_dir="export/plots", data_folder="export"):
 
     data = load_csv("costs2050.csv",folder_path=data_folder)
     plot_data(
@@ -2532,33 +2543,33 @@ def main(custom_order=["default", "carbon_costs"], file_type="png", export_dir="
         file_type=file_type,
     )
 
-    data = load_csv("industrial_energy.csv",folder_path=data_folder)
-    plot_bar_with_totals(
-        data,
-        "Industrial Heat Supply in 2050",
-        "",
-        "TWh",
-        "industrial_energy",
-        custom_order,
-        axis2_ticks=500,
-        include_total=False,
-        export_dir=export_dir,
-        file_type=file_type,
-    )
+    # data = load_csv("industrial_energy.csv",folder_path=data_folder)
+    # plot_bar_with_totals(
+    #     data,
+    #     "Industrial Heat Supply in 2050",
+    #     "",
+    #     "TWh",
+    #     "industrial_energy",
+    #     custom_order,
+    #     axis2_ticks=500,
+    #     include_total=False,
+    #     export_dir=export_dir,
+    #     file_type=file_type,
+    # )
 
-    data = load_csv("heating_energy.csv",folder_path=data_folder)
-    plot_bar_with_totals(
-        data,
-        "Heating Energy Supply in 2050",
-        "",
-        "TWh",
-        "heating_energy",
-        custom_order,
-        axis2_ticks=1000,
-        include_total=False,
-        export_dir=export_dir,
-        file_type=file_type,
-    )
+    # data = load_csv("heating_energy.csv",folder_path=data_folder)
+    # plot_bar_with_totals(
+    #     data,
+    #     "Heating Energy Supply in 2050",
+    #     "",
+    #     "TWh",
+    #     "heating_energy",
+    #     custom_order,
+    #     axis2_ticks=1000,
+    #     include_total=False,
+    #     export_dir=export_dir,
+    #     file_type=file_type,
+    # )
 
     data = load_csv("primary_energy.csv",folder_path=data_folder)
     plot_bar_with_shares(
@@ -2670,8 +2681,8 @@ def main(custom_order=["default", "carbon_costs"], file_type="png", export_dir="
     )
 
     supply_data = load_csv("biomass_supply.csv",folder_path=data_folder)
-    usage_dict_default = get_usage_dict(supply_data, "default")
-    usage_dict_carbon_costs = get_usage_dict(supply_data, "carbon_costs")
+    usage_dict_default = get_usage_dict(supply_data, "Default")
+    usage_dict_carbon_costs = get_usage_dict(supply_data, "Carbon Costs")
 
     data = load_csv("weighted_prices.csv",folder_path=data_folder)
     plot_feedstock_prices(
@@ -2689,7 +2700,7 @@ def main(custom_order=["default", "carbon_costs"], file_type="png", export_dir="
         "Costs in Euro/MWh",
         "Prices in EUR/MWh",
         "prices_costs_default",
-        scenario="default",
+        scenario="Default",
         usage_dict=usage_dict_default,
         export_dir=export_dir,
         file_type=file_type,
@@ -2700,7 +2711,7 @@ def main(custom_order=["default", "carbon_costs"], file_type="png", export_dir="
         "Costs in Euro/MWh",
         "Prices in EUR/MWh",
         "prices_costs_carbon_costs",
-        scenario="carbon_costs",
+        scenario="Carbon Costs",
         usage_dict=usage_dict_carbon_costs,
         export_dir=export_dir,
         file_type=file_type,
@@ -2812,13 +2823,13 @@ def main(custom_order=["default", "carbon_costs"], file_type="png", export_dir="
         }
     ]
     create_gravitational_plot(
-        "Gravitational Plot (carbon_costs)",
+        "Gravitational Plot (Carbon Costs)",
         "gravitational_plot_carbon_costs",
         export_dir=export_dir,
         file_type=file_type,
         capacity_factors=capacity_factors,
         biomass_supply=data,
-        scenario="carbon_costs",
+        scenario="Carbon Costs",
         usage_threshold=usage_threshold,
     )
 
@@ -2833,13 +2844,13 @@ def main(custom_order=["default", "carbon_costs"], file_type="png", export_dir="
         }
     ]
     create_gravitational_plot(
-        "Gravitational Plot (default)",
+        "Gravitational Plot (Default)",
         "gravitational_plot_default",
         export_dir=export_dir,
         file_type=file_type,
         capacity_factors=capacity_factors,
         biomass_supply=data,
-        scenario="default",
+        scenario="Default",
         usage_threshold=usage_threshold,
     )
 
@@ -2850,10 +2861,10 @@ def specific_plots():
     data = load_csv("biomass_supply.csv",folder_path="export/seq")
     capacity_factors = load_csv("capacity_factors.csv",folder_path="export")
     create_gravitational_plot(
-        "Cost vs CO2 Emissions (default)",
+        "Cost vs CO2 Emissions (Default)",
         "gravitational_plot_default",
         biomass_supply=data,
-        scenario="default",
+        scenario="Default",
         export_dir="export/plots",
         file_type="png",
         capacity_factors=capacity_factors,
@@ -2883,11 +2894,11 @@ if __name__ == "__main__":
     file_type = "png"
     # file_type = "pgf"
 
-    # custom_order = ["default", "carbon_costs", "default_710","carbon_costs_710"]   
+    # custom_order = ["Default", "Carbon Costs", "Default 710", "Carbon Costs 710"]  
     # export_dir = "export/seq_plots"
     # data_folder = "export/seq"
 
-    custom_order = ["default", "carbon_costs"]
+    custom_order = ["Default", "Carbon Costs"]  # Adjusted for the current context
     export_dir = "export/plots"
     data_folder = "export"
     #main(custom_order=custom_order, file_type=file_type, export_dir=export_dir, data_folder=data_folder)
@@ -2945,14 +2956,14 @@ if __name__ == "__main__":
     # co2_data = load_csv("co2_sankey.csv",folder_path="export")
     # plot_co2_sankey(
     #     co2_data,
-    #     scenario="default",
+    #     scenario="Default",
     #     multiplier=1e-6,
     #     output_dir="export/plots",
     #     unit_label="Mt CO2",
     # )
     # plot_co2_sankey(
     #     co2_data,
-    #     scenario="carbon_costs",
+    #     scenario="Carbon Costs",
     #     multiplier=1e-6,
     #     output_dir="export/plots",
     #     unit_label="Mt CO2",
