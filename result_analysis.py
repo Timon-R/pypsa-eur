@@ -1328,6 +1328,7 @@ def main(results_dir="results", export_dir="export",scenarios=["default", "carbo
                 "fuelwoodRW",
                 "biomass",
                 "C&P_RW",
+                "solid biomass import",
             ],
             "solid biomass",
         ],

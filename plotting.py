@@ -113,7 +113,11 @@ def load_csv(file_path, folder_path="export", rename_scenarios=True):
     if rename_scenarios:
         rename_dict = {
             "default_optimal": "Default",
+            "default": "Default",
+            "default_710": "Default 710",
             "optimal": "Carbon Costs",
+            "carbon_costs": "Carbon Costs",
+            "carbon_costs_710": "Carbon Costs 710",
             "default_710_optimal": "Default 710",
             "710_optimal": "Carbon Costs 710",
         }
@@ -2403,64 +2407,169 @@ def plot_mga(df, file_name, title = "Near Optimal Biomass Use", export_dir='expo
     plt.close(fig)
     print(f"MGA plot saved to {output_path}")
 
-def plot_stacked_biomass_with_errorbars(data, export_dir="export/plots", file_name="biomass_stacked_errorbar", file_type="png"):
-    # Filter for year 2050
-    df = data[data["Year"] == 2050].copy()
+def plot_stacked_biomass_with_errorbars(
+    data: pd.DataFrame,
+    export_dir: str = "export/plots",
+    file_name: str = "biomass_stacked_errorbar",
+    file_type: str = "png",
+):
+    """Stacked biomass bars (TWh) for 2050 with ±710 variant error bars."""
+    # --- data prep ----------------------------------------------------------
+    df = data.loc[data["Year"] == 2050].copy()
 
-    # Select relevant scenarios
-    scenarios = ["Default", "Carbon Costs"]
-    variant_suffix = "_710"
+    base = ["Default", "Carbon Costs"]
+    variant_suffix = " 710"                # <- include the space
+    variants = [s + variant_suffix for s in base]
+
     sectors = df["Data Name"].unique()
 
-    # Aggregate values per scenario and sector
-    scenario_totals = {}
-    for scen in scenarios + [s + variant_suffix for s in scenarios]:
-        scenario_df = df[df["Folder"] == scen]
-        sector_values = scenario_df.set_index("Data Name")["Values"].reindex(sectors, fill_value=0)
-        scenario_totals[scen] = sector_values / 1e6  # Convert to TWh
+    # per-sector values in TWh
+    scen_vals = {}
+    for scen in base + variants:
+        vals = (df.loc[df["Folder"] == scen]
+                  .set_index("Data Name")["Values"]
+                  .reindex(sectors, fill_value=0) / 1e6)
+        scen_vals[scen] = vals
 
-    # Calculate total biomass and error bars
-    total_biomass = {s: scenario_totals[s].sum() for s in scenarios}
-    total_variants = {s: scenario_totals[s + variant_suffix].sum() for s in scenarios}
-    diffs = {s: total_variants[s] - total_biomass[s] for s in scenarios}
+    totals_base = {s: scen_vals[s].sum() for s in base}
+    totals_var  = {s: scen_vals[s + variant_suffix].sum() for s in base}
+    deltas      = {s: totals_var[s] - totals_base[s] for s in base}
 
-    # Plotting
-    x = np.arange(len(scenarios))
-    fig, ax = plt.subplots(figsize=(12, 8))
+    # --- plotting -----------------------------------------------------------
+    x = np.arange(len(base))
+    fig, ax = plt.subplots(figsize=(8, 6))
 
-    bottom = np.zeros(len(scenarios))
+    bottom = np.zeros_like(x, dtype=float)
     for sector in sectors:
-        heights = [scenario_totals[s][sector] for s in scenarios]
+        heights = [scen_vals[s][sector] for s in base]
         ax.bar(x, heights, bottom=bottom, label=sector)
         bottom += heights
 
-    # Error bars
-    y = [total_biomass[s] for s in scenarios]
-    yerr = np.array([
-        [abs(diffs[s]) if diffs[s] < 0 else 0 for s in scenarios],  # lower
-        [diffs[s] if diffs[s] > 0 else 0 for s in scenarios]        # upper
-    ])
-    ax.errorbar(x, y, yerr=yerr, fmt="none", ecolor="black", capsize=6, linewidth=1.5)
+    # one-sided error bars
+    lowers = [abs(d) if d < 0 else 0 for d in deltas.values()]
+    uppers = [d if d > 0 else 0 for d in deltas.values()]
+    yerr   = np.vstack([lowers, uppers])
 
-    # Customise plot
+    ax.errorbar(x, list(totals_base.values()), yerr=yerr,
+                fmt="none", ecolor="black", capsize=6, linewidth=1.5)
+
+    # axes & legend
     ax.set_xticks(x)
-    ax.set_xticklabels(["Default", "Carbon Costs"])
+    ax.set_xticklabels(base)
     ax.set_ylabel("Total Biomass Use (TWh)")
     ax.set_title("Biomass Use by Sector in 2050")
-    ax.legend(title="Sector", bbox_to_anchor=(1.05, 1), loc='upper left')
+    ax.legend(title="Sector", bbox_to_anchor=(1.05, 1), loc="upper left")
+    ax.grid(axis="y", linestyle="--", alpha=0.6)
+
     plt.tight_layout()
 
-    # Save
+    # save
     os.makedirs(export_dir, exist_ok=True)
-    file_path = os.path.join(export_dir, f"{file_name}.{file_type}")
-
-    if file_path.endswith(".pgf"):
+    path = os.path.join(export_dir, f"{file_name}.{file_type}")
+    if path.endswith(".pgf"):
         configure_for_pgf()
+    plt.savefig(path, dpi=300)
+    plt.close()
+    print(f"Stacked plot with error bars saved to {path}")
 
-    plt.savefig(file_path)
+def plot_technology_barplot_with_errorbars(
+    data: pd.DataFrame,
+    export_dir: str = "export/plots",
+    file_name: str = "primary_energy_errorbars",
+    file_type: str = "png",
+    colour_error: bool = False,
+):
+    """
+    Grouped bar chart of energy (TWh) by technology (x-axis) for two scenarios
+    ('default', 'carbon_costs'), with one-sided error bars that show the
+    difference to the matching _710 variant (positive = up, negative = down).
+
+    Parameters
+    ----------
+    data : DataFrame
+        Needs columns ['Year', 'Folder', 'Data Name', 'Values'].
+    export_dir : str
+        Folder where the file is saved.
+    file_name : str
+        Base name of the output file.
+    file_type : str
+        'png', 'pdf', etc.
+    colour_error : bool
+        If True, error bars are green (positive) or red (negative);
+        otherwise they are black.
+    """
+    os.makedirs(export_dir, exist_ok=True)
+
+    # --- prepare data -------------------------------------------------------
+    df = data.query("Year == 2050").copy()
+    df["Values"] /= 1e6  # → TWh
+
+    scenarios = ["Default", "Carbon Costs"]
+    variants = [f"{s} 710" for s in scenarios]
+
+    # wide table: rows = tech, cols = scenario / variant
+    wide = df.pivot(index="Data Name", columns="Folder", values="Values")
+
+    # check required columns
+    missing = [c for c in scenarios + variants if c not in wide.columns]
+    if missing:
+        raise ValueError(f"Missing columns: {missing}")
+
+    techs = wide.index.tolist()
+    n_tech = len(techs)
+
+    # base heights and deltas (variant – base) as Series dictionaries
+    base = {s: wide[s].fillna(0) for s in scenarios}
+    delta = {s: wide[f"{s} 710"].fillna(0) - base[s] for s in scenarios}
+
+    # --- plotting -----------------------------------------------------------
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    x = np.arange(n_tech)
+    bar_w = 0.35
+    colours = ["#1f77b4","#ff7f0e"]  # two scenarios
+
+    for j, s in enumerate(scenarios):
+        xpos = x + (j - 0.5) * bar_w
+        heights = base[s].values
+        ax.bar(xpos, heights, width=bar_w, color=colours[j],
+               label=s.replace("_", " ").title(), zorder=3)
+
+        # one-sided error bars
+        errs = delta[s].values
+        lowers = [abs(e) if e < 0 else 0 for e in errs]
+        uppers = [e if e > 0 else 0 for e in errs]
+
+        if colour_error:
+            ecols = ["green" if e > 0 else "red" if e < 0 else "black"
+                     for e in errs]
+        else:
+            ecols = ["black"] * n_tech
+
+        for xi, y, lo, up, ec in zip(xpos, heights, lowers, uppers, ecols):
+            ax.errorbar(xi, y,
+                        yerr=np.array([[lo], [up]]),
+                        fmt="none", ecolor=ec,
+                        capsize=4, elinewidth=1.8, zorder=4)
+
+    # axes, legend, layout
+    ax.set_xticks(x)
+    ax.set_xticklabels(techs, rotation=45, ha="right")
+    ax.set_ylabel("Energy (TWh)")
+    ax.set_title("Primary Energy")
+    ax.grid(axis="y", linestyle="--", alpha=0.6, zorder=0)
+    ax.legend(title="Scenario", frameon=False)
+
+    plt.tight_layout()
+
+    # save
+    path = os.path.join(export_dir, f"{file_name}.{file_type}")
+    if path.endswith(".pgf"):
+        configure_for_pgf()
+    plt.savefig(path, dpi=300)
     plt.close()
 
-    print(f"Plot saved to {file_path}")
+    print(f"Primary energy plot with error bars saved to {path}")
 
 def main(custom_order=["Default", "Carbon Costs"], file_type="png", export_dir="export/plots", data_folder="export"):
 
@@ -2859,7 +2968,7 @@ def specific_plots():
     Create specific plots for the project.
     """
     data = load_csv("biomass_supply.csv",folder_path="export/seq")
-    capacity_factors = load_csv("capacity_factors.csv",folder_path="export")
+    capacity_factors = load_csv("capacity_factors.csv",folder_path="export/seq")
     create_gravitational_plot(
         "Cost vs CO2 Emissions (Default)",
         "gravitational_plot_default",
@@ -2886,6 +2995,14 @@ def specific_plots():
         export_dir="export/plots",
         file_name="biomass_stacked_errorbar",
         file_type="png"
+    )
+    data = load_csv("primary_energy.csv",folder_path="export/seq")
+    plot_technology_barplot_with_errorbars(
+        data,
+        export_dir="export/plots",
+        file_name="primary_energy_errorbars",
+        file_type="png",
+        colour_error= False
     )
 
 
