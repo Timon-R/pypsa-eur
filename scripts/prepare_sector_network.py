@@ -4682,7 +4682,7 @@ def add_medium_t_industry(n, nodes, industrial_demand, costs, must_run):
             carrier="solid biomass for mediumT industry",
             p_nom_extendable=True,
             p_min_pu=must_run,
-            efficiency=costs.at["direct firing solid fuels", "efficiency"],
+            efficiency= costs.at["solid biomass boiler steam", "efficiency"], # corrected to have the same efficiency as the lowT industry boiler (might be a bit too high but best source we have; DEA)
             capital_cost=costs.at["direct firing solid fuels", "capital_cost"]
             * costs.at["direct firing solid fuels", "efficiency"],
             marginal_cost=costs.at["direct firing solid fuels", "VOM"]

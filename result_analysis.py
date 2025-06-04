@@ -1074,9 +1074,9 @@ def modify_co2_data(data, threshold=0):
         "urban decentral gas boiler": "gas",
         "Fischer-Tropsch": "liquid fuels",
         "waste CHP CC": "municipal solid waste",
-        "onwind landuse emission": "indirect land use emissions from renewables",
-        "solar landuse emission": "indirect land use emissions from renewables",
-        "solar-hsat landuse emission": "indirect land use emissions from renewables",
+        "onwind landuse emission": "indirect emissions from renewables",
+        "solar landuse emission": "indirect emissions from renewables",
+        "solar-hsat landuse emission": "indirect emissions from renewables",
         "agricultural waste": "indirect emissions from biomass",
         "fuelwood residues": "indirect emissions from biomass",
         "fuelwoodRW": "indirect emissions from biomass",
@@ -1657,7 +1657,8 @@ def main(results_dir="results", export_dir="export",scenarios=["default", "carbo
     merge_fields = [
         [["biomass to liquid","biomass to liquid CC", "electrobiofuels","biomass-to-methanol","biomass-to-methanol CC"], "conversion to liquid fuels"],
         [["solid biomass for industry","solid biomass for lowT industry","solid biomass for mediumT industry", "solid biomass for industry CC","solid biomass for lowT industry CC","solid biomass for mediumT industry CC","rural biomass boiler","urban decentral biomass boiler","urban central biomass boiler",
-          "gas for lowT industry","gas for mediumT industry","gas for highT industry","gas for industry","gas for lowT industry CC","gas for mediumT industry CC","gas for highT industry CC","gas for industry CC","rural gas boiler","urban decentral gas boiler","urban central gas boiler",
+          "gas for lowT industry","gas for mediumT industry","gas for highT industry","gas for industry","gas for lowT industry CC","gas for mediumT industry CC","gas for highT industry CC","gas for industry CC","rural gas boiler","urban decentral gas boiler","urban central gas boiler","lowT industry solid biomass","lowT industry solid biomass CC",
+          "lowT industry methane","lowT industry methane CC",
           ], "heat production"],
         [["urban central solid biomass CHP","urban central solid biomass CHP CC"], "CHP"],
         [["solid biomass to hydrogen","solid biomass to hydrogen CC","SMR","SMR CC"], "hydrogen production"],
@@ -1864,7 +1865,7 @@ def main(results_dir="results", export_dir="export",scenarios=["default", "carbo
         results,
         scenarios,
         "energy_balance",
-        [["Link", "", "co2"],["Generator", "", "co2"]],
+        [["Link", "", "co2"],["Generator", "", "co2"],["Link","","co2 sequestered"],["Link", "", "co2 stored"]],
         [],
         "D",
         "B",
@@ -1916,17 +1917,95 @@ def main(results_dir="results", export_dir="export",scenarios=["default", "carbo
         round_digits = 3,
     )
 
+def get_mga_results(results_dir="results", export_dir="export/mga"):
+    scenarios = ["optimal", "max_0.025", "max_0.05","max_0.1","max_0.15","min_0.025","min_0.05","min_0.1","min_0.15"]
+    results = load_results(results_dir, scenarios)
+
+    all_biomass_supply = get_data(
+        results,
+        scenarios,
+        "energy_balance",
+        [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
+        [
+            [[""], "biomass"],
+        ],
+        "D",
+        "B",
+        "2050",
+        filter_positive=True,
+        remove_list=["biomass transport", "solid biomass for industry","solid biomass for industry CC"],
+    )
+    export_results(all_biomass_supply, "biomass_use_carbon_costs.csv", export_dir=export_dir)
+
+    scenarios = ["710_optimal", "710_max_0.025", "710_max_0.05","710_max_0.1","710_max_0.15","710_min_0.025","710_min_0.05","710_min_0.1","710_min_0.15"]
+    results = load_results(results_dir, scenarios)
+
+    all_biomass_supply = get_data(
+        results,
+        scenarios,
+        "energy_balance",
+        [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
+        [
+            [[""], "biomass"],
+        ],
+        "D",
+        "B",
+        "2050",
+        filter_positive=True,
+        remove_list=["biomass transport", "solid biomass for industry","solid biomass for industry CC"],
+    )
+    export_results(all_biomass_supply, "biomass_use_carbon_costs_710.csv", export_dir=export_dir)
+
+    results_dir = "results"
+    scenarios = ["default_optimal", "default_max_0.025", "default_max_0.05","default_max_0.1","default_max_0.15","default_min_0.025","default_min_0.05","default_min_0.1","default_min_0.15"]
+    results = load_results(results_dir, scenarios)
+
+    all_biomass_supply = get_data(
+        results,
+        scenarios,
+        "energy_balance",
+        [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
+        [
+            [[""], "biomass"],
+        ],
+        "D",
+        "B",
+        "2050",
+        filter_positive=True,
+        remove_list=["biomass transport", "solid biomass for industry","solid biomass for industry CC"],
+    )
+    export_results(all_biomass_supply, "biomass_use_default.csv", export_dir=export_dir)
+
+    scenarios = ["default_710_optimal", "default_710_max_0.025", "default_710_max_0.05","default_710_max_0.1","default_710_max_0.15","default_710_min_0.025","default_710_min_0.05","default_710_min_0.1","default_710_min_0.15"]
+    results = load_results(results_dir, scenarios)
+
+    all_biomass_supply = get_data(
+        results,
+        scenarios,
+        "energy_balance",
+        [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
+        [
+            [[""], "biomass"],
+        ],
+        "D",
+        "B",
+        "2050",
+        filter_positive=True,
+        remove_list=["biomass transport", "solid biomass for industry","solid biomass for industry CC"],
+    )
+    export_results(all_biomass_supply, "biomass_use_default_710.csv", export_dir=export_dir)
+
 
 if __name__ == "__main__":
     results_dir = "results"
 
-    # scenarios = ["default_optimal", "optimal", default_710_optimal, "710_optimal"]
-    # difference_scenarios = ["default_optimal", "optimal"]
-    # export_dir = "export/seq"
-
-    scenarios = ["default", "carbon_costs", "default_710","carbon_costs_710"]
-    difference_scenarios = ["default", "carbon_costs"]
+    scenarios = ["default_optimal", "optimal", "default_710_optimal", "710_optimal"]
+    difference_scenarios = ["default_optimal", "optimal"]
     export_dir = "export/seq"
+
+    # scenarios = ["default", "carbon_costs", "default_710","carbon_costs_710"]
+    # difference_scenarios = ["default", "carbon_costs"]
+    # export_dir = "export/seq"
 
     # scenarios = ["default", "carbon_costs"]
     # export_dir = "export/basic"
@@ -1935,85 +2014,4 @@ if __name__ == "__main__":
 
     #get_biomass_potentials(export_dir=export_dir)
 
-    #################### MGA ####################
-    # results_dir = "results"
-    # scenarios = ["optimal", "max_0.025", "max_0.05","max_0.1","max_0.15","min_0.025","min_0.05","min_0.1","min_0.15"]
-    # export_dir = "export/mga"
-    # results = load_results(results_dir, scenarios)
-
-    # all_biomass_supply = get_data(
-    #     results,
-    #     scenarios,
-    #     "energy_balance",
-    #     [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
-    #     [
-    #         [[""], "biomass", None],
-    #     ],
-    #     "D",
-    #     "B",
-    #     "2050",
-    #     filter_positive=True,
-    #     remove_list=["biomass transport"],
-    # )
-    # export_results(all_biomass_supply, "biomass_use_carbon_costs.csv", export_dir=export_dir)
-
-    # scenarios = ["710_optimal", "710_max_0.025", "710_max_0.05","710_max_0.1","710_max_0.15","710_min_0.025","710_min_0.05","710_min_0.1","710_min_0.15"]
-    # export_dir = "export/mga"
-    # results = load_results(results_dir, scenarios)
-
-    # all_biomass_supply = get_data(
-    #     results,
-    #     scenarios,
-    #     "energy_balance",
-    #     [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
-    #     [
-    #         [[""], "biomass", None],
-    #     ],
-    #     "D",
-    #     "B",
-    #     "2050",
-    #     filter_positive=True,
-    #     remove_list=["biomass transport"],
-    # )
-    # export_results(all_biomass_supply, "biomass_use_carbon_costs_710.csv", export_dir=export_dir)
-
-    # results_dir = "results"
-    # scenarios = ["default_optimal", "default_max_0.025", "default_max_0.05","default_max_0.1","default_max_0.15","default_min_0.025","default_min_0.05","default_min_0.1","default_min_0.15"]
-    # export_dir = "export/mga"
-    # results = load_results(results_dir, scenarios)
-
-    # all_biomass_supply = get_data(
-    #     results,
-    #     scenarios,
-    #     "energy_balance",
-    #     [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
-    #     [
-    #         [[""], "biomass", None],
-    #     ],
-    #     "D",
-    #     "B",
-    #     "2050",
-    #     filter_positive=True,
-    #     remove_list=["biomass transport"],
-    # )
-    # export_results(all_biomass_supply, "biomass_use_default.csv", export_dir=export_dir)
-
-    # scenarios = ["default_710_optimal", "default_710_max_0.025", "default_710_max_0.05","default_710_max_0.1","default_710_max_0.15","default_710_min_0.025","default_710_min_0.05","default_710_min_0.1","default_710_min_0.15"]
-    # export_dir = "export/mga"
-    # results = load_results(results_dir, scenarios)
-
-    # all_biomass_supply = get_data(
-    #     results,
-    #     scenarios,
-    #     "energy_balance",
-    #     [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
-    #     [
-    #         [[""], "biomass", None],
-    #     ],
-    #     "D",
-    #     "B",
-    #     "2050",
-    #     filter_positive=True,
-    #     remove_list=["biomass transport"],
-    # )
-    # export_results(all_biomass_supply, "biomass_use_default_710.csv", export_dir=export_dir)
+    get_mga_results()

@@ -4,13 +4,6 @@
 # SPDX-License-Identifier: MIT
 
 
-###### carbon cost ######
-
-optimal:
-  solving:
-    mga:
-      enable: false
-
 min_0.025:
   solving:
     mga:
@@ -18,147 +11,160 @@ min_0.025:
       sense: min
       slack: 0.025
 
-max_0.025:
-  solving:
-    mga:
-      enable: true
-      sense: max
-      slack: 0.025
+###### carbon cost ######
+
+# optimal:
+#   solving:
+#     mga:
+#       enable: false
+
+# min_0.025:
+#   solving:
+#     mga:
+#       enable: true
+#       sense: min
+#       slack: 0.025
+
+# max_0.025:
+#   solving:
+#     mga:
+#       enable: true
+#       sense: max
+#       slack: 0.025
+
+# min_0.05:
+#   solving:
+#     mga:
+#       enable: true
+#       sense: min
+#       slack: 0.05
+
+# max_0.05:
+#   solving:
+#     mga:
+#       enable: true
+#       sense: max
+#       slack: 0.05
+
+# min_0.1:
+#   solving:
+#     mga:
+#       enable: true
+#       sense: min
+#       slack: 0.1
+
+# max_0.1:
+#   solving:
+#     mga:
+#       enable: true
+#       sense: max
+#       slack: 0.1
+
+# min_0.15:
+#   solving:
+#     mga:
+#       enable: true
+#       sense: min
+#       slack: 0.15
+
+# max_0.15:
+#   solving:
+#     mga:
+#       enable: true
+#       sense: max
+#       slack: 0.15
+
+# ####### 710 scenarios carbon costs ########
+# 710_optimal:
+#   solving:
+#     mga:
+#       enable: false
+#   sector:
+#     co2_sequestration_potential:
+#       2050: 710
+
+# 710_min_0.025:
+#   solving:
+#     mga:
+#       enable: true
+#       sense: min
+#       slack: 0.025
+#   sector:
+#     co2_sequestration_potential:
+#       2050: 710
+
+# 710_max_0.025:
+#   solving:
+#     mga:
+#       enable: true
+#       sense: max
+#       slack: 0.025
+#   sector:
+#     co2_sequestration_potential:
+#       2050: 710
+
+# 710_min_0.05:
+#   solving:
+#     mga:
+#       enable: true
+#       sense: min
+#       slack: 0.05
+#   sector:
+#     co2_sequestration_potential:
+#       2050: 710
+
+# 710_max_0.05:
+#   solving:
+#     mga:
+#       enable: true
+#       sense: max
+#       slack: 0.05
+#   sector:
+#     co2_sequestration_potential:
+#       2050: 710
+
+# 710_min_0.1:
+#   solving:
+#     mga:
+#       enable: true
+#       sense: min
+#       slack: 0.1
+#   sector:
+#     co2_sequestration_potential:
+#       2050: 710
+
+# 710_max_0.1:
+#   solving:
+#     mga:
+#       enable: true
+#       sense: max
+#       slack: 0.1
+#   sector:
+#     co2_sequestration_potential:
+#       2050: 710
+
+# 710_min_0.15:
+#   solving:
+#     mga:
+#       enable: true
+#       sense: min
+#       slack: 0.15
+#   sector:
+#     co2_sequestration_potential:
+#       2050: 710
+
+# 710_max_0.15:
+#   solving:
+#     mga:
+#       enable: true
+#       sense: max
+#       slack: 0.15
+#   sector:
+#     co2_sequestration_potential:
+#       2050: 710
 
 
-min_0.05:
-  solving:
-    mga:
-      enable: true
-      sense: min
-      slack: 0.05
-
-max_0.05:
-  solving:
-    mga:
-      enable: true
-      sense: max
-      slack: 0.05
-
-min_0.1:
-  solving:
-    mga:
-      enable: true
-      sense: min
-      slack: 0.1
-
-max_0.1:
-  solving:
-    mga:
-      enable: true
-      sense: max
-      slack: 0.1
-
-min_0.15:
-  solving:
-    mga:
-      enable: true
-      sense: min
-      slack: 0.15
-
-max_0.15:
-  solving:
-    mga:
-      enable: true
-      sense: max
-      slack: 0.15
-
-####### 710 scenarios carbon costs ########
-710_optimal:
-  solving:
-    mga:
-      enable: false
-  sector:
-    co2_sequestration_potential:
-      2050: 710
-
-710_min_0.025:
-  solving:
-    mga:
-      enable: true
-      sense: min
-      slack: 0.025
-  sector:
-    co2_sequestration_potential:
-      2050: 710
-
-710_max_0.025:
-  solving:
-    mga:
-      enable: true
-      sense: max
-      slack: 0.025
-  sector:
-    co2_sequestration_potential:
-      2050: 710
-
-710_min_0.05:
-  solving:
-    mga:
-      enable: true
-      sense: min
-      slack: 0.05
-  sector:
-    co2_sequestration_potential:
-      2050: 710
-
-710_max_0.05:
-  solving:
-    mga:
-      enable: true
-      sense: max
-      slack: 0.05
-  sector:
-    co2_sequestration_potential:
-      2050: 710
-
-710_min_0.1:
-  solving:
-    mga:
-      enable: true
-      sense: min
-      slack: 0.1
-  sector:
-    co2_sequestration_potential:
-      2050: 710
-
-710_max_0.1:
-  solving:
-    mga:
-      enable: true
-      sense: max
-      slack: 0.1
-  sector:
-    co2_sequestration_potential:
-      2050: 710
-
-710_min_0.15:
-  solving:
-    mga:
-      enable: true
-      sense: min
-      slack: 0.15
-  sector:
-    co2_sequestration_potential:
-      2050: 710
-
-710_max_0.15:
-  solving:
-    mga:
-      enable: true
-      sense: max
-      slack: 0.15
-  sector:
-    co2_sequestration_potential:
-      2050: 710
-
-
-# # ####### default scenarios #######
+# # # ####### default scenarios #######
 default_optimal:
   biomass:
     emission_factors:
@@ -176,6 +182,8 @@ default_optimal:
   sector:
     renewable_emissions:
       enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
 
 default_min_0.025:
   biomass:
@@ -194,6 +202,8 @@ default_min_0.025:
   sector:
     renewable_emissions:
       enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
   solving:
     mga:
       enable: true
@@ -218,6 +228,8 @@ default_max_0.025:
   sector:
     renewable_emissions:
       enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
   solving:
     mga:
       enable: true
@@ -241,6 +253,8 @@ default_min_0.05:
   sector:
     renewable_emissions:
       enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
   solving:
     mga:
       enable: true
@@ -264,6 +278,8 @@ default_max_0.05:
   sector:
     renewable_emissions:
       enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
   solving:
     mga:
       enable: true
@@ -287,6 +303,8 @@ default_min_0.1:
   sector:
     renewable_emissions:
       enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
   solving:
     mga:
       enable: true
@@ -310,6 +328,8 @@ default_max_0.1:
   sector:
     renewable_emissions:
       enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
   solving:
     mga:
       enable: true
@@ -333,6 +353,8 @@ default_min_0.15:
   sector:
     renewable_emissions:
       enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
   solving:
     mga:
       enable: true
@@ -356,6 +378,8 @@ default_max_0.15:
   sector:
     renewable_emissions:
       enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
   solving:
     mga:
       enable: true
@@ -381,6 +405,8 @@ default_710_optimal:
   sector:
     renewable_emissions:
       enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
     co2_sequestration_potential:
       2050: 710
 
@@ -402,6 +428,8 @@ default_710_min_0.025:
   sector:
     renewable_emissions:
       enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
     co2_sequestration_potential:
       2050: 710
   solving:
@@ -427,6 +455,8 @@ default_710_min_0.05:
   sector:
     renewable_emissions:
       enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
     co2_sequestration_potential:
       2050: 710
   solving:
@@ -452,6 +482,8 @@ default_710_max_0.025:
   sector:
     renewable_emissions:
       enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
     co2_sequestration_potential:
       2050: 710
   solving:
@@ -477,6 +509,8 @@ default_710_max_0.05:
   sector:
     renewable_emissions:
       enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
     co2_sequestration_potential:
       2050: 710
   solving:
@@ -502,6 +536,8 @@ default_710_min_0.1:
   sector:
     renewable_emissions:
       enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
     co2_sequestration_potential:
       2050: 710
   solving:
@@ -527,6 +563,8 @@ default_710_max_0.1:
   sector:
     renewable_emissions:
       enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
     co2_sequestration_potential:
       2050: 710
   solving:
@@ -552,6 +590,8 @@ default_710_min_0.15:
   sector:
     renewable_emissions:
       enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
     co2_sequestration_potential:
       2050: 710
   solving:
@@ -577,6 +617,8 @@ default_710_max_0.15:
   sector:
     renewable_emissions:
       enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
     co2_sequestration_potential:
       2050: 710
   solving:

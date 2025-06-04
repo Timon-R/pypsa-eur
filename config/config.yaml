@@ -771,8 +771,9 @@ sector:
     # Thus, p_min_pu is set to must run to avoid too much dispatch behaviour. Improvements welcome!
     # share of medium and high temperature for process heat based on EU27 Fig. 5 https://www.agora-industry.org/publications/direct-electrification-of-industrial-process-heat
     # TODO: should be improved and split up by country and sector
-    share_medium: 0.42
-    share_high: 0.57
+    # Medium/high shares are conditional: (0.37 / 0.50) normalised so that medium + high = 1 after removing the 13 % low-T share → (0.425, 0.575)
+    share_medium: 0.425
+    share_high: 0.575
     # Options in case of endogenous industry heat supply
     low_T:
       biomass: true
@@ -984,7 +985,7 @@ clustering:
       ramp_limit_down: max
   temporal:
     resolution_elec: false
-    resolution_sector: 6H
+    resolution_sector: 5H
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#adjustments
 adjustments:
