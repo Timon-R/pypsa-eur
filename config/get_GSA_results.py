@@ -82,11 +82,11 @@ def get_gsa_config() -> dict:
         return yaml.safe_load(f)
 
 
-def extract_results():
+def extract_results(folder="results"):
     """
     Extract results from model runs and save them as CSV files for GSA analysis.
     """
-    resultsfolder = Path("results")
+    resultsfolder = Path(folder)
     gsa_config = get_gsa_config()
     result_variables = gsa_config.get("results", [])
     results_dir = Path("GSA/results")
@@ -190,5 +190,5 @@ def calculate_GSA_metrics():
 
 
 if __name__ == "__main__":
-    extract_results()
+    extract_results(folder= "results/GSA")
     calculate_GSA_metrics()

@@ -750,7 +750,7 @@ def split_CHP(data):
     return data
 
 def calculate_supply_difference_and_emission_difference(
-    data, scenario1, scenario2, year
+    data,capacity_data, scenario1, scenario2, year
 ):
     results = {}
     emission_factors = get_emission_factors(
@@ -758,6 +758,11 @@ def calculate_supply_difference_and_emission_difference(
         new_names=False,
         add_imported_biomass=True,
     )
+    renewable_factors = {
+        "solar": 8.4,
+        "onwind": 0.95,
+        "solar-hsat": 12.41
+    }
     # find all rows that match year and data name and calculate the difference between folder1 and folder2
     for key, content in data.items():
         # remove number 1 from data name
@@ -777,6 +782,27 @@ def calculate_supply_difference_and_emission_difference(
                         "emission_difference": difference
                         * emission_factors[content["data_name"]],
                     }
+    for key, content in capacity_data.items():
+        if content["year"] == year:
+            if content["folder"] == scenario1:
+                key2 = key.replace(scenario1, scenario2)
+                if key2 in capacity_data:
+                    difference = content["values"] - capacity_data[key2]["values"]
+                    new_key = key.replace(scenario1, f"{scenario1}_{scenario2}")
+                    results[new_key] = {
+                        "year": year,
+                        "data_name": content["data_name"],
+                        f"values_{scenario1}": content["values"],
+                        f"values_{scenario2}": capacity_data[key2]["values"],
+                        "difference": difference,
+                        "emission_difference": (
+                            difference
+                            * renewable_factors.get(
+                                content["data_name"], 0
+                            )
+                        ),
+                    }
+
     results["total"] = {
         "year": year,
         "data_name": "total",
@@ -864,12 +890,17 @@ def get_biomass_potentials(
     df.to_csv(file_path, index=False)
 
 
-def calculate_upstream_emissions(data, scenarios):
+def calculate_upstream_emissions(data, scenarios, capacity_data):
     emission_factors = get_emission_factors(
         config_file_path="config/config.yaml",
         new_names=False,
         add_imported_biomass=True,
     )
+    renewable_factors = {
+        "solar": 8.4,
+        "onwind": 0.95,
+        "solar-hsat": 12.41
+    }
     results = {}
     for key, content in data.items():
         for scenario in scenarios:
@@ -881,6 +912,23 @@ def calculate_upstream_emissions(data, scenarios):
                     "upstream emissions": content["values"]
                     * emission_factors[content["data_name"]],
                 }
+    for key, content in capacity_data.items():
+        for scenario in scenarios:
+            if content["folder"] == scenario:
+                # calculate upstream emissions based on capacity
+                upstream_emissions = (
+                    content["values"]
+                    * renewable_factors.get(
+                        content["data_name"], 0
+                    ) 
+                )
+                results[key] = {
+                    "folder": content["folder"],
+                    "data_name": content["data_name"],
+                    "year": content["year"],
+                    "upstream emissions": upstream_emissions,
+                }
+
     # calculate the total upstream emissions
     for scenario in scenarios:
         total_upstream_emissions = sum(
@@ -945,6 +993,7 @@ def calc_beccus(results, scenarios, solid_biomass_supply, digestable_biomass_sup
             ["Link", "solid biomass for mediumT industry CC", "co2 stored"],
             ["Link", "solid biomass to hydrogen", "co2 stored"],
             ["Link", "urban central solid biomass CHP CC", "co2 stored"],
+            ["Link", "biomass-to-methanol CC", "co2 stored"],            
         ],
         [],
         "D",
@@ -1003,6 +1052,11 @@ def calc_beccus(results, scenarios, solid_biomass_supply, digestable_biomass_sup
             ["Link", "electrobiofuels", "co2"],
             ["Link", "biogas to gas", "co2"],
             ["Link", "BioSNG", "co2"],
+            ["Link", "biomass to liquid CC", "co2"],
+            ["Link", "biogas to gas CC", "co2"],
+            ["Link", "BioSNG CC", "co2"],
+            ["Link", "biomass-to-methanol", "co2"],
+            ["Link", "biomass-to-methanol CC", "co2"],
         ],
         [[[""], "All utilised"]],
         "D",
@@ -1026,6 +1080,7 @@ def calc_beccus(results, scenarios, solid_biomass_supply, digestable_biomass_sup
         [
             ["Link", "biomass to liquid CC", "co2 stored"],
             ["Link", "biogas to gas CC", "co2 stored"],
+            #["Link", "BioSNG CC", "co2 stored"],
         ],
         [],
         "D",
@@ -1379,10 +1434,25 @@ def main(results_dir="results", export_dir="export",scenarios=["default", "carbo
         remove_list=["biomass transport", "solid biomass for industry","solid biomass for industry CC"],
     )
     export_results(biomass_supply, "biomass_supply.csv", export_dir=export_dir)
-    difference = calculate_supply_difference_and_emission_difference(
-        biomass_supply, difference_scenarios[0], difference_scenarios[1], "2050"
+    renewable_capacity = get_data(
+        results,
+        scenarios,
+        "capacities",
+        [["Generator", "solar"], ["Generator", "onwind"], ["Generator", "solar-hsat"]],
+        [],
+        "C",
+        "B",
+        "2050",
+        filter_positive=True,
     )
-    export_results(difference, "biomass_supply_difference.csv", simply_print=True, export_dir=export_dir)
+    difference = calculate_supply_difference_and_emission_difference(
+        biomass_supply,renewable_capacity, difference_scenarios[0], difference_scenarios[1], "2050"
+    )
+    export_results(difference, "supply_difference.csv", simply_print=True, export_dir=export_dir)
+    difference2 = calculate_supply_difference_and_emission_difference(
+        biomass_supply,renewable_capacity, "default_710_optimal", "710_optimal", "2050"
+    )
+    export_results(difference2, "supply_difference_variants.csv", simply_print=True, export_dir=export_dir)
 
     fossil_fuel_supply = get_data(
         results,
@@ -1761,7 +1831,19 @@ def main(results_dir="results", export_dir="export",scenarios=["default", "carbo
         biomass_use, "biomass_use.csv", include_share=True, export_dir=export_dir
     )
 
-    upstream_emissions = calculate_upstream_emissions(biomass_supply, scenarios)
+    renewable_capacity = get_data(
+        results,
+        scenarios,
+        "capacities",
+        [["Generator", "solar"], ["Generator", "onwind"], ["Generator", "solar-hsat"]],
+        [],
+        "C",
+        "B",
+        "2050",
+        filter_positive=True,
+    )
+
+    upstream_emissions = calculate_upstream_emissions(biomass_supply, scenarios,renewable_capacity)
     export_results(upstream_emissions, "upstream_emissions.csv", simply_print=True, export_dir=export_dir)
 
     remove_list = ["agriculture machinery oil1"]
@@ -1916,6 +1998,20 @@ def main(results_dir="results", export_dir="export",scenarios=["default", "carbo
         export_dir=export_dir,
         round_digits = 3,
     )
+    renewable_capacity = get_data(
+        results,
+        scenarios,
+        "capacities",
+        [["Generator", "solar"], ["Generator", "onwind"], ["Generator", "solar-hsat"], ["Generator", "offwind-ac"], ["Generator", "offwind-dc"],["Generator", "offwind-float"],["Generator", "solar rooftop"],],
+        [[["offwind-dc", "onwind", "offwind-ac", "offwind-float"], "wind"],
+         [["solar", "solar-hsat", "solar rooftop"], "solar"],
+        ],
+        "C",
+        "B",
+        "2050",
+        filter_positive=True,
+        )
+    export_results(renewable_capacity, "renewable_capacity.csv", export_dir=export_dir)
 
 def get_mga_results(results_dir="results", export_dir="export/mga"):
     scenarios = ["optimal", "max_0.025", "max_0.05","max_0.1","max_0.15","min_0.025","min_0.05","min_0.1","min_0.15"]
@@ -1957,7 +2053,7 @@ def get_mga_results(results_dir="results", export_dir="export/mga"):
     export_results(all_biomass_supply, "biomass_use_carbon_costs_710.csv", export_dir=export_dir)
 
     results_dir = "results"
-    scenarios = ["default_optimal", "default_max_0.025", "default_max_0.05","default_max_0.1","default_max_0.15","default_min_0.025","default_min_0.05","default_min_0.1","default_min_0.15"]
+    scenarios = ["default_optimal", "default_max_0.025", "default_max_0.05","default_max_0.1","default_max_0.15","default_min_0.025","default_min_0.05","default_min_0.1","default_min_0.15", "default_min_0.12","default_min_0.14"]
     results = load_results(results_dir, scenarios)
 
     all_biomass_supply = get_data(
@@ -1976,7 +2072,7 @@ def get_mga_results(results_dir="results", export_dir="export/mga"):
     )
     export_results(all_biomass_supply, "biomass_use_default.csv", export_dir=export_dir)
 
-    scenarios = ["default_710_optimal", "default_710_max_0.025", "default_710_max_0.05","default_710_max_0.1","default_710_max_0.15","default_710_min_0.025","default_710_min_0.05","default_710_min_0.1","default_710_min_0.15"]
+    scenarios = ["default_710_optimal", "default_710_max_0.025", "default_710_max_0.05","default_710_max_0.1","default_710_max_0.15","default_710_min_0.025","default_710_min_0.05","default_710_min_0.1","default_710_min_0.15", "default_710_min_0.12","default_710_min_0.14"]
     results = load_results(results_dir, scenarios)
 
     all_biomass_supply = get_data(
@@ -1995,6 +2091,50 @@ def get_mga_results(results_dir="results", export_dir="export/mga"):
     )
     export_results(all_biomass_supply, "biomass_use_default_710.csv", export_dir=export_dir)
 
+ 
+def check_result_quality(results_dir="results"):
+    """
+    Check each folder in the results directory for "Numerical trouble encountered"
+    in the logs/base_s_39___2025_solver.log file.
+
+    Parameters
+    ----------
+    results_dir : str
+        Path to the results directory.
+    """
+    troubled_folders = []
+    suboptimal_folders = []
+
+    # Iterate through each folder in the results directory
+    for folder in os.listdir(results_dir):
+        folder_path = os.path.join(results_dir, folder)
+        log_file_path = os.path.join(folder_path, "logs/base_s_39___2050_solver.log")
+        
+        # Check if the log file exists
+        if os.path.isfile(log_file_path):
+            with open(log_file_path, "r") as log_file:
+                log_content = log_file.read()
+                if "Numerical trouble encountered" in log_content:
+                    troubled_folders.append(folder)
+                if "Sub-optimal termination" in log_content:
+                    suboptimal_folders.append(folder)
+
+    # Print the folders with numerical trouble
+    if troubled_folders:
+        print("Folders with 'Numerical trouble encountered':")
+        for folder in troubled_folders:
+            print(folder)
+    else:
+        print("No folders with 'Numerical trouble encountered' found.")
+    
+    # Print the folders with suboptimal solutions
+    if suboptimal_folders:
+        print("Folders with 'Suboptimal solution found':")
+        for folder in suboptimal_folders:
+            print(folder)
+    else:
+        print("No folders with 'Suboptimal solution found' found.")
+
 
 if __name__ == "__main__":
     results_dir = "results"
@@ -2003,14 +2143,12 @@ if __name__ == "__main__":
     difference_scenarios = ["default_optimal", "optimal"]
     export_dir = "export/seq"
 
-    # scenarios = ["default", "carbon_costs", "default_710","carbon_costs_710"]
-    # difference_scenarios = ["default", "carbon_costs"]
-    # export_dir = "export/seq"
+    check_result_quality(results_dir="results")
 
-    # scenarios = ["default", "carbon_costs"]
+    # scenarios = ["default_optimal", "optimal"]
     # export_dir = "export/basic"
 
-    main(results_dir=results_dir, export_dir=export_dir, scenarios=scenarios, difference_scenarios=difference_scenarios)
+    #main(results_dir=results_dir, export_dir=export_dir, scenarios=scenarios, difference_scenarios=difference_scenarios)
 
     #get_biomass_potentials(export_dir=export_dir)
 

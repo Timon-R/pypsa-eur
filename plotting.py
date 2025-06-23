@@ -17,11 +17,14 @@ from matplotlib.legend_handler import HandlerPatch
 from matplotlib.path import Path
 from matplotlib.ticker import MultipleLocator
 from matplotlib.lines import Line2D
+from collections import OrderedDict
+from matplotlib.patches import Rectangle, Ellipse, FancyArrowPatch
 
 import plotly.graph_objects as go
 import plotly.express as px
 from result_analysis import get_emission_factors
 
+import matplot2tikz 
 
 import warnings
 
@@ -46,7 +49,7 @@ new_names_dict = {
     "sawdust": "sawdust",
     "fuelwood residues": "logging residues",
     "agricultural waste": "crop residues",
-    "residues from landscape care": "residues from landscape care",
+    "residues from landscape care": "residues from landscape care", #consider naming it landscape management
     "sludge": "sludge",
     "manure": "manure",
     "solid biomass import": "imported biomass",
@@ -86,14 +89,93 @@ biomass_costs = {  # Euro/MWh_LHV
 def configure_for_pgf():
     print("Configuring matplotlib for PGF output...")
     mpl.rcParams.update({
-        "pgf.texsystem": "xelatex",  # or 'xelatex'
-        "font.family": "serif",
+        "pgf.texsystem": "pdflatex",
         "text.usetex": True,
+        "font.family": "serif",   # Or any system font name if set in LaTeX
         "pgf.rcfonts": False,
     })
 def configure_to_default():
     print("Configuring matplotlib to default...")    
     mpl.rcParams.update(mpl.rcParamsDefault)
+
+def configure_for_tikz():
+    plt.rcParams.update({
+        "pgf.texsystem": "pdflatex",   # or xelatex/lualatex if you use those
+        "text.usetex": True,           # so LaTeX typesets all labels
+        "font.family": "serif",
+        "pgf.rcfonts": False,         
+    })
+
+def carbon_flow_diagram(save_path: str | None = "carbon_flow_diagram.pdf",
+                        show: bool = False,
+                        close: bool = True):
+    """
+    Draw the linear vs circular carbon-flow schematic.
+
+    Parameters
+    ----------
+    save_path : str | None   PDF/PNG file name (None → no file written)
+    show      : bool         True → pop up an interactive window
+    close     : bool         True → plt.close(fig) afterwards
+    """
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Rectangle, Ellipse, FancyArrowPatch
+
+    # LaTeX & font setup
+    plt.rc('text', usetex=True)
+    plt.rc('font', family='serif', size=14)
+
+    fig, ax = plt.subplots(figsize=(7, 5))
+    ax.axis('off')
+
+    # ── Linear flow ───────────────────────────────────────────────────────
+    ax.add_patch(Rectangle((0.08, 0.70), 0.28, 0.15, fill=False, lw=2))
+    ax.add_patch(Rectangle((0.64, 0.70), 0.28, 0.15, fill=False, lw=2))
+
+    ax.text(0.22, 0.775,  r'\shortstack{Cement / \\Fossil Fuels}',
+            ha='center', va='center')
+    ax.text(0.78, 0.775, r'\shortstack{Sequestered\\Carbon}',
+            ha='center', va='center')
+
+    ax.add_patch(FancyArrowPatch((0.36, 0.775), (0.64, 0.775),
+                                 arrowstyle='-|>', mutation_scale=18, lw=2))
+    ax.text(0.50, 0.805, r'CCS', ha='center', va='bottom')
+    ax.text(0.50, 0.92,  r'\textbf{Linear Carbon Flow}',
+            ha='center', va='center', fontsize=18)
+
+    # ── Circular flow ────────────────────────────────────────────────────
+    ax.add_patch(Ellipse((0.22, 0.35), 0.28, 0.17, fill=False, lw=2))
+    ax.add_patch(Ellipse((0.78, 0.35), 0.28, 0.17, fill=False, lw=2))
+
+    ax.text(0.22, 0.35, r'\shortstack{Liquid Fuels}',
+            ha='center', va='center')
+    ax.text(0.78, 0.35, r'Atmosphere',
+            ha='center', va='center')
+
+    ax.add_patch(FancyArrowPatch((0.36, 0.35), (0.64, 0.35),
+                                 arrowstyle='-|>', mutation_scale=18, lw=2))
+    for start, end in [((0.78, 0.26), (0.78, 0.15)),
+                       ((0.78, 0.15), (0.22, 0.15)),
+                       ((0.22, 0.15), (0.22, 0.26))]:
+        ax.add_patch(FancyArrowPatch(start, end,
+                                     arrowstyle='-|>', mutation_scale=18, lw=2))
+
+    ax.text(0.50, 0.50, r'\textbf{Circular Carbon Flow}',
+            ha='center', va='center', fontsize=18)
+    ax.text(0.50, 0.07,
+            r'Biomass to liquid / DAC \& Fischer--Tropsch / Electrobiofuels',
+            ha='center', va='center')
+
+    plt.tight_layout()
+
+    if save_path:
+        fig.savefig(save_path, bbox_inches='tight')
+    if show:
+        plt.show()
+    if close:
+        plt.close(fig)
+
+    return fig
 
 def load_csv(file_path, folder_path="export", rename_scenarios=True):
     """
@@ -179,11 +261,19 @@ def create_gravitational_plot(
     show_fossil_fuels=True,
     usage_threshold=False,
     variant_plot=False,
-    include_solar_hsat=False,
+    include_solar_hsat=True,
 ):
 
     file_path = f"{file_name}.{file_type}"
-
+    mpl.rcParams.update({
+        "text.usetex": False,         # plain Matplotlib text engine
+        "font.family":   "serif",
+        "font.serif":    ["CMU Serif", "Latin Modern Roman",
+                        "Computer Modern Roman", "Times"],  # fall-backs
+        "mathtext.fontset": "cm",     # Computer Modern for $math$
+        "figure.dpi":    300,
+        "font.size": 12,
+    })
 
     if biomass_supply is not None and scenario is not None:
         biomass = biomass_supply[biomass_supply["Folder"] == scenario]
@@ -226,14 +316,14 @@ def create_gravitational_plot(
         )
         location = emissions[i] + 2 * sizes[i] / max_potential * 0.015 + 0.01
         if (
-            bt == "secondary forestry residues" or bt == "sludge" or "import" in bt
+            bt == "secondary forestry residues" or bt == "sludge" or "import" in bt or bt == "fuelwoodRW"
         ):  # below the point
             location = emissions[i] - 2 * sizes[i] / max_potential * 0.015 - 0.015
         plt.text(
             costs[i],
             location,
             new_names_dict[bt],
-            fontsize=9,
+            fontsize=12,
             ha="center",
         )
 
@@ -321,7 +411,7 @@ def create_gravitational_plot(
                     lcoe[tech],
                     location,
                     f"{tech}",
-                    fontsize=9,
+                    fontsize=12,
                     ha="center",
                     color='black'
                 )
@@ -347,11 +437,17 @@ def create_gravitational_plot(
             )
             
             # Add text label
+            y_location = data["emission"] + 0.012
+            if fuel == "oil":
+                y_location = data["emission"] -0.003
+            x_location = data["cost"]
+            if fuel == "oil": # right from the point
+                x_location = data["cost"] + 1.3
             plt.text(
-                data["cost"],
-                data["emission"] + 0.02,
+                x_location,
+                y_location,
                 fuel,
-                fontsize=9,
+                fontsize=12,
                 ha="center",
                 color='black',
             )
@@ -598,6 +694,43 @@ def create_gravitational_plot(
         Line2D([0], [0], marker='x', color='none', markerfacecolor='orange',
             markeredgecolor='orange', label='Renewable energy', markersize=10, linewidth=0),
     ]
+    if scenario is None or "Default" in scenario:
+        colour_legend_elements = [
+            Line2D([0], [0], marker='o', color='none', markerfacecolor='green',
+                markeredgecolor='green', label='Solid biomass', markersize=10, linewidth=0),
+            Line2D([0], [0], marker='o', color='none', markerfacecolor='blue',
+                markeredgecolor='blue', label='Digestible biomass', markersize=10, linewidth=0),
+            Line2D([0], [0], marker='x', color='none', markerfacecolor='black',
+                markeredgecolor='black', label='Fossil fuels', markersize=10, linewidth=0),
+            Line2D([0], [0], marker='x', color='none', markerfacecolor='orange',
+                markeredgecolor='orange', label='Renewable energy', markersize=10, linewidth=0),
+        ]
+    else:
+        colour_legend_elements = [
+            Line2D([0], [0], marker='o', color='none', markerfacecolor='green',
+                markeredgecolor='green', label='Solid biomass', markersize=10, linewidth=0),
+            Line2D([0], [0], marker='o', color='none', markerfacecolor='lightgreen',
+                markeredgecolor='lightgreen', label='Additional solid biomass use\nwith high co2 seq. potential', markersize=10, linewidth=0),
+            Line2D([0], [0], marker='o', color='none', markerfacecolor='blue',
+                markeredgecolor='blue', label='Digestible biomass', markersize=10, linewidth=0),
+            Line2D([0], [0], marker='x', color='none', markerfacecolor='black',
+                markeredgecolor='black', label='Fossil fuels', markersize=10, linewidth=0),
+            Line2D([0], [0], marker='x', color='none', markerfacecolor='orange',
+                markeredgecolor='orange', label='Renewable energy', markersize=10, linewidth=0),
+        ]
+
+
+    if biomass_supply is None:
+        colour_legend_elements = [
+            Line2D([0], [0], marker='o', color='none', markerfacecolor='green',
+                markeredgecolor='green', label='Solid biomass', markersize=10, linewidth=0),
+            Line2D([0], [0], marker='o', color='none', markerfacecolor='blue',
+                markeredgecolor='blue', label='Digestible biomass', markersize=10, linewidth=0),
+            Line2D([0], [0], marker='x', color='none', markerfacecolor='black',
+                markeredgecolor='black', label='Fossil fuels', markersize=10, linewidth=0),
+            Line2D([0], [0], marker='x', color='none', markerfacecolor='orange',
+                markeredgecolor='orange', label='Renewable energy', markersize=10, linewidth=0),
+        ]
 
     legend2 = ax.legend(
         handles=colour_legend_elements,
@@ -647,9 +780,10 @@ def plot_stacked_bar(
 
     df[column] = df[column] * multiplier
     for row in df.iterrows():
-        if abs(row[1][threshold_column]) < threshold:
-            # remove the row
-            df.drop(row[0], inplace=True)
+        if threshold is not None:
+            if abs(row[1][threshold_column]) < threshold:
+                # remove the row
+                df.drop(row[0], inplace=True)
 
     if index is None:
         df["Index"] = range(len(df))
@@ -661,16 +795,28 @@ def plot_stacked_bar(
     bar_width = 0.5
 
     # Create the bar plot
-    fig, ax = plt.subplots(figsize=(14, 8))
-    bottom = np.zeros(len(pivot_df.columns))
+    fig, ax = plt.subplots(figsize=(8, 5))
+    
+    # Separate positive and negative bottoms for proper stacking
+    bottom_pos = np.zeros(len(pivot_df.columns))
+    bottom_neg = np.zeros(len(pivot_df.columns))
 
     for data_name in pivot_df.index:
-        ax.bar(x, pivot_df.loc[data_name], bar_width, label=data_name, bottom=bottom)
-        bottom += pivot_df.loc[data_name]
-
-    # Adjust plot limits to add space for text
-    ylim = ax.get_ylim()
-    ax.set_ylim(ylim[0], ylim[1] + abs(ylim[1] * 0.1))  # Add 10% to the y-axis limit
+        values = pivot_df.loc[data_name].values
+        
+        # Handle positive and negative values separately
+        pos_values = np.maximum(values, 0)
+        neg_values = np.minimum(values, 0)
+        
+        # Plot positive values stacked upward
+        if np.any(pos_values > 0):
+            ax.bar(x, pos_values, bar_width, label=new_names_dict.get(data_name,data_name), bottom=bottom_pos)
+            bottom_pos += pos_values
+        
+        # Plot negative values stacked downward
+        if np.any(neg_values < 0):
+            ax.bar(x, neg_values, bar_width, label=data_name if np.all(pos_values == 0) else None, bottom=bottom_neg)
+            bottom_neg += neg_values
 
     # Customise the plot
     ax.set_xlabel(x_label)
@@ -679,6 +825,9 @@ def plot_stacked_bar(
     ax.set_xticks(x)
     ax.set_xticklabels(pivot_df.columns, rotation=45, ha="right")
     ax.legend(title="Legend", bbox_to_anchor=(1.05, 1), loc="upper left")
+
+    # Add horizontal line at y=0 for reference
+    ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5, alpha=0.7)
 
     # no x-ticks
     if no_xticks:
@@ -2414,7 +2563,7 @@ def plot_co2_sankey(
     return fig
 
 
-def plot_mga(df, file_name, title = "Near Optimal Biomass Use", export_dir='export/plots', file_type='png', unit='MWh', multiplier=1, y_range=(0,4300)):
+def plot_mga(df, file_name, title = "Near Optimal Biomass Use", export_dir='export/plots', file_type='png', unit='MWh', multiplier=1, y_range=(0,4300),allow_incomplete=True):
     """
     Plot the near-optimal solution space for biomass use under various cost deviations.
 
@@ -2439,201 +2588,218 @@ def plot_mga(df, file_name, title = "Near Optimal Biomass Use", export_dir='expo
         Factor to scale the biomass values by (useful for unit conversion; default 1).
     y_range : tuple, optional
         Tuple specifying the y-axis range as (y_min, y_max). If None, the range is determined automatically.
+    allow_incomplete : bool, optional
+        If True, allows plotting even if some cost deviations are missing (default True).
+        If False, only uses scenarios with complete min/max pairs for each cost deviation.
     """
     # Ensure the output directory exists
     os.makedirs(export_dir, exist_ok=True)
-    
-    # If DataFrame has a 'Data Name' column, filter to rows containing 'biomass' (case-insensitive)
-    if 'Data Name' in df.columns:
-        biomass_mask = df['Data Name'].str.contains('biomass', case=False, na=False)
-        df_plot = df[biomass_mask].copy() if biomass_mask.any() else df.copy()
+
+    # --- filter to biomass rows (unchanged) ----------------------------------
+    if "Data Name" in df.columns:
+        mask = df["Data Name"].str.contains("biomass", case=False, na=False)
+        df_plot = df[mask].copy() if mask.any() else df.copy()
     else:
         df_plot = df.copy()
-    
-    # Dictionaries to hold min and max biomass values for each cost deviation percentage
-    min_values = {}
-    max_values = {}
-    optimal_value = None  # to store the biomass value for the optimal scenario (0% deviation)
-    
-    # Process each scenario in the DataFrame
+
+    min_vals, max_vals = {}, {}
+    original_min, original_max = set(), set()
+    optimal_value = None
+
+    # --- gather original data ------------------------------------------------
     for _, row in df_plot.iterrows():
-        scenario = str(row['Folder']).lower()       # scenario name (e.g., 'optimal', 'max_0.05')
-        value = float(row['Values']) * multiplier   # apply unit scaling to the value
-        if 'optimal' in scenario:
-            # Cost-optimal scenario (0% cost deviation)
-            optimal_value = value
-            min_values[0] = value
-            max_values[0] = value
-        elif 'min_' in scenario:
-            # Scenario minimizing biomass at X% cost deviation
-            dev_str = scenario.split('min_', 1)[1]  # e.g., '0.05' from 'min_0.05'
-            # Convert the deviation string to a fraction (e.g., '0.05' -> 0.05)
-            try:
-                cost_dev_frac = float(dev_str)
-            except ValueError:
-                # Handle cases like 'min_5' or 'min_5%' by interpreting as percentage
-                dev_str_num = dev_str.strip('%')
-                cost_dev_frac = float(dev_str_num) / 100.0 if dev_str_num.replace('.', '', 1).isdigit() else None
-            if cost_dev_frac is not None:
-                cost_dev_percent = cost_dev_frac * 100  # convert to percentage (float -> int)
-                min_values[cost_dev_percent] = value
-        elif 'max_' in scenario:
-            # Scenario maximizing biomass at X% cost deviation
-            dev_str = scenario.split('max_', 1)[1]
-            try:
-                cost_dev_frac = float(dev_str)
-            except ValueError:
-                dev_str_num = dev_str.strip('%')
-                cost_dev_frac = float(dev_str_num) / 100.0 if dev_str_num.replace('.', '', 1).isdigit() else None
-            if cost_dev_frac is not None:
-                cost_dev_percent = cost_dev_frac * 100
-                max_values[cost_dev_percent] = value
-    
-    # Check that the optimal scenario was provided
+        scenario = str(row["Folder"]).lower()
+        val = float(row["Values"]) * multiplier
+
+        if "optimal" in scenario:
+            optimal_value = val
+            min_vals[0] = max_vals[0] = val
+            original_min.add(0)
+            original_max.add(0)
+            continue
+
+        for kind in ("min_", "max_"):
+            if kind in scenario:
+                dev = scenario.split(kind, 1)[1]
+                try:
+                    frac = float(dev)
+                except ValueError:
+                    frac = float(dev.strip("%")) / 100.0
+                pct = frac * 100
+                if kind == "min_":
+                    min_vals[pct] = val
+                    original_min.add(pct)
+                else:
+                    max_vals[pct] = val
+                    original_max.add(pct)
+                break
+
     if optimal_value is None:
-        raise ValueError("Optimal scenario data is missing in the DataFrame (expected a 'optimal' entry).")
-    
-    # Prepare sorted list of cost deviation percentages (e.g., [0, 5, 10, 15])
-    cost_devs = sorted(set(min_values.keys()) | set(max_values.keys()))
-    
-    # Build lists of y-values (biomass use) for min and max lines in order of cost_devs
+        raise ValueError("Missing 'optimal' scenario in DataFrame.")
+
+    # --- interpolation helper -----------------------------------------------
+    def interpolate(target, originals):
+        all_devs = sorted(set(min_vals) | set(max_vals))
+        for dev in all_devs:
+            if dev in target:
+                continue
+            lower = max([d for d in target if d < dev], default=None)
+            upper = min([d for d in target if d > dev], default=None)
+            if lower is None or upper is None:
+                raise ValueError(f"No data to interpolate {'max' if target is max_vals else 'min'} at {dev} %.")
+            r = (dev - lower) / (upper - lower)
+            target[dev] = target[lower] + r * (target[upper] - target[lower])
+            # note: dev not added to originals → will not be marked
+
+    interpolate(min_vals, original_min)
+    interpolate(max_vals, original_max)
+
+    # --- prepare plotting lists ---------------------------------------------
+    cost_devs = sorted(set(min_vals) | set(max_vals))
     x_vals = []
     y_min = []
     y_max = []
-    for dev in cost_devs:
-        if dev in min_values and dev in max_values:
-            x_vals.append(dev)
-            y_min.append(min_values[dev])
-            y_max.append(max_values[dev])
-    # (If any dev is missing a min or max, it will be skipped to avoid incomplete data plotting)
-    
-    # Create the figure and axis for plotting
-    fig, ax = plt.subplots(figsize=(8, 6))
-    
-    # Fill the area between the min and max biomass usage curves (near-optimal solution space)
-    ax.fill_between(x_vals, y_min, y_max, color='grey', alpha=0.3, label='Near-optimal solution space')
-    # Plot the minimum biomass usage curve (blue solid line with circle markers)
-    ax.plot(x_vals, y_min, color='tab:blue', marker='o', label='Min biomass use')
-    # Plot the maximum biomass usage curve (orange solid line with triangle markers)
-    ax.plot(x_vals, y_max, color='tab:orange', marker='o', label='Max biomass use')
-    # Mark the cost-optimal solution (0% deviation) as a distinct point (black diamond marker)
-    ax.plot([0], [optimal_value], color='black', marker='o', markersize=8, linestyle='none',
-            label='Cost-optimal solution')
-    
-    # # Annotate each data point with its value and scenario label
-    # for dev in x_vals:
-    #     if dev == 0:
-    #         # Optimal point annotation (e.g., "100 MWh (optimal)")
-    #         ax.annotate(f'{optimal_value:.2f} {unit}\n(optimal)',
-    #                     xy=(dev, optimal_value), xytext=(5, 5), textcoords='offset points',
-    #                     ha='left', va='bottom', fontsize=9)
-    #     else:
-    #         # Annotate min point (e.g., "80 MWh (min 5%)") slightly below and to the right
-    #         if dev in min_values:
-    #             val_min = min_values[dev]
-    #             ax.annotate(f'{val_min:.2f} {unit}\n(min {dev}%)',
-    #                         xy=(dev, val_min), xytext=(5, -15), textcoords='offset points',
-    #                         ha='left', va='top', fontsize=8, color='tab:blue')
-    #         # Annotate max point (e.g., "120 MWh (max 5%)") slightly above and to the right
-    #         if dev in max_values:
-    #             val_max = max_values[dev]
-    #             ax.annotate(f'{val_max:.2f} {unit}\n(max {dev}%)',
-    #                         xy=(dev, val_max), xytext=(5, 5), textcoords='offset points',
-    #                         ha='left', va='bottom', fontsize=8, color='tab:orange')
-    
-    # Configure the axes labels and ticks 
-    ax.set_xlabel('Cost deviation from optimal')
-    ax.set_ylabel(f'Biomass use ({unit})')
-    ax.set_xticks(x_vals)
-    ax.set_xticklabels([f'{x:.1f}%' if x % 1 else f'{int(x)}%' for x in x_vals])
-    ax.set_yscale('linear')  # ensure y-axis is linear (it is by default)
-    ax.set_title(title, fontsize=16)
-    ax.grid(True, linestyle='--', alpha=0.5)  # add a light grid for readability
+    for d in cost_devs:
+        if allow_incomplete or (d in min_vals and d in max_vals):
+            x_vals.append(d)
+            y_min.append(min_vals[d])
+            y_max.append(max_vals[d])
 
-    # Set y-axis range if provided
+    # --- plot ----------------------------------------------------------------
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.fill_between(x_vals, y_min, y_max, color="grey", alpha=0.3,
+                    label="Near-optimal solution space")
+
+    # lines without markers
+    ax.plot(x_vals, y_min, color="tab:blue", label="Min biomass use")
+    ax.plot(x_vals, y_max, color="tab:orange", label="Max biomass use")
+
+    # mark only original (non-interpolated) points
+    ax.scatter([d for d in x_vals if d in original_min],
+               [min_vals[d] for d in x_vals if d in original_min],
+               color="tab:blue", marker="o")
+    ax.scatter([d for d in x_vals if d in original_max],
+               [max_vals[d] for d in x_vals if d in original_max],
+               color="tab:orange", marker="o")
+
+    ax.plot([0], [optimal_value], color="black", marker="o",
+            markersize=8, linestyle="none", label="Cost-optimal solution")
+
+    ax.set_xlabel("Cost deviation from optimal")
+    ax.set_ylabel(f"Biomass use ({unit})")
+    ax.set_xticks(x_vals)
+    ax.set_xticklabels([f"{x:.1f} %" if x % 1 else f"{int(x)} %" for x in x_vals])
+    ax.set_title(title, fontsize=16)
+    ax.grid(True, linestyle="--", alpha=0.5)
     if y_range:
         ax.set_ylim(y_range)
-    
-    # Add a legend to identify the plotted elements
+
+    # tidy legend order
+    order = ["Cost-optimal solution", "Max biomass use",
+             "Min biomass use", "Near-optimal solution space"]
     handles, labels = ax.get_legend_handles_labels()
-    # Reorder legend entries for clarity
-    legend_order = ['Cost-optimal solution', 'Max biomass use', 'Min biomass use', 'Near-optimal solution space']
-    ordered = [(h, l) for h, l in zip(handles, labels) if l in legend_order]
-    ordered_handles, ordered_labels = zip(*sorted(ordered, key=lambda x: legend_order.index(x[1])))
-    ax.legend(ordered_handles, ordered_labels, loc='best')
-    
-    # Save the plot to a file in the specified directory and format
-    output_path = os.path.join(export_dir, f"{file_name}.{file_type}")
-    plt.savefig(output_path, format=file_type, bbox_inches='tight')
+    ordered = [h for l in order for h, lbl in zip(handles, labels) if lbl == l]
+    ax.legend(ordered, order, loc="best")
+
+    out_path = os.path.join(export_dir, f"{file_name}.{file_type}")
+    plt.savefig(out_path, format=file_type, bbox_inches="tight")
     plt.close(fig)
-    print(f"MGA plot saved to {output_path}")
+    print(f"MGA plot saved to {out_path}")
 
 def plot_stacked_biomass_with_errorbars(
-    data: pd.DataFrame,
-    export_dir: str = "export/plots",
-    file_name: str = "biomass_stacked_errorbar",
-    file_type: str = "png",
-    errorbars: bool = True,
+    data,                                # pandas.DataFrame
+    export_dir="export/plots",
+    file_name="biomass_stacked_errorbar",
+    file_type="png",                     # "png", "pgf", or "tex"
+    errorbars=True,
 ):
-    """Stacked biomass bars (TWh) for 2050 with ±710 variant error bars."""
-    # --- data prep ----------------------------------------------------------
+    # ── 1. aggregate 2050 data ───────────────────────────────────────
     df = data.loc[data["Year"] == 2050].copy()
-
     base = ["Default", "Carbon Stock Changes"]
-    variant_suffix = " 710"                # <- include the space
-    variants = [s + variant_suffix for s in base]
-
+    variant_suffix = " 710"
     sectors = df["Data Name"].unique()
 
-    # per-sector values in TWh
-    scen_vals = {}
-    for scen in base + variants:
-        vals = (df.loc[df["Folder"] == scen]
-                  .set_index("Data Name")["Values"]
-                  .reindex(sectors, fill_value=0) / 1e6)
-        scen_vals[scen] = vals
+    baseline_data = {}
+    high_variant_data = {}
 
-    totals_base = {s: scen_vals[s].sum() for s in base}
-    totals_var  = {s: scen_vals[s + variant_suffix].sum() for s in base}
-    deltas      = {s: totals_var[s] - totals_base[s] for s in base}
+    for scen in base:
+        baseline_data[scen] = (
+            df.query("Folder == @scen")
+              .set_index("Data Name")["Values"]
+              .reindex(sectors, fill_value=0)
+              .div(1e6)
+              .to_dict()
+        )
+        high_scen = scen + variant_suffix
+        high_variant_data[scen] = (
+            df.query("Folder == @high_scen")
+              .set_index("Data Name")["Values"]
+              .reindex(sectors, fill_value=0)
+              .div(1e6)
+              .to_dict()
+        )
+        # Add total for error bar calc
+        high_variant_data[scen]["TOTAL"] = sum(high_variant_data[scen].values())
 
-    # --- plotting -----------------------------------------------------------
-    x = np.arange(len(base))
+    # ── 2. plot ───────────────────────────────────────────────────────
+    categories = base
+    x = np.arange(len(categories))
     fig, ax = plt.subplots(figsize=(8, 6))
+    width = 0.8
 
     bottom = np.zeros_like(x, dtype=float)
     for sector in sectors:
-        heights = [scen_vals[s][sector] for s in base]
-        ax.bar(x, heights, bottom=bottom, label=sector)
-        bottom += heights
-
-    # one-sided error bars
-    lowers = [abs(d) if d < 0 else 0 for d in deltas.values()]
-    uppers = [d if d > 0 else 0 for d in deltas.values()]
-    yerr   = np.vstack([lowers, uppers])
+        sector_values = np.array([baseline_data[cat][sector] for cat in categories], dtype=float)
+        ax.bar(x, sector_values, width, bottom=bottom, label=sector)
+        bottom += sector_values
 
     if errorbars:
-        ax.errorbar(x, list(totals_base.values()), yerr=yerr,
-                fmt="none", ecolor="black", capsize=6, linewidth=1.5,label="Difference to high seq. pot. variant")
+        total_baseline = bottom
+        diff_high = np.array([
+            high_variant_data[cat]["TOTAL"] - total_baseline[i]
+            for i, cat in enumerate(categories)
+        ], dtype=float)
 
-    # axes & legend
+        # Ensure error bars are non-negative: split into upper and lower
+        lower = np.where(diff_high < 0, -diff_high, 0)
+        upper = np.where(diff_high > 0, diff_high, 0)
+        y_err = [lower, upper]
+
+        err = ax.errorbar(
+            x, total_baseline, yerr=y_err, fmt='none', ecolor='black',
+            elinewidth=1.5, capsize=6, label='Difference to high seq. pot. variant.'
+        )
+
     ax.set_xticks(x)
-    ax.set_xticklabels(base)
-    ax.set_ylabel("Total Biomass Use (TWh)")
-    ax.set_title("Biomass Use by Sector in 2050")
-    ax.legend(title="Sector", bbox_to_anchor=(1.05, 1), loc="upper left")
-    ax.grid(axis="y", linestyle="--", alpha=0.6)
+    ax.set_xticklabels(categories)
+    ax.set_ylabel('Total Biomass Use (TWh)')
+    ax.set_title('Biomass Use by Sector')
+    ax.grid(axis='y', linestyle='--', alpha=0.6)
 
-    plt.tight_layout()
+    # Legend deduplication
+    handles, labels = ax.get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    ax.legend(by_label.values(), by_label.keys(), title="Sector", bbox_to_anchor=(1.05, 1), loc='upper left')
 
-    # save
+    fig.tight_layout()
+
     os.makedirs(export_dir, exist_ok=True)
-    path = os.path.join(export_dir, f"{file_name}.{file_type}")
-    if path.endswith(".pgf"):
-        configure_for_pgf()
-    plt.savefig(path, dpi=300)
-    plt.close()
-    print(f"Stacked plot with error bars saved to {path}")
+    base_path = os.path.join(export_dir, file_name)
+
+    if file_type == "png":
+        fig.savefig(f"{base_path}.png", dpi=300)
+    elif file_type == "pgf":
+        fig.savefig(f"{base_path}.pgf")
+    elif file_type == "tex":
+        tikz_code = matplot2tikz.get_tikz_code()
+        legend_label = "Difference to high seq. pot. variant."
+        occurrences = [pos for pos in range(len(tikz_code)) if tikz_code.startswith(legend_label, pos)]
+        if len(occurrences) > 1:
+            tikz_code = tikz_code.replace(f"\\addlegendentry{{{legend_label}}}", "", len(occurrences) - 1)
+        with open(f"{base_path}.tex", "w", encoding="utf-8") as f:
+            f.write(tikz_code)
+
+    plt.close(fig)
 
 def plot_technology_barplot_with_errorbars(
     data: pd.DataFrame,
@@ -2687,7 +2853,7 @@ def plot_technology_barplot_with_errorbars(
     delta = {s: wide[f"{s} 710"].fillna(0) - base[s] for s in scenarios}
 
     # --- plotting -----------------------------------------------------------
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(8, 5))
 
     x = np.arange(n_tech)
     bar_w = 0.35
@@ -2725,7 +2891,7 @@ def plot_technology_barplot_with_errorbars(
     ax.set_ylabel("Energy (TWh)")
     ax.set_title("Primary Energy")
     ax.grid(axis="y", linestyle="--", alpha=0.6, zorder=0)
-    ax.legend(title="Scenario", frameon=False)
+    ax.legend(title="Scenario", frameon=True)
 
     plt.tight_layout()
 
@@ -2897,17 +3063,6 @@ def main(custom_order=["Default", "Carbon Stock Changes"], file_type="png", expo
         file_type=file_type,
     )
 
-    data = load_csv("cost_difference.csv",folder_path=data_folder)
-    plot_costs(
-        data,
-        "Extra Costs Due to Biomass Emissions (bigger than 1 Billion EUR)",
-        "",
-        "Cost (Billion EUR)",
-        "cost_difference",
-        export_dir=export_dir,
-        file_type=file_type,
-    )
-
     data = load_csv("shadow_price.csv",folder_path=data_folder)
     plot_data(
         data,
@@ -3053,26 +3208,6 @@ def main(custom_order=["Default", "Carbon Stock Changes"], file_type="png", expo
         file_type=file_type,
     )
 
-    data = load_csv("biomass_supply_difference.csv",folder_path=data_folder)
-    data = data[data["data_name"] != "total"]
-    data
-    plot_stacked_bar(
-        data,
-        "Additional CO2 Emissions Due to Biomass Use",
-        "",
-        "Mt_CO2",
-        "biomass_emission_difference",
-        multiplier=1e-6,
-        column="emission_difference",
-        columns="year",
-        index="Data Name",
-        threshold=0.001,
-        threshold_column="emission_difference",
-        export_dir=export_dir,
-        file_type=file_type,
-        no_xticks=True,
-    )
-
 
     data = load_csv("biomass_supply.csv",folder_path=data_folder)
 
@@ -3155,12 +3290,12 @@ def specific_plots():
         capacity_factors=capacity_factors,
         variant_plot=True,
     )
-    data = load_csv("biomass_use_by_sector.csv",folder_path="export/seq")
+    bm_data = load_csv("biomass_use_by_sector.csv",folder_path="export/seq")
     plot_stacked_biomass_with_errorbars(
-        data,
+        bm_data,
         export_dir="export/plots",
         file_name="biomass_stacked_errorbar",
-        file_type="png"
+        file_type="png",
     )
     data = load_csv("primary_energy.csv",folder_path="export/seq")
     plot_technology_barplot_with_errorbars(
@@ -3178,6 +3313,43 @@ def specific_plots():
         colour_error= False,
         error_bars=False
     )
+    plot_stacked_biomass_with_errorbars(
+        bm_data,
+        export_dir="export/plots",
+        file_name="biomass_stacked_errorbar",
+        file_type="tex",
+    )
+    carbon_flow_diagram(save_path="export/plots/carbon_flow_diagram.png")
+    data = load_csv("supply_difference.csv",folder_path=data_folder)
+    data = data[data["data_name"] != "total"]
+    data
+    plot_stacked_bar(
+        data,
+        "Avoided Carbon Stock Changes",
+        "",
+        "Mt_CO2",
+        "emission_difference",
+        multiplier=1e-6,
+        column="emission_difference",
+        columns="year",
+        index="Data Name",
+        threshold=0.001,
+        threshold_column="emission_difference",
+        export_dir="export/plots",
+        file_type=file_type,
+        no_xticks=True,
+    )
+    data = load_csv("cost_difference.csv",folder_path=data_folder)
+    plot_costs(
+        data,
+        "Extra Costs Due to Carbon Stock Changes (larger 1 B€)",
+        "",
+        "Cost (Billion EUR)",
+        "cost_difference",
+        export_dir="export/plots",
+        file_type=file_type,
+    )
+
 
 def mga_plots():
     mga_data = load_csv("biomass_use_carbon_costs_710.csv",folder_path="export/mga",rename_scenarios=False)
@@ -3225,17 +3397,26 @@ if __name__ == "__main__":
 
     file_type = "png"
     # file_type = "pgf"
+    mpl.rcParams.update({
+        "text.usetex": False,         # plain Matplotlib text engine
+        "font.family":   "serif",
+        "font.serif":    ["CMU Serif", "Latin Modern Roman",
+                        "Computer Modern Roman", "Times"],  # fall-backs
+        "mathtext.fontset": "cm",     # Computer Modern for $math$
+        "figure.dpi":    300,
+        "font.size": 12,
+    })
 
     custom_order = ["Default", "Carbon Stock Changes", "Default 710", "Carbon Stock Changes 710"]  
     export_dir = "export/seq_plots"
     data_folder = "export/seq"
 
-    specific_plots()
+    #specific_plots()
     #main(custom_order=custom_order, file_type=file_type, export_dir=export_dir, data_folder=data_folder)
-    #plot_efs(export_dir=export_dir)
+    # plot_efs(export_dir=export_dir)
     #plot_efs_for_presentation(export_dir=export_dir, file_type=file_type)
 
-    #mga_plots()
+    mga_plots()
 
     ########### Sankey Diagrams ###########
     # co2_data = load_csv("co2_sankey.csv",folder_path="export/seq")

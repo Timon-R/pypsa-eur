@@ -436,7 +436,7 @@ biomass:
     grasses: 0.216 # 60
     woody crops: 0.216 # 60
     agricultural waste: 0.03528 # 9.8 , cerial straw
-    fuelwoodRW: 0.3384 #79 , fuelwood
+    fuelwoodRW: 0.3384 #94 , fuelwood
     C&P_RW: 0.3132 #87
     fuelwood residues: 0.1512 #42 , logging residues
     secondary forestry residues: 0.3132 #87
@@ -833,9 +833,9 @@ sector:
       oil: 125
   renewable_emissions:
     enable: true
-    solar: 12.2 #ton/MW, asssuming 10000 m2/MW
-    onwind: 2.44 #ton/MW assuming 2000 m2/MW
-    solar-hsat: 24.4 #ton/MW, assumming 20000 m2/MW, ammoritised over 30 years, carbon storage loss is 1.22 kgCO2/m2/year
+    solar: 8.4 #ton/MW, asssuming 11500 m2/MW
+    onwind: 0.95 #ton/MW assuming 1300 m2/MW (Cogato et al. 2023)
+    solar-hsat: 12.41 #ton/MW, assumming 17000 m2/MW, ammoritised over 50 years, carbon storage loss is 0.73 kgCO2/m2/year
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#industry
 industry:

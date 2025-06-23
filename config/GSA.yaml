@@ -10,6 +10,106 @@ general:
   method: morris #Maybe other later
   covariance_plot: false
 
+results: #define results from results folder
+  system_costs: #name of result
+    multiplier: 1e-9 #to change the unit of the result or to change the sign if the output in the csv is negative
+    unit: billion € #unit of the result
+    csv:
+      filename: metrics.csv #name of the file
+      identification_column_entries: total costs #has to be unique (otherwise raise error)
+  co2_shadow_price:
+    multiplier: -1
+    unit: €/t
+    csv:
+      filename: metrics.csv
+      identification_column_entries: co2_shadow
+  biomass_use:
+    multiplier: 1e-6
+    unit: TWh
+    csv:
+      filename: custom_metrics.csv
+      identification_column_entries: Biomass supply
+  nuclear_electricity_production:
+    multiplier: 1e-6
+    unit: TWh
+    csv:
+      filename: energy_balance.csv
+      identification_column_entries: Generator,nuclear,AC
+
+  manure_use:
+    multiplier: -1e-6
+    unit: TWh
+    csv:
+      filename: energy_balance.csv
+      identification_column_entries: Link,manure,manure
+  crop_residues_use:
+    multiplier: -1e-6
+    unit: TWh
+    csv:
+      filename: energy_balance.csv
+      identification_column_entries: Link,agricultural waste,agricultural waste
+  logging_residues_use:
+    multiplier: -1e-6
+    unit: TWh
+    csv:
+      filename: energy_balance.csv
+      identification_column_entries: Link,fuelwood residues,fuelwood residues
+  stemwood_use:
+    multiplier: -1e-6
+    unit: TWh
+    csv:
+      filename: energy_balance.csv
+      identification_column_entries: Link,fuelwoodRW,fuelwoodRW
+  grasses_use:
+    multiplier: -1e-6
+    unit: TWh
+    csv:
+      filename: energy_balance.csv
+      identification_column_entries: Link,grasses,grasses
+  sawdust_use:
+    multiplier: -1e-6
+    unit: TWh
+    csv:
+      filename: energy_balance.csv
+      identification_column_entries: Link,sawdust,sawdust
+  secondary_forestry_residues_use:
+    multiplier: -1e-6
+    unit: TWh
+    csv:
+      filename: energy_balance.csv
+      identification_column_entries: Link,secondary forestry residues,secondary forestry residues
+  woody_crops_use:
+    multiplier: -1e-6
+    unit: TWh
+    csv:
+      filename: energy_balance.csv
+      identification_column_entries: Link,woody crops,woody crops
+  chips_and_pellets_use:
+    multiplier: -1e-6
+    unit: TWh
+    csv:
+      filename: energy_balance.csv
+      identification_column_entries: Link,C&P_RW,C&P_RW
+  sludge_use:
+    multiplier: -1e-6
+    unit: TWh
+    csv:
+      filename: energy_balance.csv
+      identification_column_entries: Link,sludge,sludge
+  residues_from_landscape_care_use:
+    multiplier: -1e-6
+    unit: TWh
+    csv:
+      filename: energy_balance.csv
+      identification_column_entries: Link,residues from landscape care,residues from landscape care
+  biomass_import:
+    multiplier: -1e-6
+    unit: TWh
+    csv:
+      filename: energy_balance.csv
+      identification_column_entries: Link,solid biomass imports,solid biomass imports
+
+
 #they will get reorderd alphabetically
 parameters:
   seq_potential: #name of parameter only for reference
@@ -20,30 +120,125 @@ parameters:
       sector:
         co2_sequestration_potential:
           2050:
+  
+  ef_wind:
+    groupname: ef_wind #supplementary material from paper, 5-95% percentile range (0.7-1.66 m2/kW), capacity weighted and 0.73 kgCO2/m2/year
+    min: 0.51 #ton/MW/year
+    max: 1.21 #ton/MW/year
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      sector:
+        renewable_emissions:
+          wind:
+
+  ef_solar:
+    groupname: ef_solar # plus minus 10% in alignment with the paper
+    min: 7.56
+    max: 9.24
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      sector:
+        renewable_emissions:
+          solar:
+
+  ef_solar-hsat:
+    groupname: ef_solar-hsat # plus minus 10% in alignment with the paper
+    min: 11.17
+    max: 13.65
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      sector:
+        renewable_emissions:
+          solar-hsat:
+
+  nuclear_costs: 
+    groupname: nuclear_costs #name of group for grouping the parameters
+    min: 3241 #in €/kW
+    max: 9906 #in €/kW
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      costs:
+        overwrites:
+          investment:
+            nuclear:
+
   ef_manure: #name of parameter only for reference
     groupname: ef_manure #name of group for grouping the parameters
-    min: 0.027 # 7.5 g/MJ
-    max: 0.081 # 22.5 g/MJ
+    min: 0.0396 #11 g/MJ
+    max: 0.0594 #16.5 g/MJ
     config_file_location: #has to be a non-binary numerical value so that the sampling can be done
       biomass:
         emission_factors:
           manure:
   ef_crop_residues: #name of parameter only for reference
     groupname: ef_crop_residues #name of group for grouping the parameters
-    min: 0.036 # 10 g/MJ
-    max: 0.108 # 30 g/MJ
+    min: 0.02268 #6.3 g/MJ
+    max: 0.04428 #12.3 g/MJ
     config_file_location: #has to be a non-binary numerical value so that the sampling can be done
       biomass:
         emission_factors:
           agricultural waste:
   ef_logging_residues: #name of parameter only for reference
     groupname: ef_logging_residues #name of group for grouping the parameters
-    min: 0.045 # 12.5 g/MJ
-    max: 0.135 # 37.5 g/MJ
+    min: 0.126 #35 g/MJ
+    max: 0.1764 #49 g/MJ
     config_file_location: #has to be a non-binary numerical value so that the sampling can be done
       biomass:
         emission_factors:
           fuelwood residues:
+  ef_stemwood: #name of parameter only for reference
+    groupname: ef_stemwood #name of group for grouping the parameters
+    min: 0.306 #85 g/MJ
+    max: 0.3708 #103 g/MJ
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      biomass:
+        emission_factors:
+          fuelwoodRW:
+  ef_grasses: #name of parameter only for reference
+    groupname: ef_grasses #name of group for grouping the parameters
+    min: 0.18 #50 g/MJ
+    max: 0.27 #75 g/MJ
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      biomass:
+        emission_factors:
+          grasses:
+  ef_sawdust: #name of parameter only for reference
+    groupname: ef_sawdust #name of group for grouping the parameters
+    min: 0.3096 #86 g/MJ
+    max: 0.4212 #117 g/MJ
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      biomass:
+        emission_factors:
+          sawdust:
+  ef_secondary_forestry_residues: #name of parameter only for reference
+    groupname: ef_secondary_forestry_residues #name of group for grouping the parameters
+    min: 0.2592 #72 g/MJ
+    max: 0.3708 #103 g/MJ
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      biomass:
+        emission_factors:
+          secondary forestry residues:
+  ef_woody_crops: #name of parameter only for reference
+    groupname: ef_woody_crops #name of group for grouping the parameters
+    min: 0.18 #50 g/MJ
+    max: 0.27 #75 g/MJ
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      biomass:
+        emission_factors:
+          woody crops:
+  ef_C&P_RW: #name of parameter only for reference
+    groupname: ef_chips_and_pellets #name of group for grouping the parameters
+    min: 0.2592 #72 g/MJ
+    max: 0.3708 #103 g/MJ
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      biomass:
+        emission_factors:
+          C&P_RW:
+  ef_biomass_import: #default is 60 g/MJ (equalling 0.59 as share of co2 intensity)
+    groupname: ef_biomass_import #name of group for grouping the parameters
+    min: 0.49 #in % of co2 intensity which is 0.3667 ton/MWh #equalling 0.18 g/MJ
+    max: 0.74 #in % of co2 intensity which is 0.3667 ton/MWh #equalling 0.27 g/MJ
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      sector:
+        solid_biomass_import:
+          upstream_emissions_factor:
+      
   costs_agricultural_waste: #name of parameter only for reference
     groupname: biomass_costs #name of group for grouping the parameters
     min: 10.03
@@ -62,7 +257,7 @@ parameters:
         overwrites:
           fuel:
             C&P_RW:
-  costs_fuelwood_residues: #name of parameter only for reference
+  costs_logging_residues: #name of parameter only for reference
     groupname: biomass_costs #name of group for grouping the parameters
     min: 11.76
     max: 14.72
@@ -152,44 +347,6 @@ parameters:
         overwrites:
           fuel:
             Willow:
-
-results: #define results from results folder (TODO: or from the network directly)
-  system_costs: #name of result
-    multiplier: 1e-9 #to change the unit of the result or to change the sign if the output in the csv is negative
-    unit: billion € #unit of the result
-    csv:
-      filename: metrics.csv #name of the file
-      identification_column_entries: total costs #has to be unique (otherwise raise error)
-  manure_use:
-    multiplier: -1e-6
-    unit: TWh
-    csv:
-      filename: supply_energy.csv
-      identification_column_entries: manure,links,manure0
-  crop_residues_use:
-    multiplier: -1e-6
-    unit: TWh
-    csv:
-      filename: supply_energy.csv
-      identification_column_entries: agricultural waste,links,agricultural waste0
-  logging_residues_use:
-    multiplier: -1e-6
-    unit: TWh
-    csv:
-      filename: supply_energy.csv
-      identification_column_entries: fuelwood residues,links,fuelwood residues0
-  co2_shadow_price:
-    multiplier: -1
-    unit: €/t
-    csv:
-      filename: metrics.csv
-      identification_column_entries: co2_shadow
-  biomass_use:
-    multiplier: 1e-6
-    unit: TWh
-    csv:
-      filename: custom_metrics.csv
-      identification_column_entries: Biomass supply
 
 
 

@@ -1,0 +1,15 @@
+name: plotting_env
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - numpy
+  - pandas
+  - seaborn
+  - matplotlib        # Matplotlib 3.6+ (will get latest compatible, e.g. 3.8.x)
+  - webcolors>=1.13   # Ensure new webcolors (24.x) for color name support
+  - plotly
+  - pypsa
+  - pip
+  - pip:
+      - git+https://github.com/ErwindeGelder/matplot2tikz.git@v0.3.2#egg=matplot2tikz
