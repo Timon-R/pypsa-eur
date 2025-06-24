@@ -29,144 +29,171 @@
 #       enable: true
 #       sense: min
 #       slack: 0.15
-#     solver:
-#       options: gurobi-numeric-focus
+# #     solver:
+# #       options: gurobi-numeric-focus
 
-# min_0.05:
-#   solving:
-#     mga:
-#       enable: true
-#       sense: min
-#       slack: 0.05
-#     solver:
-#       options: gurobi-numeric-focus
+default_min_0.125:
+  biomass:
+    emission_factors:
+      agricultural waste: 0
+      fuelwood residues: 0
+      secondary forestry residues: 0
+      sawdust: 0
+      residues from landscape care: 0
+      grasses: 0
+      woody crops: 0
+      fuelwoodRW: 0
+      manure: 0
+      sludge: 0
+      C&P_RW: 0
+  sector:
+    renewable_emissions:
+      enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.125
+    # solver:
+    #   options: gurobi-numeric-focus
 
-# 710_min_0.025:
-#   solving:
-#     mga:
-#       enable: true
-#       sense: min
-#       slack: 0.025
-#     solver:
-#       options: gurobi-numeric-focus
-#   sector:
-#     co2_sequestration_potential:
-#       2050: 710
+min_0.03:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.03
+    # solver:
+    #   options: gurobi-numeric-focus
+
+710_min_0.03:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.03
+    # solver:
+    #   options: gurobi-numeric-focus
+  sector:
+    co2_sequestration_potential:
+      2050: 710
 
 ###### investigation min for default scenarios #########
 
 ### for default scenarios add min 0.12 and min 0.14 (with numberic focus)
-default_min_0.12:
-  biomass:
-    emission_factors:
-      agricultural waste: 0
-      fuelwood residues: 0
-      secondary forestry residues: 0
-      sawdust: 0
-      residues from landscape care: 0
-      grasses: 0
-      woody crops: 0
-      fuelwoodRW: 0
-      manure: 0
-      sludge: 0
-      C&P_RW: 0
-  sector:
-    renewable_emissions:
-      enable: false
-    solid_biomass_import:
-      upstream_emissions_factor: 0
-  solving:
-    mga:
-      enable: true
-      sense: min
-      slack: 0.12
-    # solver:
-    #   options: gurobi-numeric-focus
+# default_min_0.12:
+#   biomass:
+#     emission_factors:
+#       agricultural waste: 0
+#       fuelwood residues: 0
+#       secondary forestry residues: 0
+#       sawdust: 0
+#       residues from landscape care: 0
+#       grasses: 0
+#       woody crops: 0
+#       fuelwoodRW: 0
+#       manure: 0
+#       sludge: 0
+#       C&P_RW: 0
+#   sector:
+#     renewable_emissions:
+#       enable: false
+#     solid_biomass_import:
+#       upstream_emissions_factor: 0
+#   solving:
+#     mga:
+#       enable: true
+#       sense: min
+#       slack: 0.12
+#     # solver:
+#     #   options: gurobi-numeric-focus
 
-default_min_0.14:
-  biomass:
-    emission_factors:
-      agricultural waste: 0
-      fuelwood residues: 0
-      secondary forestry residues: 0
-      sawdust: 0
-      residues from landscape care: 0
-      grasses: 0
-      woody crops: 0
-      fuelwoodRW: 0
-      manure: 0
-      sludge: 0
-      C&P_RW: 0
-  sector:
-    renewable_emissions:
-      enable: false
-    solid_biomass_import:
-      upstream_emissions_factor: 0
-  solving:
-    mga:
-      enable: true
-      sense: min
-      slack: 0.14
-    # solver:
-    #   options: gurobi-numeric-focus
+# default_min_0.14:
+#   biomass:
+#     emission_factors:
+#       agricultural waste: 0
+#       fuelwood residues: 0
+#       secondary forestry residues: 0
+#       sawdust: 0
+#       residues from landscape care: 0
+#       grasses: 0
+#       woody crops: 0
+#       fuelwoodRW: 0
+#       manure: 0
+#       sludge: 0
+#       C&P_RW: 0
+#   sector:
+#     renewable_emissions:
+#       enable: false
+#     solid_biomass_import:
+#       upstream_emissions_factor: 0
+#   solving:
+#     mga:
+#       enable: true
+#       sense: min
+#       slack: 0.14
+#     # solver:
+#     #   options: gurobi-numeric-focus
 
-default_710_min_0.12:
-  biomass:
-    emission_factors:
-      agricultural waste: 0
-      fuelwood residues: 0
-      secondary forestry residues: 0
-      sawdust: 0
-      residues from landscape care: 0
-      grasses: 0
-      woody crops: 0
-      fuelwoodRW: 0
-      manure: 0
-      sludge: 0
-      C&P_RW: 0
-  sector:
-    renewable_emissions:
-      enable: false
-    solid_biomass_import:
-      upstream_emissions_factor: 0
-    co2_sequestration_potential:
-      2050: 710
-  solving:
-    mga:
-      enable: true
-      sense: min
-      slack: 0.12
-    # solver:
-    #   options: gurobi-numeric-focus
+# default_710_min_0.12:
+#   biomass:
+#     emission_factors:
+#       agricultural waste: 0
+#       fuelwood residues: 0
+#       secondary forestry residues: 0
+#       sawdust: 0
+#       residues from landscape care: 0
+#       grasses: 0
+#       woody crops: 0
+#       fuelwoodRW: 0
+#       manure: 0
+#       sludge: 0
+#       C&P_RW: 0
+#   sector:
+#     renewable_emissions:
+#       enable: false
+#     solid_biomass_import:
+#       upstream_emissions_factor: 0
+#     co2_sequestration_potential:
+#       2050: 710
+#   solving:
+#     mga:
+#       enable: true
+#       sense: min
+#       slack: 0.12
+#     # solver:
+#     #   options: gurobi-numeric-focus
 
-default_710_min_0.14:
-  biomass:
-    emission_factors:
-      agricultural waste: 0
-      fuelwood residues: 0
-      secondary forestry residues: 0
-      sawdust: 0
-      residues from landscape care: 0
-      grasses: 0
-      woody crops: 0
-      fuelwoodRW: 0
-      manure: 0
-      sludge: 0
-      C&P_RW: 0
-  sector:
-    renewable_emissions:
-      enable: false
-    solid_biomass_import:
-      upstream_emissions_factor: 0
-    co2_sequestration_potential:
-      2050: 710
-  solving:
-    mga:
-      enable: true
-      sense: min
-      slack: 0.14
-    # solver:
-    #   options: gurobi-numeric-focus
+# default_710_min_0.14:
+#   biomass:
+#     emission_factors:
+#       agricultural waste: 0
+#       fuelwood residues: 0
+#       secondary forestry residues: 0
+#       sawdust: 0
+#       residues from landscape care: 0
+#       grasses: 0
+#       woody crops: 0
+#       fuelwoodRW: 0
+#       manure: 0
+#       sludge: 0
+#       C&P_RW: 0
+#   sector:
+#     renewable_emissions:
+#       enable: false
+#     solid_biomass_import:
+#       upstream_emissions_factor: 0
+#     co2_sequestration_potential:
+#       2050: 710
+#   solving:
+#     mga:
+#       enable: true
+#       sense: min
+#       slack: 0.14
+#     # solver:
+#     #   options: gurobi-numeric-focus
 
 ###### carbon cost ######
 

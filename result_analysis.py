@@ -2033,7 +2033,7 @@ def get_mga_results(results_dir="results", export_dir="export/mga"):
     )
     export_results(all_biomass_supply, "biomass_use_carbon_costs.csv", export_dir=export_dir)
 
-    scenarios = ["710_optimal", "710_max_0.025", "710_max_0.05","710_max_0.1","710_max_0.15","710_min_0.025","710_min_0.05","710_min_0.1","710_min_0.15"]
+    scenarios = ["710_optimal", "710_max_0.025", "710_max_0.05","710_max_0.1","710_max_0.15","710_min_0.025","710_min_0.05","710_min_0.1","710_min_0.15","710_min_0.02"]
     results = load_results(results_dir, scenarios)
 
     all_biomass_supply = get_data(
