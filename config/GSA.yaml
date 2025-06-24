@@ -6,7 +6,7 @@
 # only works for Greenfield scenarios, uniform distribution is used for all parameters
 
 general:
-  replicates: 3 #10 is standard
+  replicates: 10 #10 is standard
   method: morris #Maybe other later
   covariance_plot: false
 
@@ -158,86 +158,86 @@ parameters:
           investment:
             nuclear:
 
-  # ef_manure: #name of parameter only for reference
-  #   groupname: ef_manure #name of group for grouping the parameters
-  #   min: 0.0396 #11 g/MJ
-  #   max: 0.0594 #16.5 g/MJ
-  #   config_file_location: #has to be a non-binary numerical value so that the sampling can be done
-  #     biomass:
-  #       emission_factors:
-  #         manure:
-  # ef_crop_residues: #name of parameter only for reference
-  #   groupname: ef_crop_residues #name of group for grouping the parameters
-  #   min: 0.02268 #6.3 g/MJ
-  #   max: 0.04428 #12.3 g/MJ
-  #   config_file_location: #has to be a non-binary numerical value so that the sampling can be done
-  #     biomass:
-  #       emission_factors:
-  #         agricultural waste:
-  # ef_logging_residues: #name of parameter only for reference
-  #   groupname: ef_logging_residues #name of group for grouping the parameters
-  #   min: 0.126 #35 g/MJ
-  #   max: 0.1764 #49 g/MJ
-  #   config_file_location: #has to be a non-binary numerical value so that the sampling can be done
-  #     biomass:
-  #       emission_factors:
-  #         fuelwood residues:
-  # ef_stemwood: #name of parameter only for reference
-  #   groupname: ef_stemwood #name of group for grouping the parameters
-  #   min: 0.306 #85 g/MJ
-  #   max: 0.3708 #103 g/MJ
-  #   config_file_location: #has to be a non-binary numerical value so that the sampling can be done
-  #     biomass:
-  #       emission_factors:
-  #         fuelwoodRW:
-  # ef_grasses: #name of parameter only for reference
-  #   groupname: ef_grasses #name of group for grouping the parameters
-  #   min: 0.18 #50 g/MJ
-  #   max: 0.27 #75 g/MJ
-  #   config_file_location: #has to be a non-binary numerical value so that the sampling can be done
-  #     biomass:
-  #       emission_factors:
-  #         grasses:
-  # ef_sawdust: #name of parameter only for reference
-  #   groupname: ef_sawdust #name of group for grouping the parameters
-  #   min: 0.3096 #86 g/MJ
-  #   max: 0.4212 #117 g/MJ
-  #   config_file_location: #has to be a non-binary numerical value so that the sampling can be done
-  #     biomass:
-  #       emission_factors:
-  #         sawdust:
-  # ef_secondary_forestry_residues: #name of parameter only for reference
-  #   groupname: ef_secondary_forestry_residues #name of group for grouping the parameters
-  #   min: 0.2592 #72 g/MJ
-  #   max: 0.3708 #103 g/MJ
-  #   config_file_location: #has to be a non-binary numerical value so that the sampling can be done
-  #     biomass:
-  #       emission_factors:
-  #         secondary forestry residues:
-  # ef_woody_crops: #name of parameter only for reference
-  #   groupname: ef_woody_crops #name of group for grouping the parameters
-  #   min: 0.18 #50 g/MJ
-  #   max: 0.27 #75 g/MJ
-  #   config_file_location: #has to be a non-binary numerical value so that the sampling can be done
-  #     biomass:
-  #       emission_factors:
-  #         woody crops:
-  # ef_C&P_RW: #name of parameter only for reference
-  #   groupname: ef_chips_and_pellets #name of group for grouping the parameters
-  #   min: 0.2592 #72 g/MJ
-  #   max: 0.3708 #103 g/MJ
-  #   config_file_location: #has to be a non-binary numerical value so that the sampling can be done
-  #     biomass:
-  #       emission_factors:
-  #         C&P_RW:
-  # ef_biomass_import: #default is 60 g/MJ (equalling 0.59 as share of co2 intensity)
-  #   groupname: ef_biomass_import #name of group for grouping the parameters
-  #   min: 0.49 #in % of co2 intensity which is 0.3667 ton/MWh #equalling 0.18 g/MJ
-  #   max: 0.74 #in % of co2 intensity which is 0.3667 ton/MWh #equalling 0.27 g/MJ
-  #   config_file_location: #has to be a non-binary numerical value so that the sampling can be done
-  #     sector:
-  #       solid_biomass_import:
-  #         upstream_emissions_factor:
+  ef_manure: #name of parameter only for reference
+    groupname: ef_manure #name of group for grouping the parameters
+    min: 0.0396 #11 g/MJ
+    max: 0.0594 #16.5 g/MJ
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      biomass:
+        emission_factors:
+          manure:
+  ef_crop_residues: #name of parameter only for reference
+    groupname: ef_crop_residues #name of group for grouping the parameters
+    min: 0.02268 #6.3 g/MJ
+    max: 0.04428 #12.3 g/MJ
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      biomass:
+        emission_factors:
+          agricultural waste:
+  ef_logging_residues: #name of parameter only for reference
+    groupname: ef_logging_residues #name of group for grouping the parameters
+    min: 0.126 #35 g/MJ
+    max: 0.1764 #49 g/MJ
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      biomass:
+        emission_factors:
+          fuelwood residues:
+  ef_stemwood: #name of parameter only for reference
+    groupname: ef_stemwood #name of group for grouping the parameters
+    min: 0.306 #85 g/MJ
+    max: 0.3708 #103 g/MJ
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      biomass:
+        emission_factors:
+          fuelwoodRW:
+  ef_grasses: #name of parameter only for reference
+    groupname: ef_grasses #name of group for grouping the parameters
+    min: 0.18 #50 g/MJ
+    max: 0.27 #75 g/MJ
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      biomass:
+        emission_factors:
+          grasses:
+  ef_sawdust: #name of parameter only for reference
+    groupname: ef_sawdust #name of group for grouping the parameters
+    min: 0.3096 #86 g/MJ
+    max: 0.4212 #117 g/MJ
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      biomass:
+        emission_factors:
+          sawdust:
+  ef_secondary_forestry_residues: #name of parameter only for reference
+    groupname: ef_secondary_forestry_residues #name of group for grouping the parameters
+    min: 0.2592 #72 g/MJ
+    max: 0.3708 #103 g/MJ
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      biomass:
+        emission_factors:
+          secondary forestry residues:
+  ef_woody_crops: #name of parameter only for reference
+    groupname: ef_woody_crops #name of group for grouping the parameters
+    min: 0.18 #50 g/MJ
+    max: 0.27 #75 g/MJ
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      biomass:
+        emission_factors:
+          woody crops:
+  ef_C&P_RW: #name of parameter only for reference
+    groupname: ef_chips_and_pellets #name of group for grouping the parameters
+    min: 0.2592 #72 g/MJ
+    max: 0.3708 #103 g/MJ
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      biomass:
+        emission_factors:
+          C&P_RW:
+  ef_biomass_import: #default is 60 g/MJ (equalling 0.59 as share of co2 intensity)
+    groupname: ef_biomass_import #name of group for grouping the parameters
+    min: 0.49 #in % of co2 intensity which is 0.3667 ton/MWh #equalling 0.18 g/MJ
+    max: 0.74 #in % of co2 intensity which is 0.3667 ton/MWh #equalling 0.27 g/MJ
+    config_file_location: #has to be a non-binary numerical value so that the sampling can be done
+      sector:
+        solid_biomass_import:
+          upstream_emissions_factor:
       
   costs_agricultural_waste: #name of parameter only for reference
     groupname: biomass_costs #name of group for grouping the parameters
