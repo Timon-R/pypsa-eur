@@ -14,7 +14,7 @@ rule solve_network:
     input:
         network=resources("networks/base_s_{clusters}_elec_{opts}.nc"),
     output:
-        network=RESULTS + "networks/base_s_{clusters}_elec_{opts}.nc",
+        network= temp(RESULTS + "networks/base_s_{clusters}_elec_{opts}.nc"),
         config=RESULTS + "configs/config.base_s_{clusters}_elec_{opts}.yaml",
     log:
         solver=normpath(
