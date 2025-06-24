@@ -161,7 +161,7 @@ def calculate_GSA_metrics():
         Y = results["value"].values
         if len(X) != len(Y):
             raise ValueError(
-                f"Length of sample ({len(X)}) and results ({len(Y)}) do not match. Try changing the identification_column_entries in the GSA.yaml file."
+                f"Length of sample ({len(X)}) and results ({len(Y)}) do not match. Try changing the identification_column_entries in the GSA.yaml file. Variable: {variable}"
             )
         print(f"GSA for {variable}: ")
         Si = analyze_morris.analyze(problem, X, Y, print_to_console=True)
@@ -190,5 +190,5 @@ def calculate_GSA_metrics():
 
 
 if __name__ == "__main__":
-    extract_results(folder= "results/GSA")
+    extract_results(folder= "results/test")
     calculate_GSA_metrics()

@@ -344,6 +344,25 @@ rule make_cumulative_costs:
     script:
         "../scripts/make_cumulative_costs.py"
 
+rule make_custom_metrics:
+    params:
+        scenario = config_provider("scenario"),            # same pattern
+        folder = RESULTS + "csvs",
+    input:
+        energy_balance = RESULTS + "csvs/energy_balance.csv",
+    output:
+        custom_metrics = RESULTS + "csvs/custom_metrics.csv",
+    threads: 1
+    resources:
+        mem_mb = 4000,
+    log:
+        RESULTS + "logs/make_custom_metrics.log",
+    benchmark:
+        RESULTS + "benchmarks/make_custom_metrics",
+    conda:
+        "../envs/environment.yaml"
+    script:
+        "../scripts/make_custom_metrics.py"
 
 rule plot_summary:
     params:

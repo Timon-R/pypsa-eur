@@ -1,37 +1,27 @@
-# SPDX-FileCopyrightText: Contributors to PyPSA-Eur <https://github.com/pypsa/pypsa-eur>
-#
-# SPDX-License-Identifier: MIT
-
 import os
 import string
 
 import pandas as pd
 
 
-def safe_as_csv(data, path):
-    """
-    This function saves a dictionary as a csv file.
-    """
+def safe_as_csv(data: dict, path: str) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
         f.write("data_name,value\n")
         for key, value in data.items():
             f.write(f"{key},{value}\n")
-    return
 
 
-def load_csvs(folderpath):
-    """
-    This function loads a csv file as a pandas dataframe.
-    """
-    csv_files = [f for f in os.listdir(folderpath) if f.endswith(".csv")]
+def load_csvs(folderpath: str) -> dict[str, pd.DataFrame]:
     dataframes = {}
-    for file in csv_files:
-        file_path = os.path.join(folderpath, file)
-        if "custom_metrics" not in file:
-            df = pd.read_csv(file_path).drop(index=range(3))
+    for file in os.listdir(folderpath):
+        if file.endswith(".csv") and "custom_metrics" not in file:
+            fp = os.path.join(folderpath, file)
+            df = pd.read_csv(fp)
+            if len(df) > 3:
+                df = df.drop(index=range(3))
             df.columns = list(string.ascii_uppercase[: len(df.columns)])
-            key = os.path.splitext(file)[0]
-            dataframes[key] = df.reset_index(drop=True)
+            dataframes[os.path.splitext(file)[0]] = df.reset_index(drop=True)
     return dataframes
 
 
@@ -104,21 +94,20 @@ def calculate_custom_metric(
 
 
 if __name__ == "__main__":
-    # iterate through all the result folders
-    results_dir = "results"
-    folders = os.listdir(results_dir)
-    for folder in folders:
-        folder_path = os.path.join(results_dir, folder, "csvs")
-        results = load_csvs(folder_path)
-        # compute the metrics needed
-        metrics = calculate_custom_metric(
-            results,
-            "energy_balance",
-            [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
-            [[[""], "Biomass supply", None]],
-            "B",
-            "D",
-            filter_positive=True,
-            remove_list=["solid biomass transport"],
-        )
-        safe_as_csv(metrics, os.path.join(folder_path, "custom_metrics.csv"))
+    folder   = snakemake.params.folder
+    out_file = snakemake.output[0]
+
+    dfs = load_csvs(folder)
+
+    metrics = calculate_custom_metric(
+        dfs,
+        "energy_balance",
+        [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
+        [[[""], "Biomass supply", None]],
+        "B",
+        "D",
+        filter_positive=True,
+        remove_list=["solid biomass transport"],
+    )
+
+    safe_as_csv(metrics, out_file)
