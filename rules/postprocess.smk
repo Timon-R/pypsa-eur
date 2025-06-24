@@ -346,7 +346,7 @@ rule make_cumulative_costs:
 
 rule make_custom_metrics:
     params:
-        scenario = config_provider("scenario"),            # same pattern
+        scenario = config_provider("scenario"),
         folder = RESULTS + "csvs",
     input:
         energy_balance = RESULTS + "csvs/energy_balance.csv",
