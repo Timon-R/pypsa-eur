@@ -190,5 +190,5 @@ def calculate_GSA_metrics():
 
 
 if __name__ == "__main__":
-    extract_results(folder= "results/test")
+    extract_results(folder= "results/GSA")
     calculate_GSA_metrics()

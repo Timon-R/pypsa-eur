@@ -71,13 +71,17 @@ def load_results(results_dir, folders="all"):
         dataframes = {}
         print(f"Loading data from {folder}...")
         for file in csv_files:
-            file_path = os.path.join(folder_path, file)
-            if "custom_metrics" not in file and "metrics" not in file and "weighted_prices" not in file:
-                df = pd.read_csv(file_path).drop(index=range(3))
-            elif "weighted_prices" in file:
-                df = pd.read_csv(file_path).drop(index=range(1))
-            else:
-                df = pd.read_csv(file_path).drop(index=range(2))
+            try:
+                file_path = os.path.join(folder_path, file)
+                if "custom_metrics" in file or "cumulative_costs" in file:
+                    df = pd.read_csv(file_path)
+                elif "metrics" in file:
+                    df = pd.read_csv(file_path).drop(index=range(2))
+                else:
+                    df = pd.read_csv(file_path).drop(index=range(3))
+            except Exception as e:
+                print(f"Error reading {file_path}: {e}")
+                raise e
             df.columns = list(string.ascii_uppercase[: len(df.columns)])
             key = os.path.splitext(file)[0]
             dataframes[key] = df.reset_index(drop=True)
@@ -2143,7 +2147,7 @@ if __name__ == "__main__":
     difference_scenarios = ["default_optimal", "optimal"]
     export_dir = "export/seq"
 
-    check_result_quality(results_dir="results")
+    #check_result_quality(results_dir="results")
 
     # scenarios = ["default_optimal", "optimal"]
     # export_dir = "export/basic"
@@ -2152,4 +2156,19 @@ if __name__ == "__main__":
 
     #get_biomass_potentials(export_dir=export_dir)
 
-    get_mga_results()
+    #get_mga_results()
+
+
+    results = load_results("results/GSA", "all")
+    nuclear_capacity = get_data(
+        results,
+        "all",
+        "capacities",
+        [["Generator", "nuclear"]],
+        [],
+        "C",
+        "B",
+        "2050",
+        filter_positive=True,
+    )
+    export_results(nuclear_capacity, "nuclear_capacity.csv", export_dir="GSA/export")
