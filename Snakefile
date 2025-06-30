@@ -84,73 +84,93 @@ if config["foresight"] == "perfect":
 
 
 rule all:
-    input:
-        expand(RESULTS + "graphs/costs.svg", run=config["run"]["name"]),
-        expand(
-            resources("maps/power-network-s-{clusters}.pdf"),
-            run=config["run"]["name"],
-            **config["scenario"],
-        ),
-        expand(
-            RESULTS
-            + "maps/base_s_{clusters}_{opts}_{sector_opts}-costs-all_{planning_horizons}.pdf",
-            run=config["run"]["name"],
-            **config["scenario"],
-        ),
-        lambda w: expand(
-            (
-                RESULTS
-                + "maps/base_s_{clusters}_{opts}_{sector_opts}-h2_network_{planning_horizons}.pdf"
-                if config_provider("sector", "H2_network")(w)
-                else []
-            ),
-            run=config["run"]["name"],
-            **config["scenario"],
-        ),
-        lambda w: expand(
-            (
-                RESULTS
-                + "maps/base_s_{clusters}_{opts}_{sector_opts}-ch4_network_{planning_horizons}.pdf"
-                if config_provider("sector", "gas_network")(w)
-                else []
-            ),
-            run=config["run"]["name"],
-            **config["scenario"],
-        ),
-        lambda w: expand(
-            (
-                RESULTS + "csvs/cumulative_costs.csv"
-                if config_provider("foresight")(w) == "myopic"
-                else []
-            ),
-            run=config["run"]["name"],
-        ),
-        lambda w: expand(
-            (
-                RESULTS
-                + "maps/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}-balance_map_{carrier}.pdf"
-            ),
-            **config["scenario"],
-            run=config["run"]["name"],
-            carrier=config_provider("plotting", "balance_map", "bus_carriers")(w),
-        ),
-        directory(
-            expand(
-                RESULTS
-                + "graphics/balance_timeseries/s_{clusters}_{opts}_{sector_opts}_{planning_horizons}",
-                run=config["run"]["name"],
-                **config["scenario"],
-            ),
-        ),
-        directory(
-            expand(
-                RESULTS
-                + "graphics/heatmap_timeseries/s_{clusters}_{opts}_{sector_opts}_{planning_horizons}",
-                run=config["run"]["name"],
-                **config["scenario"],
-            ),
-        ),
     default_target: True
+    input:
+        expand(
+            RESULTS + "csvs/{name}.csv",
+            run=config["run"]["name"],
+            **config["scenario"],
+            name=[
+                "costs", "capacities", "energy", "energy_balance",
+                "capacity_factors", "metrics", "curtailment",
+                "prices", "weighted_prices", "market_values",
+                "nodal_costs", "nodal_capacities",
+                "nodal_energy_balance", "nodal_capacity_factors",
+                "cumulative_costs",
+            ],
+        ),
+        expand(
+            RESULTS + "csvs/custom_metrics.csv",
+            run=config["run"]["name"],
+            **config["scenario"],
+        ),
+
+    #     expand(RESULTS + "graphs/costs.svg", run=config["run"]["name"]),
+    #     expand(
+    #         resources("maps/power-network-s-{clusters}.pdf"),
+    #         run=config["run"]["name"],
+    #         **config["scenario"],
+    #     ),
+    #     expand(
+    #         RESULTS
+    #         + "maps/base_s_{clusters}_{opts}_{sector_opts}-costs-all_{planning_horizons}.pdf",
+    #         run=config["run"]["name"],
+    #         **config["scenario"],
+    #     ),
+    #     lambda w: expand(
+    #         (
+    #             RESULTS
+    #             + "maps/base_s_{clusters}_{opts}_{sector_opts}-h2_network_{planning_horizons}.pdf"
+    #             if config_provider("sector", "H2_network")(w)
+    #             else []
+    #         ),
+    #         run=config["run"]["name"],
+    #         **config["scenario"],
+    #     ),
+    #     lambda w: expand(
+    #         (
+    #             RESULTS
+    #             + "maps/base_s_{clusters}_{opts}_{sector_opts}-ch4_network_{planning_horizons}.pdf"
+    #             if config_provider("sector", "gas_network")(w)
+    #             else []
+    #         ),
+    #         run=config["run"]["name"],
+    #         **config["scenario"],
+    #     ),
+    #     lambda w: expand(
+    #         (
+    #             RESULTS + "csvs/cumulative_costs.csv"
+    #             if config_provider("foresight")(w) == "myopic"
+    #             else []
+    #         ),
+    #         run=config["run"]["name"],
+    #     ),
+    #     lambda w: expand(
+    #         (
+    #             RESULTS
+    #             + "maps/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}-balance_map_{carrier}.pdf"
+    #         ),
+    #         **config["scenario"],
+    #         run=config["run"]["name"],
+    #         carrier=config_provider("plotting", "balance_map", "bus_carriers")(w),
+    #     ),
+    #     directory(
+    #         expand(
+    #             RESULTS
+    #             + "graphics/balance_timeseries/s_{clusters}_{opts}_{sector_opts}_{planning_horizons}",
+    #             run=config["run"]["name"],
+    #             **config["scenario"],
+    #         ),
+    #     ),
+    #     directory(
+    #         expand(
+    #             RESULTS
+    #             + "graphics/heatmap_timeseries/s_{clusters}_{opts}_{sector_opts}_{planning_horizons}",
+    #             run=config["run"]["name"],
+    #             **config["scenario"],
+    #         ),
+    #     ),
+    # default_target: True
 
 
 rule create_scenarios:

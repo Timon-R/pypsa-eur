@@ -1,0 +1,26 @@
+default_min_0.15:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.15
+    solver:
+      options: gurobi-numeric-focus
+  biomass:
+    emission_factors:
+      agricultural waste: 0
+      fuelwood residues: 0
+      secondary forestry residues: 0
+      sawdust: 0
+      residues from landscape care: 0
+      grasses: 0
+      woody crops: 0
+      fuelwoodRW: 0
+      manure: 0
+      sludge: 0
+      C&P_RW: 0
+  sector:
+    renewable_emissions:
+      enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
