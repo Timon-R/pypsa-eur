@@ -1,83 +1,27 @@
-###### SPECIAL CASES ######
+###### carbon cost ######
 
-default_710_min_0.12:
+optimal:
+  solving:
+    mga:
+      enable: false
+
+bm0:
+  sector:
+    biomass: false
+
+min_0.01:
   solving:
     mga:
       enable: true
       sense: min
-      slack: 0.12
-  biomass:
-    emission_factors:
-      agricultural waste: 0
-      fuelwood residues: 0
-      secondary forestry residues: 0
-      sawdust: 0
-      residues from landscape care: 0
-      grasses: 0
-      woody crops: 0
-      fuelwoodRW: 0
-      manure: 0
-      sludge: 0
-      C&P_RW: 0
-  sector:
-    renewable_emissions:
-      enable: false
-    solid_biomass_import:
-      upstream_emissions_factor: 0
-    co2_sequestration_potential:
-      2050: 710
+      slack: 0.01
 
-default_min_0.12:
+min_0.02:
   solving:
     mga:
       enable: true
       sense: min
-      slack: 0.12
-  biomass:
-    emission_factors:
-      agricultural waste: 0
-      fuelwood residues: 0
-      secondary forestry residues: 0
-      sawdust: 0
-      residues from landscape care: 0
-      grasses: 0
-      woody crops: 0
-      fuelwoodRW: 0
-      manure: 0
-      sludge: 0
-      C&P_RW: 0
-  sector:
-    renewable_emissions:
-      enable: false
-    solid_biomass_import:
-      upstream_emissions_factor: 0
-
-default_min_0.13:
-  solving:
-    mga:
-      enable: true
-      sense: min
-      slack: 0.13
-    solver:
-      options: gurobi-numeric-focus
-  biomass:
-    emission_factors:
-      agricultural waste: 0
-      fuelwood residues: 0
-      secondary forestry residues: 0
-      sawdust: 0
-      residues from landscape care: 0
-      grasses: 0
-      woody crops: 0
-      fuelwoodRW: 0
-      manure: 0
-      sludge: 0
-      C&P_RW: 0
-  sector:
-    renewable_emissions:
-      enable: false
-    solid_biomass_import:
-      upstream_emissions_factor: 0
+      slack: 0.02
 
 min_0.03:
   solving:
@@ -85,17 +29,13 @@ min_0.03:
       enable: true
       sense: min
       slack: 0.03
-    solver:
-      options: gurobi-numeric-focus
 
-###### carbon cost ######
-
-min_0.025:
+min_0.04:
   solving:
     mga:
       enable: true
       sense: min
-      slack: 0.025
+      slack: 0.04
 
 min_0.05:
   solving:
@@ -103,8 +43,6 @@ min_0.05:
       enable: true
       sense: min
       slack: 0.05
-    solver:
-      options: gurobi-numeric-focus
 
 min_0.1:
   solving:
@@ -113,19 +51,33 @@ min_0.1:
       sense: min
       slack: 0.1
 
-min_0.15:
-  solving:
-    mga:
-      enable: true
-      sense: min
-      slack: 0.15
-
-max_0.025:
+max_0.01:
   solving:
     mga:
       enable: true
       sense: max
-      slack: 0.025
+      slack: 0.01
+
+max_0.02:
+  solving:
+    mga:
+      enable: true
+      sense: max
+      slack: 0.02
+
+max_0.03:
+  solving:
+    mga:
+      enable: true
+      sense: max
+      slack: 0.03
+
+max_0.04:
+  solving:
+    mga:
+      enable: true
+      sense: max
+      slack: 0.04
 
 max_0.05:
   solving:
@@ -148,21 +100,65 @@ max_0.15:
       sense: max
       slack: 0.15
 
-optimal:
+max_0.2:
   solving:
     mga:
-      enable: false
+      enable: true
+      sense: max
+      slack: 0.2
 
 ###### 710 carbon costs ######
 
-710_min_0.025:
+710_optimal:
+  solving:
+    mga:
+      enable: false
+  sector:
+    co2_sequestration_potential:
+      2050: 710
+
+710_bm0:
+  sector:
+    co2_sequestration_potential:
+      2050: 710
+    biomass: false
+
+710_min_0.01:
   solving:
     mga:
       enable: true
       sense: min
-      slack: 0.025
-    solver:
-      options: gurobi-numeric-focus
+      slack: 0.01
+  sector:
+    co2_sequestration_potential:
+      2050: 710
+
+710_min_0.02:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.02
+  sector:
+    co2_sequestration_potential:
+      2050: 710
+
+710_min_0.03:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.03
+  sector:
+    co2_sequestration_potential:
+      2050: 710
+
+710_min_0.04:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.04
   sector:
     co2_sequestration_potential:
       2050: 710
@@ -187,22 +183,42 @@ optimal:
     co2_sequestration_potential:
       2050: 710
 
-710_min_0.15:
-  solving:
-    mga:
-      enable: true
-      sense: min
-      slack: 0.15
-  sector:
-    co2_sequestration_potential:
-      2050: 710
-
-710_max_0.025:
+710_max_0.01:
   solving:
     mga:
       enable: true
       sense: max
-      slack: 0.025
+      slack: 0.01
+  sector:
+    co2_sequestration_potential:
+      2050: 710
+
+710_max_0.02:
+  solving:
+    mga:
+      enable: true
+      sense: max
+      slack: 0.02
+  sector:
+    co2_sequestration_potential:
+      2050: 710
+
+710_max_0.03:
+  solving:
+    mga:
+      enable: true
+      sense: max
+      slack: 0.03
+  sector:
+    co2_sequestration_potential:
+      2050: 710
+
+710_max_0.04:
+  solving:
+    mga:
+      enable: true
+      sense: max
+      slack: 0.04
   sector:
     co2_sequestration_potential:
       2050: 710
@@ -237,22 +253,143 @@ optimal:
     co2_sequestration_potential:
       2050: 710
 
-710_optimal:
+710_max_0.2:
   solving:
     mga:
-      enable: false
+      enable: true
+      sense: max
+      slack: 0.2
   sector:
     co2_sequestration_potential:
       2050: 710
 
 ###### default ######
 
-default_min_0.025:
+default_optimal:
+  solving:
+    mga:
+      enable: false
+  biomass:
+    emission_factors:
+      agricultural waste: 0
+      fuelwood residues: 0
+      secondary forestry residues: 0
+      sawdust: 0
+      residues from landscape care: 0
+      grasses: 0
+      woody crops: 0
+      fuelwoodRW: 0
+      manure: 0
+      sludge: 0
+      C&P_RW: 0
+  sector:
+    renewable_emissions:
+      enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
+
+default_bm0:
+  biomass:
+    emission_factors:
+      agricultural waste: 0
+      fuelwood residues: 0
+      secondary forestry residues: 0
+      sawdust: 0
+      residues from landscape care: 0
+      grasses: 0
+      woody crops: 0
+      fuelwoodRW: 0
+      manure: 0
+      sludge: 0
+      C&P_RW: 0
+  sector:
+    renewable_emissions:
+      enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
+    biomass: false
+
+default_min_0.01:
   solving:
     mga:
       enable: true
       sense: min
-      slack: 0.025
+      slack: 0.01
+  biomass:
+    emission_factors:
+      agricultural waste: 0
+      fuelwood residues: 0
+      secondary forestry residues: 0
+      sawdust: 0
+      residues from landscape care: 0
+      grasses: 0
+      woody crops: 0
+      fuelwoodRW: 0
+      manure: 0
+      sludge: 0
+      C&P_RW: 0
+  sector:
+    renewable_emissions:
+      enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
+
+default_min_0.02:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.02
+  biomass:
+    emission_factors:
+      agricultural waste: 0
+      fuelwood residues: 0
+      secondary forestry residues: 0
+      sawdust: 0
+      residues from landscape care: 0
+      grasses: 0
+      woody crops: 0
+      fuelwoodRW: 0
+      manure: 0
+      sludge: 0
+      C&P_RW: 0
+  sector:
+    renewable_emissions:
+      enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
+
+default_min_0.03:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.03
+  biomass:
+    emission_factors:
+      agricultural waste: 0
+      fuelwood residues: 0
+      secondary forestry residues: 0
+      sawdust: 0
+      residues from landscape care: 0
+      grasses: 0
+      woody crops: 0
+      fuelwoodRW: 0
+      manure: 0
+      sludge: 0
+      C&P_RW: 0
+  sector:
+    renewable_emissions:
+      enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
+
+default_min_0.04:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.04
   biomass:
     emission_factors:
       agricultural waste: 0
@@ -328,8 +465,6 @@ default_min_0.15:
       enable: true
       sense: min
       slack: 0.15
-    solver:
-      options: gurobi-numeric-focus
   biomass:
     emission_factors:
       agricultural waste: 0
@@ -349,12 +484,112 @@ default_min_0.15:
     solid_biomass_import:
       upstream_emissions_factor: 0
 
-default_max_0.025:
+default_min_0.2:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.2
+  biomass:
+    emission_factors:
+      agricultural waste: 0
+      fuelwood residues: 0
+      secondary forestry residues: 0
+      sawdust: 0
+      residues from landscape care: 0
+      grasses: 0
+      woody crops: 0
+      fuelwoodRW: 0
+      manure: 0
+      sludge: 0
+      C&P_RW: 0
+  sector:
+    renewable_emissions:
+      enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
+
+default_max_0.01:
   solving:
     mga:
       enable: true
       sense: max
-      slack: 0.025
+      slack: 0.01
+  biomass:
+    emission_factors:
+      agricultural waste: 0
+      fuelwood residues: 0
+      secondary forestry residues: 0
+      sawdust: 0
+      residues from landscape care: 0
+      grasses: 0
+      woody crops: 0
+      fuelwoodRW: 0
+      manure: 0
+      sludge: 0
+      C&P_RW: 0
+  sector:
+    renewable_emissions:
+      enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
+
+default_max_0.02:
+  solving:
+    mga:
+      enable: true
+      sense: max
+      slack: 0.02
+  biomass:
+    emission_factors:
+      agricultural waste: 0
+      fuelwood residues: 0
+      secondary forestry residues: 0
+      sawdust: 0
+      residues from landscape care: 0
+      grasses: 0
+      woody crops: 0
+      fuelwoodRW: 0
+      manure: 0
+      sludge: 0
+      C&P_RW: 0
+  sector:
+    renewable_emissions:
+      enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
+
+default_max_0.03:
+  solving:
+    mga:
+      enable: true
+      sense: max
+      slack: 0.03
+  biomass:
+    emission_factors:
+      agricultural waste: 0
+      fuelwood residues: 0
+      secondary forestry residues: 0
+      sawdust: 0
+      residues from landscape care: 0
+      grasses: 0
+      woody crops: 0
+      fuelwoodRW: 0
+      manure: 0
+      sludge: 0
+      C&P_RW: 0
+  sector:
+    renewable_emissions:
+      enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
+
+default_max_0.04:
+  solving:
+    mga:
+      enable: true
+      sense: max
+      slack: 0.04
   biomass:
     emission_factors:
       agricultural waste: 0
@@ -449,10 +684,12 @@ default_max_0.15:
     solid_biomass_import:
       upstream_emissions_factor: 0
 
-default_optimal:
+default_max_0.2:
   solving:
     mga:
-      enable: false
+      enable: true
+      sense: max
+      slack: 0.2
   biomass:
     emission_factors:
       agricultural waste: 0
@@ -474,12 +711,141 @@ default_optimal:
 
 ###### 710 default ######
 
-default_710_min_0.025:
+default_710_optimal:
+  solving:
+    mga:
+      enable: false
+  biomass:
+    emission_factors:
+      agricultural waste: 0
+      fuelwood residues: 0
+      secondary forestry residues: 0
+      sawdust: 0
+      residues from landscape care: 0
+      grasses: 0
+      woody crops: 0
+      fuelwoodRW: 0
+      manure: 0
+      sludge: 0
+      C&P_RW: 0
+  sector:
+    renewable_emissions:
+      enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
+    co2_sequestration_potential:
+      2050: 710
+
+default_710_bm0:
+  biomass:
+    emission_factors:
+      agricultural waste: 0
+      fuelwood residues: 0
+      secondary forestry residues: 0
+      sawdust: 0
+      residues from landscape care: 0
+      grasses: 0
+      woody crops: 0
+      fuelwoodRW: 0
+      manure: 0
+      sludge: 0
+      C&P_RW: 0
+  sector:
+    renewable_emissions:
+      enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
+    co2_sequestration_potential:
+      2050: 710
+    biomass: false
+
+default_710_min_0.01:
   solving:
     mga:
       enable: true
       sense: min
-      slack: 0.025
+      slack: 0.01
+  biomass:
+    emission_factors:
+      agricultural waste: 0
+      fuelwood residues: 0
+      secondary forestry residues: 0
+      sawdust: 0
+      residues from landscape care: 0
+      grasses: 0
+      woody crops: 0
+      fuelwoodRW: 0
+      manure: 0
+      sludge: 0
+      C&P_RW: 0
+  sector:
+    renewable_emissions:
+      enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
+    co2_sequestration_potential:
+      2050: 710
+
+default_710_min_0.02:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.02
+  biomass:
+    emission_factors:
+      agricultural waste: 0
+      fuelwood residues: 0
+      secondary forestry residues: 0
+      sawdust: 0
+      residues from landscape care: 0
+      grasses: 0
+      woody crops: 0
+      fuelwoodRW: 0
+      manure: 0
+      sludge: 0
+      C&P_RW: 0
+  sector:
+    renewable_emissions:
+      enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
+    co2_sequestration_potential:
+      2050: 710
+
+default_710_min_0.03:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.03
+  biomass:
+    emission_factors:
+      agricultural waste: 0
+      fuelwood residues: 0
+      secondary forestry residues: 0
+      sawdust: 0
+      residues from landscape care: 0
+      grasses: 0
+      woody crops: 0
+      fuelwoodRW: 0
+      manure: 0
+      sludge: 0
+      C&P_RW: 0
+  sector:
+    renewable_emissions:
+      enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
+    co2_sequestration_potential:
+      2050: 710
+
+default_710_min_0.04:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.04
   biomass:
     emission_factors:
       agricultural waste: 0
@@ -582,12 +948,120 @@ default_710_min_0.15:
     co2_sequestration_potential:
       2050: 710
 
-default_710_max_0.025:
+default_710_min_0.2:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.2
+  biomass:
+    emission_factors:
+      agricultural waste: 0
+      fuelwood residues: 0
+      secondary forestry residues: 0
+      sawdust: 0
+      residues from landscape care: 0
+      grasses: 0
+      woody crops: 0
+      fuelwoodRW: 0
+      manure: 0
+      sludge: 0
+      C&P_RW: 0
+  sector:
+    renewable_emissions:
+      enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
+    co2_sequestration_potential:
+      2050: 710
+
+default_710_max_0.01:
   solving:
     mga:
       enable: true
       sense: max
-      slack: 0.025
+      slack: 0.01
+  biomass:
+    emission_factors:
+      agricultural waste: 0
+      fuelwood residues: 0
+      secondary forestry residues: 0
+      sawdust: 0
+      residues from landscape care: 0
+      grasses: 0
+      woody crops: 0
+      fuelwoodRW: 0
+      manure: 0
+      sludge: 0
+      C&P_RW: 0
+  sector:
+    renewable_emissions:
+      enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
+    co2_sequestration_potential:
+      2050: 710
+
+default_710_max_0.02:
+  solving:
+    mga:
+      enable: true
+      sense: max
+      slack: 0.02
+  biomass:
+    emission_factors:
+      agricultural waste: 0
+      fuelwood residues: 0
+      secondary forestry residues: 0
+      sawdust: 0
+      residues from landscape care: 0
+      grasses: 0
+      woody crops: 0
+      fuelwoodRW: 0
+      manure: 0
+      sludge: 0
+      C&P_RW: 0
+  sector:
+    renewable_emissions:
+      enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
+    co2_sequestration_potential:
+      2050: 710
+
+default_710_max_0.03:
+  solving:
+    mga:
+      enable: true
+      sense: max
+      slack: 0.03
+  biomass:
+    emission_factors:
+      agricultural waste: 0
+      fuelwood residues: 0
+      secondary forestry residues: 0
+      sawdust: 0
+      residues from landscape care: 0
+      grasses: 0
+      woody crops: 0
+      fuelwoodRW: 0
+      manure: 0
+      sludge: 0
+      C&P_RW: 0
+  sector:
+    renewable_emissions:
+      enable: false
+    solid_biomass_import:
+      upstream_emissions_factor: 0
+    co2_sequestration_potential:
+      2050: 710
+
+default_710_max_0.04:
+  solving:
+    mga:
+      enable: true
+      sense: max
+      slack: 0.04
   biomass:
     emission_factors:
       agricultural waste: 0
@@ -690,10 +1164,12 @@ default_710_max_0.15:
     co2_sequestration_potential:
       2050: 710
 
-default_710_optimal:
+default_710_max_0.2:
   solving:
     mga:
-      enable: false
+      enable: true
+      sense: max
+      slack: 0.2
   biomass:
     emission_factors:
       agricultural waste: 0

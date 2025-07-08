@@ -20,6 +20,56 @@
 #     - offwind-dc
 #     - hydro
 
+default_bm0:
+  biomass:
+    emission_factors:
+      agricultural waste: 0
+      fuelwood residues: 0
+      secondary forestry residues: 0
+      sawdust: 0
+      residues from landscape care: 0
+      grasses: 0
+      woody crops: 0
+      fuelwoodRW: 0
+      manure: 0
+      sludge: 0
+      C&P_RW: 0
+  sector:
+    renewable_emissions:
+      enable: false
+    biomass: false
+
+default_710_bm0:
+  biomass:
+    emission_factors:
+      agricultural waste: 0
+      fuelwood residues: 0
+      secondary forestry residues: 0
+      sawdust: 0
+      residues from landscape care: 0
+      grasses: 0
+      woody crops: 0
+      fuelwoodRW: 0
+      manure: 0
+      sludge: 0
+      C&P_RW: 0
+  sector:
+    renewable_emissions:
+      enable: false
+    co2_sequestration_potential:
+      2050: 710
+    biomass: false
+
+cscs_bm0:
+  sector:
+    biomass: false
+
+cscs_710_bm0:
+  sector:
+    biomass: false
+    co2_sequestration_potential:
+      2050: 710
+
 default:
   biomass:
     emission_factors:
@@ -61,41 +111,6 @@ default_710:
 cscs: {}
 
 cscs_710:
+  sector:
     co2_sequestration_potential:
       2050: 710
-
-# carbon_costs_no_re_em:
-#   biomass:
-#     emission_factors: #same as default
-#       agricultural waste: 0.03528 # 9.8
-#       fuelwood residues: 0.1476 #41
-#       secondary forestry residues: 0.396 #110
-#       sawdust: 0.396 #110
-#       residues from landscape care: 0
-#       grasses: 0.216
-#       woody crops: 0.18
-#       fuelwoodRW: 0.2844 #79
-#       manure: 0.04932 #13.7
-#       sludge: 0
-#       C&P_RW: 0.414 #115
-#   sector:
-#     renewable_emissions:
-#       enable: false
-
-# default_re_em:
-#   biomass:
-#     emission_factors:
-#       agricultural waste: 0
-#       fuelwood residues: 0
-#       secondary forestry residues: 0
-#       sawdust: 0
-#       residues from landscape care: 0
-#       grasses: 0
-#       woody crops: 0
-#       fuelwoodRW: 0
-#       manure: 0
-#       sludge: 0
-#       C&P_RW: 0
-#   sector:
-#     renewable_emissions:
-#       enable: true 

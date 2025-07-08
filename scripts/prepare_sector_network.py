@@ -4515,8 +4515,7 @@ def add_low_t_industry(n, nodes, industrial_demand, costs, must_run):
     )
 
     if (
-        options["industry_t"]["low_T"]["biomass"]
-        or not options["industry_t"]["endogen"]
+        options["industry_t"]["low_T"]["biomass"] and options["biomass"]
     ):
         n.add(
             "Link",
@@ -4672,7 +4671,7 @@ def add_medium_t_industry(n, nodes, industrial_demand, costs, must_run):
         p_set=share_m * industrial_demand.loc[nodes, "methane"] / 8760.0,
     )
 
-    if options["industry_t"]["medium_T"]["biomass"]:
+    if options["industry_t"]["medium_T"]["biomass"] and options["biomass"]:
         n.add(
             "Link",
             nodes,

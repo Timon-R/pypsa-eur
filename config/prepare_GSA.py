@@ -114,6 +114,8 @@ def generate_scenarios(sample, output_file: str, parameters: dict):
 
     with open(output_file, "w") as f:
         f.write(yaml_content)
+    
+    print("Generated GSA scenarios and saved to config/GSA_runs.yaml")
 
 
 def get_gsa_config() -> dict:
@@ -139,9 +141,10 @@ def get_gsa_config() -> dict:
         return yaml.safe_load(f)
 
 
-def main():
+def main(ouput_path_sample: str = "GSA/morris_sample.txt", output_path_scenarios: str = "config/GSA_runs.yaml"):
+
     gsa_config = get_gsa_config()
-    sample_file = "GSA/morris_sample.txt"
+    sample_file = ouput_path_sample
 
     replicates = gsa_config["general"]["replicates"]
     parameters = gsa_config["parameters"]
@@ -157,9 +160,10 @@ def main():
 
     Path("GSA").mkdir(parents=True, exist_ok=True)
     np.savetxt(sample_file, sample, delimiter=",")
+    print(f"Sampled {len(sample)} Morris trajectories and saved to {sample_file}")
 
     parameters = gsa_config["parameters"]
-    output_file = "config/GSA_runs.yaml"
+    output_file = output_path_scenarios
 
     morris_sample = np.loadtxt(sample_file, delimiter=",")
     generate_scenarios(morris_sample, output_file, parameters)
@@ -167,3 +171,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    

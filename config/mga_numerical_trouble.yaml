@@ -1,0 +1,106 @@
+###### carbon cost ######
+
+min_0.01:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.01
+
+min_0.02:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.02
+
+min_0.03:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.03
+
+min_0.04:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.04
+
+min_0.05:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.05
+
+
+###### 710 carbon costs ######
+
+710_min_0.01:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.01
+  sector:
+    co2_sequestration_potential:
+      2050: 710
+
+710_min_0.02:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.02
+  sector:
+    co2_sequestration_potential:
+      2050: 710
+
+710_min_0.03:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.03
+  sector:
+    co2_sequestration_potential:
+      2050: 710
+
+710_min_0.04:
+  solving:
+    mga:
+      enable: true
+      sense: min
+      slack: 0.04
+  sector:
+    co2_sequestration_potential:
+      2050: 710
+
+###### default ######
+
+# default_min_0.15:
+#   solving:
+#     mga:
+#       enable: true
+#       sense: min
+#       slack: 0.15
+#   biomass:
+#     emission_factors:
+#       agricultural waste: 0
+#       fuelwood residues: 0
+#       secondary forestry residues: 0
+#       sawdust: 0
+#       residues from landscape care: 0
+#       grasses: 0
+#       woody crops: 0
+#       fuelwoodRW: 0
+#       manure: 0
+#       sludge: 0
+#       C&P_RW: 0
+#   sector:
+#     renewable_emissions:
+#       enable: false
+#     solid_biomass_import:
+#       upstream_emissions_factor: 0

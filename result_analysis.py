@@ -62,11 +62,19 @@ def load_results(results_dir, folders="all"):
     """
     results = {}
     if folders == "all":
-        folders = os.listdir(results_dir)
+        # Filter to only include directories, not files like .DS_Store
+        folders = [f for f in os.listdir(results_dir) if os.path.isdir(os.path.join(results_dir, f))]
     else:
-        folders = [f for f in folders if f in os.listdir(results_dir)]
+        # Check that the specified folders exist and are directories
+        folders = [f for f in folders if f in os.listdir(results_dir) and os.path.isdir(os.path.join(results_dir, f))]
     for folder in folders:
         folder_path = os.path.join(results_dir, folder, "csvs")
+        
+        # Check if the csvs directory exists
+        if not os.path.exists(folder_path):
+            print(f"Warning: No 'csvs' directory found in {folder}, skipping...")
+            continue
+            
         csv_files = [f for f in os.listdir(folder_path) if f.endswith(".csv")]
         dataframes = {}
         print(f"Loading data from {folder}...")
@@ -480,7 +488,7 @@ def get_data(
     return result_data
 
 
-def add_costs(data):
+def add_costs(data, shadow_prices):
     costs = {  # Euro/MWh_LHV
         "agricultural waste": 12.8786,
         "fuelwood residues": 15.3932,
@@ -499,12 +507,20 @@ def add_costs(data):
         "sawdust": 6.4791,
         "C&P_RW": 25.4661,
     }
+    emission_factors = get_emission_factors(new_names=False, add_imported_biomass=True)
+    shadow_price_dict = {}
+    for key, content in shadow_prices.items():
+        shadow_price_dict[content["folder"]] = content["values"]
     if add_costs:
         for key, content in data.items():
             if content["data_name"] in costs:
                 content["costs"] = costs[content["data_name"]]
             else:
                 content["costs"] = None
+            if "default" not in content["folder"]:
+                content["CO2 costs"] = emission_factors.get(content["data_name"],0) * shadow_price_dict[content["folder"]]
+            else:
+                content["CO2 costs"] = 0
     return data
 
 
@@ -1454,7 +1470,7 @@ def main(results_dir="results", export_dir="export",scenarios=["default", "carbo
     )
     export_results(difference, "supply_difference.csv", simply_print=True, export_dir=export_dir)
     difference2 = calculate_supply_difference_and_emission_difference(
-        biomass_supply,renewable_capacity, "default_710_optimal", "710_optimal", "2050"
+        biomass_supply,renewable_capacity, "default_710", "cscs_710", "2050"
     )
     export_results(difference2, "supply_difference_variants.csv", simply_print=True, export_dir=export_dir)
 
@@ -1533,20 +1549,6 @@ def main(results_dir="results", export_dir="export",scenarios=["default", "carbo
     )
     export_results(cost_difference, "cost_difference.csv", include_difference=True, export_dir=export_dir, scenario1=difference_scenarios[0], scenario2=difference_scenarios[1])
 
-    shadow_price = get_data(
-        results,
-        scenarios,
-        "metrics",
-        [["co2_shadow"]],
-        [[["co2_shadow"], "CO2 shadow price"]],
-        "B",
-        "A",
-        "2050",
-        multiplier=-1,
-        filter_positive=False,
-    )
-    export_results(shadow_price, "shadow_price.csv", export_dir=export_dir)
-
     hydrogen_production = get_data(
         results,
         scenarios,
@@ -1600,6 +1602,20 @@ def main(results_dir="results", export_dir="export",scenarios=["default", "carbo
     )
     export_results(gas_use, "gas_use.csv", export_dir=export_dir)
 
+    shadow_price = get_data(
+        results,
+        scenarios,
+        "metrics",
+        [["co2_shadow"]],
+        [[["co2_shadow"], "CO2 shadow price"]],
+        "B",
+        "A",
+        "2050",
+        multiplier=-1,
+        filter_positive=False,
+    )
+    export_results(shadow_price, "shadow_price.csv", export_dir=export_dir)
+
     weighted_prices = get_data(
         results,
         scenarios,
@@ -1630,9 +1646,8 @@ def main(results_dir="results", export_dir="export",scenarios=["default", "carbo
         filter_positive=None,
         remove_list=["agriculture machinery oil"],
     )
-
-    weighted_prices = add_costs(weighted_prices)
-    export_results(weighted_prices, "weighted_prices.csv", add_costs=True, export_dir=export_dir)
+    weighted_prices = add_costs(weighted_prices, shadow_price)
+    export_results(weighted_prices, "weighted_prices.csv",export_dir=export_dir, simply_print=True)
 
     solid_biomass_supply = get_data(
         results,
@@ -2029,13 +2044,40 @@ def main(results_dir="results", export_dir="export",scenarios=["default", "carbo
     )
     export_results(nuclear_capacity, "nuclear_capacity.csv", export_dir=export_dir)
 
-def get_mga_results(results_dir="results", export_dir="export/mga"):
-    scenarios = ["optimal", "max_0.025", "max_0.05","max_0.1","max_0.15","min_0.025","min_0.05","min_0.1","min_0.15"]
-    results = load_results(results_dir, scenarios)
+def get_mga_results(results_dir="results/MGA", export_dir="export/mga"):
+
+    results= load_results("results/main", "all")
+    costs = get_data(
+        results,
+        "all",
+        "metrics",
+        [["total costs"]],
+        [[["total costs"], "Total costs (Billion €)"]],
+        "B",
+        "A",
+        "2050",
+        1e-9,
+    )
+    export_results(costs, "total_costs.csv", export_dir=export_dir)
+
+    results = load_results(results_dir, "all")
+    cscs = []
+    cscs_710 = []
+    defaults = []
+    defaults_710 = []
+    for folder in results.keys():
+        if "710" not in folder and "default" not in folder:
+            cscs.append(folder)
+        elif "710" in folder and "default" not in folder:
+            cscs_710.append(folder)
+        elif "default" in folder and "710" not in folder:
+            defaults.append(folder)
+        elif "default" in folder and "710" in folder:
+            defaults_710.append(folder)
 
     all_biomass_supply = get_data(
         results,
-        scenarios,
+        cscs,
         "energy_balance",
         [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
         [
@@ -2049,12 +2091,9 @@ def get_mga_results(results_dir="results", export_dir="export/mga"):
     )
     export_results(all_biomass_supply, "biomass_use_carbon_costs.csv", export_dir=export_dir)
 
-    scenarios = ["710_optimal", "710_max_0.025", "710_max_0.05","710_max_0.1","710_max_0.15","710_min_0.025","710_min_0.05","710_min_0.1","710_min_0.15","710_min_0.02"]
-    results = load_results(results_dir, scenarios)
-
     all_biomass_supply = get_data(
         results,
-        scenarios,
+        cscs_710,
         "energy_balance",
         [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
         [
@@ -2068,13 +2107,10 @@ def get_mga_results(results_dir="results", export_dir="export/mga"):
     )
     export_results(all_biomass_supply, "biomass_use_carbon_costs_710.csv", export_dir=export_dir)
 
-    results_dir = "results"
-    scenarios = ["default_optimal", "default_max_0.025", "default_max_0.05","default_max_0.1","default_max_0.15","default_min_0.025","default_min_0.05","default_min_0.1","default_min_0.15", "default_min_0.12","default_min_0.14"]
-    results = load_results(results_dir, scenarios)
 
     all_biomass_supply = get_data(
         results,
-        scenarios,
+        defaults,
         "energy_balance",
         [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
         [
@@ -2088,12 +2124,9 @@ def get_mga_results(results_dir="results", export_dir="export/mga"):
     )
     export_results(all_biomass_supply, "biomass_use_default.csv", export_dir=export_dir)
 
-    scenarios = ["default_710_optimal", "default_710_max_0.025", "default_710_max_0.05","default_710_max_0.1","default_710_max_0.15","default_710_min_0.025","default_710_min_0.05","default_710_min_0.1","default_710_min_0.15", "default_710_min_0.12","default_710_min_0.14"]
-    results = load_results(results_dir, scenarios)
-
     all_biomass_supply = get_data(
         results,
-        scenarios,
+        defaults_710,
         "energy_balance",
         [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
         [
@@ -2159,21 +2192,21 @@ if __name__ == "__main__":
     # difference_scenarios = ["default_optimal", "optimal"]
     # export_dir = "export/seq"
 
-    results_dir = "results/test_nuclear"
+    results_dir = "results/main"
     scenarios = ["default","default_710","cscs", "cscs_710"]
     difference_scenarios = ["default", "cscs"]
-    export_dir = "export/test_nuclear"
+    export_dir = "export/main"
 
-    #check_result_quality(results_dir="results")
+    check_result_quality(results_dir="results/MGA")
 
     # scenarios = ["default_optimal", "optimal"]
     # export_dir = "export/basic"
 
-    main(results_dir=results_dir, export_dir=export_dir, scenarios=scenarios, difference_scenarios=difference_scenarios)
+    #main(results_dir=results_dir, export_dir=export_dir, scenarios=scenarios, difference_scenarios=difference_scenarios)
 
     #get_biomass_potentials(export_dir=export_dir)
 
-    #get_mga_results()
+    get_mga_results(results_dir="results/MGA", export_dir="export/mga")
 
 
     # results = load_results("results/GSA", "all")

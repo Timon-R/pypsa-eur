@@ -16,11 +16,11 @@ remote:
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
-  prefix: ""
+  prefix: test
   name: all
   scenarios:
     enable: true
-    file: config/mga_scenarios.yaml
+    file: config/test_scenarios.yaml
   disable_progressbar: false
   shared_resources:
     policy: base
@@ -1088,16 +1088,19 @@ solving:
       PreDual: 0
       GURO_PAR_BARDENSETHRESH: 200
     gurobi-numeric-focus:
-      NumericFocus: 3       # Favour numeric stability over speed
-      method: 2             # barrier
-      crossover: 0          # do not use crossover
-      BarHomogeneous: 1     # Use homogeneous barrier if standard does not converge
-      BarConvTol: 1.e-5
+      NumericFocus: 3 
+      threads: 32
+      method: 2
+      crossover: 0
+      BarConvTol: 1.e-6
+      Seed: 123
+      AggFill: 0
+      PreDual: 0
+      GURO_PAR_BARDENSETHRESH: 200
       FeasibilityTol: 1.e-4
       OptimalityTol: 1.e-4
-      ObjScale: -0.5
-      threads: 8
-      Seed: 123
+      BarHomogeneous: 1
+      CrossoverBasis: 1
     gurobi-fallback:        # Use gurobi defaults
       crossover: 0
       method: 2             # barrier

@@ -120,7 +120,18 @@ results: #define results from results folder
     csv:
       filename: energy_balance.csv
       identification_column_entries: Link,solid biomass import,solid biomass import
-
+  gas_use:
+    multiplier: -1e-6
+    unit: TWh
+    csv:
+      filename: energy_balance.csv
+      identification_column_entries: Generator,gas,gas
+  oil_use:
+    multiplier: -1e-6
+    unit: TWh
+    csv:
+      filename: energy_balance.csv
+      identification_column_entries: Generator,oil primary,oil primary
 
 #they will get reorderd alphabetically
 parameters:
@@ -140,7 +151,7 @@ parameters:
     config_file_location: #has to be a non-binary numerical value so that the sampling can be done
       sector:
         renewable_emissions:
-          wind:
+          onwind:
 
   ef_solar:
     groupname: ef_solar # plus minus 10% in alignment with the paper
@@ -162,8 +173,8 @@ parameters:
 
   nuclear_costs: 
     groupname: nuclear_costs #name of group for grouping the parameters
-    min: 3241 #in €/kW
-    max: 9906 #in €/kW
+    min: 3241000 #in €/MW
+    max: 9906000 #in €/MW
     config_file_location: #has to be a non-binary numerical value so that the sampling can be done
       costs:
         overwrites:
@@ -304,7 +315,7 @@ parameters:
       costs:
         overwrites:
           fuel:
-            "Manure solid, liquid":
+            Manure solid, liquid:
   costs_residues_from_landscape_care: #name of parameter only for reference
     groupname: biomass_costs #name
     min: 8.21

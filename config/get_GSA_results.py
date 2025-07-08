@@ -142,36 +142,59 @@ def extract_results(folder="results"):
         f.close()
 
 
-def calculate_GSA_metrics():
+def calculate_GSA_metrics(
+        sample_path: str = "GSA/morris_sample.txt",
+        output_dir: str = "GSA",
+):
     """
     Calculate GSA metrics and generate sensitivity plots.
+
+    Parameters
+    ----------
+    sample_path : str
+        Path to the Morris sample file (CSV‐style, comma-separated).
+    output_dir : str
+        **Base directory** in which SA_results/ and SA_plots/ folders
+        will be created and populated.  Pass any folder you like.
     """
     gsa_config = get_gsa_config()
-    parameters = gsa_config["parameters"]
-    sample = "GSA/morris_sample.txt"
+    parameters  = gsa_config["parameters"]
 
-    # create directory for the GSA results
-    Path("GSA/SA_results").mkdir(parents=True, exist_ok=True)
-    Path("GSA/SA_plots").mkdir(parents=True, exist_ok=True)
+    output_dir  = Path(output_dir)              # ensure Path object
+    sa_results_dir = output_dir / "SA_results"
+    sa_plots_dir   = output_dir / "SA_plots"
 
-    X = np.loadtxt(sample, delimiter=",")
-    problem = create_salib_problem(parameters)
+    sa_results_dir.mkdir(parents=True, exist_ok=True)
+    sa_plots_dir.mkdir(parents=True, exist_ok=True)
+
+
+    X        = np.loadtxt(sample_path, delimiter=",")
+    problem  = create_salib_problem(parameters)
+
     for variable, params in gsa_config.get("results", {}).items():
-        results = pd.read_csv(f"GSA/results/{variable}.csv")
+        # still reading results from <output_dir>/results/<variable>.csv
+        results_file = output_dir / "results" / f"{variable}.csv"
+        results      = pd.read_csv(results_file)
+
         Y = results["value"].values
         if len(X) != len(Y):
             raise ValueError(
-                f"Length of sample ({len(X)}) and results ({len(Y)}) do not match. Try changing the identification_column_entries in the GSA.yaml file. Variable: {variable}"
+                f"Length of sample ({len(X)}) and results ({len(Y)}) "
+                f"do not match. Check identification_column_entries in "
+                f"GSA.yaml. Variable: {variable}"
             )
+
         print(f"GSA for {variable}: ")
         Si = analyze_morris.analyze(problem, X, Y, print_to_console=True)
         print("\n")
-        Si.to_df().to_csv(f"GSA/SA_results/{variable}_SA_results.csv")
 
+        # ---------------- Save SA table ----------------
+        Si.to_df().to_csv(sa_results_dir / f"{variable}_SA_results.csv")
+
+        # ---------------- Build & save plot -------------
         title = variable.capitalize()
-        unit = params.get("unit", "")
+        unit  = params.get("unit", "")
 
-        # Check if covariance plot should be included
         if gsa_config["general"].get("covariance_plot", True):
             fig, axs = plt.subplots(2, figsize=(20, 20))
             plot_morris.horizontal_bar_plot(axs[0], Si, unit=unit)
@@ -179,16 +202,18 @@ def calculate_GSA_metrics():
             axs[1].set_xlabel(f"µ in {unit}", fontsize=18)
             axs[1].tick_params(axis="both", which="major", labelsize=14)
         else:
-            fig, axs = plt.subplots(1, figsize=(16, 10))
-            plot_morris.horizontal_bar_plot(axs, Si, unit=unit)
-            axs.set_xlabel(f"µ* in {unit}", fontsize=18)
-            axs.tick_params(axis="both", which="major", labelsize=14)
-        fig.suptitle(title, fontsize=24)
+            fig, ax = plt.subplots(1, figsize=(16, 10))
+            plot_morris.horizontal_bar_plot(ax, Si, unit=unit)
+            ax.set_xlabel(f"µ* in {unit}", fontsize=18)
+            ax.tick_params(axis="both", which="major", labelsize=14)
 
-        fig.savefig(f"GSA/SA_plots/{variable}.png", bbox_inches="tight")
+        fig.suptitle(title, fontsize=24)
+        fig.savefig(sa_plots_dir / f"{variable}.png", bbox_inches="tight")
         plt.close(fig)
 
 
 if __name__ == "__main__":
     extract_results(folder= "results/GSA")
-    calculate_GSA_metrics()
+    output_dir = "GSA"
+    sample_path = "GSA/morris_sample.txt"
+    calculate_GSA_metrics(sample_path=sample_path, output_dir=output_dir)
