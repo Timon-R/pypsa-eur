@@ -1,6 +1,12 @@
 # SPDX-FileCopyrightText: Contributors to PyPSA-Eur <https://github.com/pypsa/pypsa-eur>
 #
 # SPDX-License-Identifier: MIT
+
+# PLOTTING CONFIGURATION:
+# All main plotting functions now accept fig_width, fig_height, fontsize, and title_fontsize parameters
+# to allow consistent sizing and styling across all plots. Change the default values below or
+# pass parameters when calling main(), specific_plots(), mga_plots(), or SA_plots().
+
 import os
 import io
 
@@ -27,6 +33,12 @@ from result_analysis import get_emission_factors
 import matplot2tikz 
 
 import warnings
+
+# Default plotting parameters
+DEFAULT_FIGURE_WIDTH = 10
+DEFAULT_FIGURE_HEIGHT = 6
+DEFAULT_FONTSIZE = 12
+DEFAULT_TITLE_FONTSIZE = 16
 
 
 # config_file_path = "config/config.yaml"
@@ -108,7 +120,11 @@ def configure_for_tikz():
 
 def carbon_flow_diagram(save_path: str | None = "carbon_flow_diagram.pdf",
                         show: bool = False,
-                        close: bool = True):
+                        close: bool = True,
+                        fig_width=DEFAULT_FIGURE_WIDTH,
+                        fig_height=DEFAULT_FIGURE_HEIGHT,
+                        fontsize=DEFAULT_FONTSIZE,
+                        title_fontsize=DEFAULT_TITLE_FONTSIZE):
     """
     Draw the linear vs circular carbon-flow schematic.
 
@@ -123,9 +139,9 @@ def carbon_flow_diagram(save_path: str | None = "carbon_flow_diagram.pdf",
 
     # LaTeX & font setup
     plt.rc('text', usetex=True)
-    plt.rc('font', family='serif', size=14)
+    plt.rc('font', family='serif', size=fontsize)
 
-    fig, ax = plt.subplots(figsize=(7, 5))
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
     ax.axis('off')
 
     # ── Linear flow ───────────────────────────────────────────────────────
@@ -141,7 +157,7 @@ def carbon_flow_diagram(save_path: str | None = "carbon_flow_diagram.pdf",
                                  arrowstyle='-|>', mutation_scale=18, lw=2))
     ax.text(0.50, 0.805, r'CCS', ha='center', va='bottom')
     ax.text(0.50, 0.92,  r'\textbf{Linear Carbon Flow}',
-            ha='center', va='center', fontsize=18)
+            ha='center', va='center', fontsize=title_fontsize)
 
     # ── Circular flow ────────────────────────────────────────────────────
     ax.add_patch(Ellipse((0.22, 0.35), 0.28, 0.17, fill=False, lw=2))
@@ -161,7 +177,7 @@ def carbon_flow_diagram(save_path: str | None = "carbon_flow_diagram.pdf",
                                      arrowstyle='-|>', mutation_scale=18, lw=2))
 
     ax.text(0.50, 0.50, r'\textbf{Circular Carbon Flow}',
-            ha='center', va='center', fontsize=18)
+            ha='center', va='center', fontsize=title_fontsize)
     ax.text(0.50, 0.07,
             r'Biomass to liquid / DAC \& Fischer--Tropsch / Electrobiofuels',
             ha='center', va='center')
@@ -264,6 +280,10 @@ def create_gravitational_plot(
     usage_threshold=False,
     variant_plot=False,
     include_solar_hsat=True,
+    fig_width=DEFAULT_FIGURE_WIDTH,
+    fig_height=DEFAULT_FIGURE_HEIGHT,
+    fontsize=DEFAULT_FONTSIZE,
+    title_fontsize=DEFAULT_TITLE_FONTSIZE,
 ):
 
     file_path = f"{file_name}.{file_type}"
@@ -274,7 +294,7 @@ def create_gravitational_plot(
                         "Computer Modern Roman", "Times"],  # fall-backs
         "mathtext.fontset": "cm",     # Computer Modern for $math$
         "figure.dpi":    300,
-        "font.size": 12,
+        "font.size": fontsize,
     })
 
     if biomass_supply is not None and scenario is not None:
@@ -296,7 +316,7 @@ def create_gravitational_plot(
     max_potential = max(potentials)
     sizes = [max_potential * (p / max_potential) for p in potentials]
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
 
     dig_biomass_color = "blue"
     solid_biomass_color = "green"
@@ -308,24 +328,24 @@ def create_gravitational_plot(
         else:
             color = solid_biomass_color
         plt.scatter(
-            costs[i],
-            emissions[i],
-            s=sizes[i],
+            float(costs[i]),
+            float(emissions[i]),
+            s=float(sizes[i]),
             alpha=1,
             facecolors="none",
             edgecolors=color,
             linewidth=1,
         )
-        location = emissions[i] + 2 * sizes[i] / max_potential * 0.015 + 0.01
+        location = float(emissions[i]) + 2 * float(sizes[i]) / max_potential * 0.015 + 0.01
         if (
             bt == "secondary forestry residues" or bt == "sludge" or "import" in bt or bt == "fuelwoodRW"
         ):  # below the point
-            location = emissions[i] - 2 * sizes[i] / max_potential * 0.015 - 0.015
+            location = float(emissions[i]) - 2 * float(sizes[i]) / max_potential * 0.015 - 0.015
         plt.text(
-            costs[i],
+            float(costs[i]),
             location,
             new_names_dict[bt],
-            fontsize=12,
+            fontsize=fontsize,
             ha="center",
         )
 
@@ -371,7 +391,7 @@ def create_gravitational_plot(
         lcoe = {}
         for tech in ["solar", "onwind", "solar-hsat"]:
             if tech in scenario_cf["Data Name"].values:
-                cf = scenario_cf[scenario_cf["Data Name"] == tech]["Values"].values[0]
+                cf = scenario_cf[scenario_cf["Data Name"] == tech]["Values"].values[0].item()
                 invest = investment_costs[tech] * 1000  # Euro/kW → Euro/MW
                 om = marginal_costs[tech]               # Euro/MWh
                 lifetime = lifetimes[tech]
@@ -413,7 +433,7 @@ def create_gravitational_plot(
                     lcoe[tech],
                     location,
                     f"{tech}",
-                    fontsize=12,
+                    fontsize=fontsize,
                     ha="center",
                     color='black'
                 )
@@ -430,8 +450,8 @@ def create_gravitational_plot(
         # Plot fossil fuel markers
         for fuel, data in fossil_fuels.items():
             plt.scatter(
-                data["cost"],
-                data["emission"],
+                float(data["cost"]),
+                float(data["emission"]),
                 marker='x',  # square marker to differentiate
                 color='black',
                 s=80,
@@ -439,17 +459,17 @@ def create_gravitational_plot(
             )
             
             # Add text label
-            y_location = data["emission"] + 0.012
+            y_location = float(data["emission"]) + 0.012
             if fuel == "oil":
-                y_location = data["emission"] -0.003
-            x_location = data["cost"]
+                y_location = float(data["emission"]) - 0.003
+            x_location = float(data["cost"])
             if fuel == "oil": # right from the point
-                x_location = data["cost"] + 1.3
+                x_location = float(data["cost"]) + 1.3
             plt.text(
                 x_location,
                 y_location,
                 fuel,
-                fontsize=12,
+                fontsize=fontsize,
                 ha="center",
                 color='black',
             )
@@ -482,7 +502,7 @@ def create_gravitational_plot(
                 color = "lightgreen"
             if biomass_variant is not None and bt in biomass_variant["Data Name"].values:
                 supply = (
-                    biomass_variant[biomass_variant["Data Name"] == bt]["Values"].values[0]
+                    biomass_variant[biomass_variant["Data Name"] == bt]["Values"].values[0].item()
                     * multiplier
                 )
                 potential = biomass_potentials_TWh[bt]
@@ -494,13 +514,13 @@ def create_gravitational_plot(
 
                 # Correctly convert from area (sizes[i]) to radius, matching the scatter plot circles
                 # The scatter plot uses s=area, so we need sqrt(sizes[i]/pi) to get equivalent radius
-                circle_radius = np.sqrt(sizes[i] / np.pi)*0.95
+                circle_radius = np.sqrt(float(sizes[i]) / np.pi)*0.95
                 width = circle_radius * 0.09  # Scale factor for visual appearance
                 height = width * adjustment_factor
                 if usage >= 99.5:  # Special case for (nearly) 100% usage
                     # Draw a filled ellipse instead of a wedge
                     ellipse = mpatches.Ellipse(
-                        (costs[i], emissions[i]),
+                        (float(costs[i]), float(emissions[i])),
                         width=width * 2,  # Diameter = 2*radius
                         height=height * 2,
                         facecolor=color,
@@ -513,7 +533,7 @@ def create_gravitational_plot(
                     theta1 = 90
                     theta2 = 90 - 360 * (usage / 100)
                     wedge_path = create_elliptical_wedge(
-                        costs[i], emissions[i], width, height, theta1, theta2
+                        float(costs[i]), float(emissions[i]), width, height, theta1, theta2
                     )
                     wedge_patch = mpatches.PathPatch(
                         wedge_path, facecolor=color, edgecolor="none", alpha=1
@@ -526,7 +546,7 @@ def create_gravitational_plot(
             color = solid_biomass_color
         if biomass_supply is not None and bt in biomass["Data Name"].values:
             supply = (
-                biomass[biomass["Data Name"] == bt]["Values"].values[0]
+                biomass[biomass["Data Name"] == bt]["Values"].values[0].item()
                 * multiplier
             )
             potential = biomass_potentials_TWh[bt]
@@ -538,14 +558,14 @@ def create_gravitational_plot(
 
             # Correctly convert from area (sizes[i]) to radius, matching the scatter plot circles
             # The scatter plot uses s=area, so we need sqrt(sizes[i]/pi) to get equivalent radius
-            circle_radius = np.sqrt(sizes[i] / np.pi)*0.95 #for some reason the circles are too big so they need to be scaled down
+            circle_radius = np.sqrt(float(sizes[i]) / np.pi)*0.95 #for some reason the circles are too big so they need to be scaled down
             width = circle_radius * 0.09  # Scale factor for visual appearance
             height = width * adjustment_factor
 
             if usage >= 99.5:  # Special case for (nearly) 100% usage
                 # Draw a filled ellipse instead of a wedge
                 ellipse = mpatches.Ellipse(
-                    (costs[i], emissions[i]),
+                    (float(costs[i]), float(emissions[i])),
                     width=width * 2,  # Diameter = 2*radius
                     height=height * 2,
                     facecolor=color,
@@ -558,7 +578,7 @@ def create_gravitational_plot(
                 theta1 = 90
                 theta2 = 90 - 360 * (usage / 100)
                 wedge_path = create_elliptical_wedge(
-                    costs[i], emissions[i], width, height, theta1, theta2
+                    float(costs[i]), float(emissions[i]), width, height, theta1, theta2
                 )
                 wedge_patch = mpatches.PathPatch(
                     wedge_path, facecolor=color, edgecolor="none", alpha=1
@@ -770,7 +790,11 @@ def plot_stacked_bar(
     export_dir="export/plots",
     file_type="png",
     no_xticks=False,
-    error_bar_amount=None):
+    error_bar_amount=None,
+    fig_width=DEFAULT_FIGURE_WIDTH,
+    fig_height=DEFAULT_FIGURE_HEIGHT,
+    fontsize=DEFAULT_FONTSIZE,
+    title_fontsize=DEFAULT_TITLE_FONTSIZE):
 
     file_path = f"{file_name}.{file_type}"
     # rename data_name column to Data Name
@@ -804,7 +828,7 @@ def plot_stacked_bar(
 
 
     # Create the bar plot
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
     
     # Separate positive and negative bottoms for proper stacking
     bottom_pos = np.zeros(len(pivot_df.columns))
@@ -871,7 +895,11 @@ def plot_stacked_bar(
     ax.set_title(title)
     ax.set_xticks(x)
     ax.set_xticklabels(pivot_df.columns, rotation=45, ha="right")
-    ax.legend(title="Legend", bbox_to_anchor=(1.05, 1), loc="upper left")
+    
+    # Only add legend if there are labeled artists
+    handles, labels = ax.get_legend_handles_labels()
+    if handles:
+        ax.legend(title="Legend", bbox_to_anchor=(1.05, 1), loc="upper left")
 
     # Add horizontal line at y=0 for reference
     ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5, alpha=0.7)
@@ -904,6 +932,10 @@ def plot_BECCUS(
     upstream_data=None,
     export_dir="export/plots",
     file_type="png",
+    fig_width=DEFAULT_FIGURE_WIDTH,
+    fig_height=DEFAULT_FIGURE_HEIGHT,
+    fontsize=DEFAULT_FONTSIZE,
+    title_fontsize=DEFAULT_TITLE_FONTSIZE,
 ):
     file_path = f"{file_name}.{file_type}"
 
@@ -937,7 +969,7 @@ def plot_BECCUS(
     df_plot.set_index("Folder", inplace=True)
 
     # Create the plot
-    fig, ax = plt.subplots(figsize=(14, 10))
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
     bar_width = 0.35  # Width of the bars
     x = np.arange(len(df_plot.index))  # Positions for each Folder
 
@@ -967,14 +999,14 @@ def plot_BECCUS(
         )
 
     # Add labels and title
-    ax.set_xlabel(x_label, fontsize=16)
-    ax.set_ylabel(y_label, fontsize=16)
-    ax.set_title(title, fontsize=20)
+    ax.set_xlabel(x_label, fontsize=fontsize)
+    ax.set_ylabel(y_label, fontsize=fontsize)
+    ax.set_title(title, fontsize=title_fontsize)
     ax.set_xticks(x)
     ax.set_xticklabels(df_plot.index, rotation=45, ha="right")
 
     # Add legend
-    ax.legend(title="Legend", fontsize=16)
+    ax.legend(title="Legend", fontsize=fontsize)
 
     # Add percentages on the stacked bars
     for i in range(len(df_plot.index)):  # For each scenario
@@ -994,7 +1026,7 @@ def plot_BECCUS(
                     bar.get_y() + height / 2,
                     f"{percentage:.1f}%",
                     ha="center", va="center",
-                    fontsize=12, color=color
+                    fontsize=fontsize, color=color
                 )
 
     # Adjust plot limits to add space for text
@@ -1032,7 +1064,8 @@ class HandlerWedge(HandlerPatch):
         return [p]
 
 
-def plot_costs_vs_prices(df, title, x_label, y_label, file_name, scenario, usage_dict,export_dir="export/plots",file_type="png",include_co2_costs=False, add_legend=True):
+def plot_costs_vs_prices(df, title, x_label, y_label, file_name, scenario, usage_dict,export_dir="export/plots",file_type="png",include_co2_costs=False, add_legend=True,
+                         fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT, fontsize=DEFAULT_FONTSIZE, title_fontsize=DEFAULT_TITLE_FONTSIZE):
     """
     Plot biomass types with costs on the x-axis and values on the y-axis for a specific scenario,
     with circle fill indicating usage percentage.
@@ -1091,9 +1124,9 @@ def plot_costs_vs_prices(df, title, x_label, y_label, file_name, scenario, usage
 
     # Plotting
     if add_legend:
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig, ax = plt.subplots(figsize=(fig_width, fig_height))
     else:
-        fig, ax = plt.subplots(figsize=(7, 6))
+        fig, ax = plt.subplots(figsize=(fig_width*0.7, fig_height))
     ax.set_aspect("equal")  # Ensure equal scaling for both axes
 
     # Add diagonal line from (0, 0) without adding to the legend
@@ -1253,7 +1286,203 @@ def plot_costs_vs_prices(df, title, x_label, y_label, file_name, scenario, usage
     return fig
 
 
-def plot_feedstock_prices(df, title, x_label, y_label, file_name, custom_order=None, export_dir="export/plots",file_type="png"):
+def plot_costs_vs_prices_combined(df, usage_dict_default, usage_dict_carbon_costs, 
+                                  export_dir="export/plots", file_type="png",
+                                  fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT, 
+                                  fontsize=DEFAULT_FONTSIZE, title_fontsize=DEFAULT_TITLE_FONTSIZE):
+    """
+    Plot both Default and Carbon Stock Changes scenarios side by side with a shared legend.
+    
+    Parameters
+    ----------
+    df : DataFrame
+        The dataframe containing price and cost data.
+    usage_dict_default : dict
+        Dictionary mapping biomass types to their usage percentage for Default scenario.
+    usage_dict_carbon_costs : dict  
+        Dictionary mapping biomass types to their usage percentage for Carbon Stock Changes scenario.
+    export_dir : str
+        Directory to save the plot.
+    file_type : str
+        File type for saving the plot.
+    fig_width, fig_height : float
+        Figure dimensions.
+    fontsize, title_fontsize : float
+        Font sizes for text and titles.
+    """
+    
+    # Filter for biomass types with available costs
+    biomass_types = [
+        "sludge",
+        "manure", 
+        "residues from landscape care",
+        "agricultural waste",
+        "grasses",
+        "woody crops", 
+        "fuelwood residues",
+        "fuelwoodRW",
+        "secondary forestry residues",
+        "sawdust",
+        "C&P_RW",
+        "solid biomass import",
+    ]
+    
+    # Set color palette
+    palette = sns.color_palette("tab20", n_colors=len(biomass_types))
+    color_mapping = {
+        biomass: palette[i % len(palette)] for i, biomass in enumerate(biomass_types)
+    }
+    
+    # Create figure with two subplots side by side with optimized spacing
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(fig_width, fig_height/1.2))
+    plt.subplots_adjust(wspace=0.2)  # Optimal space between subplots
+    
+    # Add main title to the figure
+    fig.suptitle("Weighted Feedstock Prices vs. Costs", fontsize=title_fontsize, y=0.88)
+    
+    scenarios = ["Default", "Carbon Stock Changes"]
+    usage_dicts = [usage_dict_default, usage_dict_carbon_costs]
+    axes = [ax1, ax2]
+    
+    legend_handles = []
+    
+    for scenario, usage_dict, ax in zip(scenarios, usage_dicts, axes):
+        # Filter data for the specified scenario
+        scenario_df = df[(df["folder"] == scenario)]
+        biomass_df = scenario_df[
+            (scenario_df["data_name"].isin(biomass_types))
+            & (scenario_df["costs"].notnull())
+        ]
+        
+        ax.set_aspect("equal")  # Ensure equal scaling for both axes
+        
+        # Add diagonal line from (0, 0) without adding to the legend
+        max_limit = 110
+        ax.plot(
+            [0, max_limit],
+            [0, max_limit],
+            color="grey",
+            linestyle="--",
+            zorder=0,
+            label="_nolegend_",
+        )
+        
+        for biomass in biomass_types:
+            subset = biomass_df[biomass_df["data_name"] == biomass]
+            if not subset.empty:
+                for _, row in subset.iterrows():
+                    usage = usage_dict.get(biomass, 0)  # Default to 0 if not provided
+                    color = color_mapping[biomass]
+                    
+                    if usage == 0:
+                        # Empty circle (just outline)
+                        ax.scatter(
+                            row["costs"],
+                            row["values"],
+                            s=100,
+                            facecolors="none",
+                            edgecolors=color,
+                            alpha=0.8,
+                        )
+                    elif usage >= 99:
+                        # Fully filled circle
+                        ax.scatter(
+                            row["costs"],
+                            row["values"],
+                            s=100,
+                            color=color,
+                            alpha=0.8,
+                        )
+                    else:
+                        # Partially filled circle
+                        theta1 = 90
+                        theta2 = 90 - 360 * (usage / 100)
+                        wedge = mpatches.Wedge(
+                            (row["costs"], row["values"]),
+                            1.6,
+                            theta2,
+                            theta1,
+                            facecolor=color,
+                            edgecolor=color,
+                            alpha=0.8,
+                        )
+                        ax.add_patch(wedge)
+                        ax.scatter(
+                            row["costs"],
+                            row["values"],
+                            s=100,
+                            facecolors="none",
+                            edgecolors=color,
+                            alpha=0.8,
+                        )
+                    
+                    # Add to legend handles (only once, for the first subplot)
+                    if ax == ax1:
+                        legend_handles.append(
+                            mlines.Line2D(
+                                [],
+                                [],
+                                marker="o",
+                                linestyle="None",
+                                markersize=10,
+                                markerfacecolor=color,
+                                markeredgecolor=color,
+                                label=new_names_dict[biomass],
+                            )
+                        )
+        
+        # Set plot properties
+        ax.set_xlim(0, max_limit)
+        ax.set_ylim(0, max_limit)
+        ax.set_xlabel("Costs in Euro/MWh", fontsize=fontsize)
+        
+        # Only add y-label and y-ticks to the left plot
+        if ax == ax1:  # Left plot
+            ax.set_ylabel("Prices in EUR/MWh", fontsize=fontsize)
+        else:  # Right plot
+            ax.set_ylabel("")  # No y-label
+            ax.set_yticklabels([])  # No y-tick labels
+            
+        # Set subplot titles (scenarios)
+        ax.set_title(f"{scenario}", fontsize=title_fontsize, loc="center")
+        ax.grid(True)
+        ax.tick_params(axis='both', which='major', labelsize=fontsize)
+    
+    # Add shared legend positioned to minimize space waste
+    by_label = {handle.get_label(): handle for handle in legend_handles}
+    fig.legend(
+        by_label.values(),
+        by_label.keys(),
+        title="Biomass Types",
+        loc="center left",
+        bbox_to_anchor=(0.9, 0.5),  # Position legend closer to the plots
+        borderaxespad=0,
+        fontsize=fontsize,
+        title_fontsize=fontsize,
+    )
+    
+    # Adjust layout for minimal space waste
+    plt.tight_layout()
+    plt.subplots_adjust(right=0.88, top=0.82)  # Minimize both right margin and top spacing
+    
+    # Save the plot
+    file_path = f"prices_costs_combined.{file_type}"
+    os.makedirs(export_dir, exist_ok=True)
+    file_path = os.path.join(export_dir, file_path)
+    
+    if file_path.endswith(".pgf"):
+        configure_for_pgf()
+    
+    plt.savefig(file_path, bbox_inches="tight", pad_inches=0.3, dpi=300)
+    plt.close()
+    
+    print(f"Combined costs vs prices plot saved to {file_path}")
+    
+    return fig
+
+
+def plot_feedstock_prices(df, title, x_label, y_label, file_name, custom_order=None, export_dir="export/plots",file_type="png",
+                          fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT, fontsize=DEFAULT_FONTSIZE, title_fontsize=DEFAULT_TITLE_FONTSIZE):
     """
     Plot feedstock prices with aggregated categories and price ranges for each scenario (folder).
 
@@ -1306,7 +1535,7 @@ def plot_feedstock_prices(df, title, x_label, y_label, file_name, custom_order=N
     # Set color palette
     palette = sns.color_palette("Set2", n_colors=len(folders))
 
-    fig, ax = plt.subplots(figsize=(10, 8))
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
 
     # Adjust position for each scenario within each feedstock
     width = 0.3  # Bar width for spacing
@@ -1413,6 +1642,10 @@ def plot_difference_bar(
     axis2_ticks=500,
     export_dir="export/plots",
     file_type="png",
+    fig_width=DEFAULT_FIGURE_WIDTH,
+    fig_height=DEFAULT_FIGURE_HEIGHT,
+    fontsize=DEFAULT_FONTSIZE,
+    title_fontsize=DEFAULT_TITLE_FONTSIZE,
 ):
     
     file_path = f"{file_name}.{file_type}"
@@ -1444,7 +1677,7 @@ def plot_difference_bar(
     bar_width = 0.6
 
     # Create the bar plot
-    fig, ax = plt.subplots(figsize=(14, 8))
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
     ax.bar(
         x,
         value_diff / 1e6,
@@ -1462,7 +1695,7 @@ def plot_difference_bar(
             value / 1e6 + 0.03 * max(value_diff) / 1e6,
             absolute_text,
             ha="center",
-            fontsize=12,
+            fontsize=fontsize,
             color="black",
         )
 
@@ -1473,7 +1706,7 @@ def plot_difference_bar(
             value / 1e6 + 0.08 * max(value_diff) / 1e6,
             delta_text,
             ha="center",
-            fontsize=12,
+            fontsize=fontsize,
             color="blue",
         )
 
@@ -1521,11 +1754,15 @@ def plot_bar_with_shares(
     threshold=0.001,
     export_dir="export/plots",
     file_type="png",
+    fig_width=DEFAULT_FIGURE_WIDTH,
+    fig_height=DEFAULT_FIGURE_HEIGHT,
+    fontsize=DEFAULT_FONTSIZE,
+    title_fontsize=DEFAULT_TITLE_FONTSIZE,
 ):
     file_path = f"{file_name}.{file_type}"
     # Pivot the DataFrame for plotting
 
-    plt.rcParams.update({"font.size": 14})
+    plt.rcParams.update({"font.size": fontsize})
     if custom_order is not None:
         df = reorder_data(df, custom_order)
 
@@ -1552,7 +1789,7 @@ def plot_bar_with_shares(
     bar_width = 0.35*2/len(custom_order)
 
     # Create the bar plot
-    fig, ax = plt.subplots(figsize=(width, 6))
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
     for i, folder in enumerate(values.columns):
         ax.bar(x + i * bar_width, values[folder], bar_width, label=folder)
 
@@ -1565,7 +1802,7 @@ def plot_bar_with_shares(
                 value + max(values.max()) * 0.01,
                 absolute_text + "\n" + share_text,
                 ha="center",
-                fontsize=8/(len(custom_order)/2),
+                fontsize=fontsize/(len(custom_order)/2),
             )
 
     # Adjust plot limits to add space for text
@@ -1575,7 +1812,7 @@ def plot_bar_with_shares(
     # Customise the plot
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
-    ax.set_title(title)
+    ax.set_title(title, fontsize=title_fontsize)
     ax.set_xticks(x + bar_width / 2)
     ax.set_xticklabels(values.index, rotation=45, ha="right")
     ax.legend(title="Scenario")
@@ -1600,7 +1837,8 @@ def plot_bar_with_shares(
     print(f"Bar plot with shares saved to {file_path}")
 
 
-def plot_shares(df, title, x_label, y_label, file_name, custom_order=None, export_dir="export/plots",file_type="png"):
+def plot_shares(df, title, x_label, y_label, file_name, custom_order=None, export_dir="export/plots",file_type="png",
+                fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT, fontsize=DEFAULT_FONTSIZE, title_fontsize=DEFAULT_TITLE_FONTSIZE):
     """
     Creates a stacked bar chart based on the provided DataFrame and saves it to file.
 
@@ -1631,7 +1869,7 @@ def plot_shares(df, title, x_label, y_label, file_name, custom_order=None, expor
     }
 
     # Figure and axes setup
-    fig, ax = plt.subplots(figsize=(12, 8))
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
 
     # Bar width and spacing setup
     bar_width = 0.6 / num_folders  # Reduced the total bar width to have space
@@ -1654,7 +1892,7 @@ def plot_shares(df, title, x_label, y_label, file_name, custom_order=None, expor
             for dataname in folder_year_data["Data Name"].unique():
                 share = folder_year_data[folder_year_data["Data Name"] == dataname][
                     "Share"
-                ].values[0]  # Get value of share
+                ].values[0].item()  # Get value of share
                 ax.bar(
                     bar_positions[j],
                     share,
@@ -1671,7 +1909,7 @@ def plot_shares(df, title, x_label, y_label, file_name, custom_order=None, expor
                 folder,
                 ha="center",
                 va="top",
-                fontsize=8,
+                fontsize=fontsize//2,  # Half the normal fontsize for small labels
                 rotation=90,
             )  # Added legend below each bar
 
@@ -1680,9 +1918,9 @@ def plot_shares(df, title, x_label, y_label, file_name, custom_order=None, expor
     ax.set_xticklabels(unique_years)
 
     # Add labels and title
-    ax.set_xlabel(x_label, fontsize=12)
-    ax.set_ylabel(y_label, fontsize=12)
-    ax.set_title(title, fontsize=14)
+    ax.set_xlabel(x_label, fontsize=fontsize)
+    ax.set_ylabel(y_label, fontsize=fontsize)
+    ax.set_title(title, fontsize=title_fontsize)
 
     # Add legend for all unique Data Names
     handles = [
@@ -1709,7 +1947,8 @@ def plot_shares(df, title, x_label, y_label, file_name, custom_order=None, expor
     print(f"Shares plot saved to {full_file_path}")
 
 
-def plot_costs(df, title, x_label, y_label, file_name, export_dir="export/plots",file_type="png"):
+def plot_costs(df, title, x_label, y_label, file_name, export_dir="export/plots",file_type="png",
+               fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT, fontsize=DEFAULT_FONTSIZE, title_fontsize=DEFAULT_TITLE_FONTSIZE):
     """
     Plot costs
     """
@@ -1720,7 +1959,7 @@ def plot_costs(df, title, x_label, y_label, file_name, export_dir="export/plots"
     df = df[df["Difference"].abs() > 1]
     plt.rcParams.update({"font.size": 14})
     # Recreate the bar chart with the reordered folders
-    plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(fig_width, fig_height))
 
     # Create a gradient color palette based on the values
     norm = plt.Normalize(df["Difference"].min(), df["Difference"].max())
@@ -1738,10 +1977,10 @@ def plot_costs(df, title, x_label, y_label, file_name, export_dir="export/plots"
 
     # Add values as labels above the bars
     for container in ax.containers:
-        ax.bar_label(container, fmt="%.0f", fontsize=12, padding=5)
+        ax.bar_label(container, fmt="%.0f", fontsize=fontsize, padding=5)
 
     # Add labels and title
-    plt.title(title, fontsize=16)
+    plt.title(title, fontsize=title_fontsize)
     plt.xlabel(x_label)
     plt.ylabel(y_label)
     plt.legend(title="Legend", bbox_to_anchor=(1.05, 1), loc="upper left")
@@ -1766,7 +2005,8 @@ def plot_costs(df, title, x_label, y_label, file_name, export_dir="export/plots"
 
 
 def plot_data(
-    data, title, x_label, y_label, file_name, custom_order=None, color_palette="viridis", export_dir="export/plots", file_type="png"
+    data, title, x_label, y_label, file_name, custom_order=None, color_palette="viridis", export_dir="export/plots", file_type="png",
+    fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT, fontsize=DEFAULT_FONTSIZE, title_fontsize=DEFAULT_TITLE_FONTSIZE
 ):
     """
     Plot data
@@ -1774,9 +2014,9 @@ def plot_data(
     file_path = f"{file_name}.{file_type}"
     if custom_order is not None:
         data = reorder_data(data, custom_order)
-    plt.rcParams.update({"font.size": 14})
+    plt.rcParams.update({"font.size": fontsize})
     # Recreate the bar chart with the reordered folders
-    plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(fig_width, fig_height))
     ax = sns.barplot(
         data=data, x="Year", y="Values", hue="Folder", palette=color_palette, orient="v"
     )
@@ -1785,10 +2025,10 @@ def plot_data(
 
     # Add values as labels above the bars
     for container in ax.containers:
-        ax.bar_label(container, fmt="%.0f", fontsize=12, padding=5)
+        ax.bar_label(container, fmt="%.0f", fontsize=fontsize, padding=5)
 
     # Add labels and title
-    plt.title(title, fontsize=16)
+    plt.title(title, fontsize=title_fontsize)
     plt.xlabel(x_label)
     plt.ylabel(y_label)
     plt.legend(title="Folder", bbox_to_anchor=(1.05, 1), loc="upper left")
@@ -1812,7 +2052,8 @@ def plot_data(
     print(f"Data plot saved to {file_path}")
 
 
-def plot_biomass_use(df, title, x_label, y_label, file_name, year=2050,export_dir="export/plots",file_type="png", labels=True):
+def plot_biomass_use(df, title, x_label, y_label, file_name, year=2050,export_dir="export/plots",file_type="png", labels=True,
+                     fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT, fontsize=DEFAULT_FONTSIZE, title_fontsize=DEFAULT_TITLE_FONTSIZE):
     file_path = f"{file_name}.{file_type}"
 
     plt.rcParams.update({"font.size": 18})
@@ -1854,7 +2095,7 @@ def plot_biomass_use(df, title, x_label, y_label, file_name, year=2050,export_di
         df_pivot[folder] = df_pivot[folder] * mwh_to_twh
 
     # Create the plot
-    fig, ax = plt.subplots(figsize=(14, 10))
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
     bar_width = 0.8
     gap = 0.6  # Adjust this value to change the space between bars
     x_coords = np.arange(len(df_pivot)) * (bar_width + gap)
@@ -1923,7 +2164,7 @@ def plot_biomass_use(df, title, x_label, y_label, file_name, year=2050,export_di
                 f"{emission_factor} | {ef_g_per_MJ} \n ton/MWh | g/MJ",
                 ha="center",
                 va="bottom",
-                fontsize=10,
+                fontsize=fontsize//2,  # Smaller fontsize for detailed annotations
             )
 
     # Add legend
@@ -1947,7 +2188,7 @@ def plot_biomass_use(df, title, x_label, y_label, file_name, year=2050,export_di
     #     hatch="///",
     #     label="More biomass used with emissions considered",
     # )
-    plt.legend(handles=[potential_patch, a_patch, b_patch], fontsize=14)
+    plt.legend(handles=[potential_patch, a_patch, b_patch], fontsize=fontsize)
 
     # Adjust plot limits to add space for text
     ylim = ax.get_ylim()
@@ -1959,7 +2200,7 @@ def plot_biomass_use(df, title, x_label, y_label, file_name, year=2050,export_di
     ax.set_xticklabels(df_pivot["Data Name"], rotation=45, ha="right")
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
-    ax.set_title(title, fontsize=26)
+    ax.set_title(title, fontsize=title_fontsize)
 
     ax2 = ax.twinx()
     ax2.set_yticks(ax.get_yticks() * mwh_to_pj / mwh_to_twh)
@@ -1982,7 +2223,8 @@ def plot_biomass_use(df, title, x_label, y_label, file_name, year=2050,export_di
     print(f"Biomass use plot saved to {file_path}")
 
 
-def plot_efs(export_dir="export/plots",file_type="png"):
+def plot_efs(export_dir="export/plots",file_type="png",
+             fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT, fontsize=DEFAULT_FONTSIZE, title_fontsize=DEFAULT_TITLE_FONTSIZE):
     biomass_costs = {  # Euro/MWh_LHV
         "crop residues": 12.8786,
         "logging residues": 15.3932,  # fuelwood residues
@@ -2003,8 +2245,8 @@ def plot_efs(export_dir="export/plots",file_type="png"):
     }
 
     # font size
-    plt.rcParams.update({"font.size": 18})
-    fig, ax = plt.subplots(figsize=(14, 10))
+    plt.rcParams.update({"font.size": fontsize})
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
     bar_width = 0.8
     gap = 0.6  # Adjust this value to change the space between bars
     x_coords = np.arange(len(emission_factors_new_names)) * (bar_width + gap)
@@ -2019,7 +2261,7 @@ def plot_efs(export_dir="export/plots",file_type="png"):
             f"{cost:.2f}\n€/MWh" if cost != "N/A" else "N/A",
             ha="center",
             va="bottom",
-            fontsize=12,
+            fontsize=fontsize,
             color="black",
         )
 
@@ -2032,7 +2274,7 @@ def plot_efs(export_dir="export/plots",file_type="png"):
         f"{biomass_costs['gas']:.2f}\n€/MWh",
         ha="center",
         va="bottom",
-        fontsize=12,
+        fontsize=fontsize,
         color="black",
     )
 
@@ -2045,7 +2287,7 @@ def plot_efs(export_dir="export/plots",file_type="png"):
         f"{biomass_costs['oil']:.2f}\n€/MWh",
         ha="center",
         va="bottom",
-        fontsize=12,
+        fontsize=fontsize,
         color="black",
     )
 
@@ -2058,7 +2300,7 @@ def plot_efs(export_dir="export/plots",file_type="png"):
         f"{biomass_costs['coal']:.2f}\n€/MWh",
         ha="center",
         va="bottom",
-        fontsize=12,
+        fontsize=fontsize,
         color="black",
     )
 
@@ -2071,7 +2313,7 @@ def plot_efs(export_dir="export/plots",file_type="png"):
     )
     ax.set_xlabel("")
     ax.set_ylabel("tonCO2/MWh")
-    ax.set_title("Emission Factors and Costs for Different Feedstocks", fontsize=26)
+    ax.set_title("Emission Factors and Costs for Different Feedstocks", fontsize=title_fontsize)
 
     ax2 = ax.twinx()
     ax2.set_yticks(ax.get_yticks() / 0.0036)
@@ -2097,11 +2339,12 @@ def plot_efs(export_dir="export/plots",file_type="png"):
     
     print(f"Emission factors plot saved to {file_path}")
 
-def plot_efs_for_presentation(export_dir="export/plots",file_type="png"):
+def plot_efs_for_presentation(export_dir="export/plots",file_type="png",
+                              fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT, fontsize=DEFAULT_FONTSIZE, title_fontsize=DEFAULT_TITLE_FONTSIZE):
 
     # font size
     plt.rcParams.update({"font.size": 18})
-    fig, ax = plt.subplots(figsize=(14, 10))
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
     bar_width = 0.8
     emission_factors = emission_factors_new_names
 
@@ -2148,7 +2391,7 @@ def plot_efs_for_presentation(export_dir="export/plots",file_type="png"):
     )
     ax.set_xlabel("")
     ax.set_ylabel("tonCO2/MWh")
-    ax.set_title("Carbon Stock Changes and Emission Factors for Different Feedstocks", fontsize=24)
+    ax.set_title("Carbon Stock Changes and Emission Factors for Different Feedstocks", fontsize=title_fontsize)
 
     ax2 = ax.twinx()
     ax2.set_yticks(ax.get_yticks() / 0.0036)
@@ -2187,6 +2430,10 @@ def plot_bar_with_totals(
     include_total=True,
     export_dir="export/plots",
     file_type="png",
+    fig_width=DEFAULT_FIGURE_WIDTH,
+    fig_height=DEFAULT_FIGURE_HEIGHT,
+    fontsize=DEFAULT_FONTSIZE,
+    title_fontsize=DEFAULT_TITLE_FONTSIZE,
 ):
     # plots the data in a bar chart and adds a sum of all values at the end
     # Pivot the DataFrame for plotting
@@ -2228,7 +2475,7 @@ def plot_bar_with_totals(
     bar_width = 0.2
 
     # Create the bar plot
-    fig, ax = plt.subplots(figsize=(14, 6))
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
     for i, folder in enumerate(pivot_df.columns):
         ax.bar(x + i * bar_width, pivot_df[folder], bar_width, label=folder)
 
@@ -2240,7 +2487,7 @@ def plot_bar_with_totals(
                 value + max(pivot_df.max()) * 0.01,
                 f"{value:.0f}",
                 ha="center",
-                fontsize=8,
+                fontsize=fontsize,
             )
 
     # Adjust plot limits to add space for text
@@ -2250,10 +2497,10 @@ def plot_bar_with_totals(
     # Customise the plot
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
-    ax.set_title(title)
+    ax.set_title(title, fontsize=title_fontsize)
     ax.set_xticks(x + bar_width * 1.5)
-    ax.set_xticklabels(pivot_df.index, rotation=45, ha="right", fontsize=12)
-    ax.legend(title="Scenario", fontsize=12)
+    ax.set_xticklabels(pivot_df.index, rotation=45, ha="right", fontsize=fontsize)
+    ax.legend(title="Scenario", fontsize=fontsize)
 
     ax2 = ax.twinx()
     ax2.set_yticks(ax.get_yticks() * 3.6)
@@ -2296,7 +2543,8 @@ def get_usage_dict(df, scenario, year=2050):
         usage_dict[key] = usage_value
     return usage_dict
 
-def plot_co2(df, scenario, file_name, export_dir="export/plots",file_type="png", unit = "ton", multiplier=1):
+def plot_co2(df, scenario, file_name, export_dir="export/plots",file_type="png", unit = "ton", multiplier=1,
+             fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT, fontsize=DEFAULT_FONTSIZE, title_fontsize=DEFAULT_TITLE_FONTSIZE):
 
     major_sinks_colors = {
         'atmosphere': 'rgba(255, 0, 0, 0.8)',        # Red for atmospheric CO2
@@ -2408,7 +2656,11 @@ def plot_co2_sankey(
     unit_label="tonCO2",
     color_links_by_technology=True,
     include_legend=True,
-    fixed = True
+    fixed = True,
+    fig_width=DEFAULT_FIGURE_WIDTH,
+    fig_height=DEFAULT_FIGURE_HEIGHT,
+    fontsize=DEFAULT_FONTSIZE,
+    title_fontsize=DEFAULT_TITLE_FONTSIZE,
 ):
     """
     Generate a Sankey diagram from a DataFrame of carbon flows for a given scenario.
@@ -2643,7 +2895,9 @@ def make_cost_diffs(df, name_col="Folder", cost_col="Values"):
 
 def plot_mga(df, file_name, title="Near Optimal Biomass Use", export_dir='export/plots',
              file_type='png', unit='MWh', multiplier=1, y_range=(0, 4300),
-             allow_incomplete=True, zero_lower_pct=None):
+             allow_incomplete=True, zero_lower_pct=None,
+             fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT,
+             fontsize=DEFAULT_FONTSIZE, title_fontsize=DEFAULT_TITLE_FONTSIZE):
     """
     Plot the near‑optimal solution space for biomass use under various cost deviations.
 
@@ -2800,7 +3054,7 @@ def plot_mga(df, file_name, title="Near Optimal Biomass Use", export_dir='export
             y_max.append(max_vals.get(d, 0))
 
     # Create plot
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
     
     # Plot solution space
     ax.fill_between(x_vals, y_min, y_max, color="grey", alpha=0.3,
@@ -2828,7 +3082,7 @@ def plot_mga(df, file_name, title="Near Optimal Biomass Use", export_dir='export
     # Customize plot
     ax.set_xlabel("ε (%)")
     ax.set_ylabel(f"Biomass use ({unit})")
-    ax.set_title(title, fontsize=16)
+    ax.set_title(title, fontsize=title_fontsize)
     ax.grid(True, linestyle="--", alpha=0.5)
     
     # Set x-axis ticks with smart spacing to avoid crowded labels
@@ -2890,6 +3144,10 @@ def plot_stacked_biomass_with_errorbars(
     file_name="biomass_stacked_errorbar",
     file_type="png",                     # "png", "pgf", or "tex"
     errorbars=True,
+    fig_width=DEFAULT_FIGURE_WIDTH,
+    fig_height=DEFAULT_FIGURE_HEIGHT,
+    fontsize=DEFAULT_FONTSIZE,
+    title_fontsize=DEFAULT_TITLE_FONTSIZE,
 ):
     # ── 1. aggregate 2050 data ───────────────────────────────────────
     df = data.loc[data["Year"] == 2050].copy()
@@ -2922,7 +3180,7 @@ def plot_stacked_biomass_with_errorbars(
     # ── 2. plot ───────────────────────────────────────────────────────
     categories = base
     x = np.arange(len(categories))
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
     width = 0.8
 
     bottom = np.zeros_like(x, dtype=float)
@@ -2951,7 +3209,7 @@ def plot_stacked_biomass_with_errorbars(
     ax.set_xticks(x)
     ax.set_xticklabels(categories)
     ax.set_ylabel('Total Biomass Use (TWh)')
-    ax.set_title('Biomass Use by Sector')
+    ax.set_title('Biomass Use by Sector', fontsize=title_fontsize)
     ax.grid(axis='y', linestyle='--', alpha=0.6)
 
     # Legend deduplication
@@ -2986,6 +3244,10 @@ def plot_technology_barplot_with_errorbars(
     file_type: str = "png",
     color_error: bool = False,
     error_bars: bool = True,
+    fig_width=DEFAULT_FIGURE_WIDTH,
+    fig_height=DEFAULT_FIGURE_HEIGHT,
+    fontsize=DEFAULT_FONTSIZE,
+    title_fontsize=DEFAULT_TITLE_FONTSIZE,
 ):
     """
     Grouped bar chart of energy (TWh) by technology (x-axis) for two scenarios
@@ -3031,7 +3293,7 @@ def plot_technology_barplot_with_errorbars(
     delta = {s: wide[f"{s} 710"].fillna(0) - base[s] for s in scenarios}
 
     # --- plotting -----------------------------------------------------------
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
 
     x = np.arange(n_tech)
     bar_w = 0.35
@@ -3067,7 +3329,7 @@ def plot_technology_barplot_with_errorbars(
     ax.set_xticks(x)
     ax.set_xticklabels(techs, rotation=45, ha="right")
     ax.set_ylabel("Energy (TWh)")
-    ax.set_title("Primary Energy")
+    ax.set_title("Primary Energy", fontsize=title_fontsize)
     ax.grid(axis="y", linestyle="--", alpha=0.6, zorder=0)
     ax.legend(title="Scenario", frameon=True)
 
@@ -3089,6 +3351,10 @@ def plot_morris_mu_star(
     title: str = "Morris μ*",
     export_dir: str = "export/GSA",
     threshold: float = 0.0,
+    fig_width=DEFAULT_FIGURE_WIDTH,
+    fig_height=DEFAULT_FIGURE_HEIGHT,
+    fontsize=DEFAULT_FONTSIZE,
+    title_fontsize=DEFAULT_TITLE_FONTSIZE,
 ):
     plot_labels = {
         "seq_potential": "CO2 sequestration potential",
@@ -3133,7 +3399,7 @@ def plot_morris_mu_star(
 
     # 3 · horizontal bar plot ---------------------------------------------------
     y_pos = np.arange(len(df))
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
 
     ax.barh(
         y_pos, mu_star,
@@ -3145,7 +3411,7 @@ def plot_morris_mu_star(
     ax.set_yticks(y_pos)
     ax.set_yticklabels([plot_labels[param] for param in df["parameter"]])
     ax.set_xlabel(r"μ*({})".format(unit))
-    ax.set_title(title, fontsize=14)
+    ax.set_title(title, fontsize=title_fontsize)
     ax.axvline(0, color="black", linewidth=0.8)
 
     plt.tight_layout()
@@ -3157,7 +3423,8 @@ def plot_morris_mu_star(
     plt.close()
     print(f"μ* plot saved → {out_path}")
 
-def main(custom_order=["Default", "Carbon Stock Changes"], file_type="png", export_dir="export/plots", data_folder="export"):
+def main(custom_order=["Default", "Carbon Stock Changes"], file_type="png", export_dir="export/plots", data_folder="export",
+         fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT, fontsize=DEFAULT_FONTSIZE, title_fontsize=DEFAULT_TITLE_FONTSIZE):
 
     capacity_factors = load_csv("capacity_factors.csv",folder_path=data_folder)
 
@@ -3167,6 +3434,10 @@ def main(custom_order=["Default", "Carbon Stock Changes"], file_type="png", expo
         export_dir=export_dir,
         file_type=file_type,
         capacity_factors=capacity_factors,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
 
     data = load_csv("costs2050.csv",folder_path=data_folder)
@@ -3179,10 +3450,15 @@ def main(custom_order=["Default", "Carbon Stock Changes"], file_type="png", expo
         custom_order,
         export_dir=export_dir,
         file_type=file_type,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
 
     data = load_csv("biomass_supply.csv",folder_path=data_folder)
-    plot_biomass_use(data, "Biomass Use", "", "TWh", "biomass_supply", export_dir=export_dir,labels=False)
+    plot_biomass_use(data, "Biomass Use", "", "TWh", "biomass_supply", export_dir=export_dir,labels=False,
+                     fig_width=fig_width, fig_height=fig_height, fontsize=fontsize, title_fontsize=title_fontsize)
     plot_bar_with_totals(
         data,
         "Biomass Supply",
@@ -3195,6 +3471,10 @@ def main(custom_order=["Default", "Carbon Stock Changes"], file_type="png", expo
         include_total=False,
         export_dir=export_dir,
         file_type=file_type,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
 
     data = load_csv("oil_production.csv",folder_path=data_folder)
@@ -3208,6 +3488,10 @@ def main(custom_order=["Default", "Carbon Stock Changes"], file_type="png", expo
         width=10,
         export_dir=export_dir,
         file_type=file_type,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
 
     data = load_csv("electricity_generation_share.csv",folder_path=data_folder)
@@ -3222,6 +3506,10 @@ def main(custom_order=["Default", "Carbon Stock Changes"], file_type="png", expo
         width=10,
         export_dir=export_dir,
         file_type=file_type,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
     # plot_difference_bar(
     #     data,
@@ -3244,6 +3532,10 @@ def main(custom_order=["Default", "Carbon Stock Changes"], file_type="png", expo
         axis2_ticks=500,
         export_dir=export_dir,
         file_type=file_type,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
 
     # data = load_csv("industrial_energy.csv",folder_path=data_folder)
@@ -3287,6 +3579,10 @@ def main(custom_order=["Default", "Carbon Stock Changes"], file_type="png", expo
         threshold=0.0001,
         export_dir=export_dir,
         file_type=file_type,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
 
     data = load_csv("biomass_use_by_sector.csv",folder_path=data_folder)
@@ -3301,6 +3597,10 @@ def main(custom_order=["Default", "Carbon Stock Changes"], file_type="png", expo
         width=10,
         export_dir=export_dir,
         file_type=file_type,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
 
     data = load_csv("fossil_fuel_supply.csv",folder_path=data_folder)
@@ -3314,6 +3614,10 @@ def main(custom_order=["Default", "Carbon Stock Changes"], file_type="png", expo
         include_total=False,
         export_dir=export_dir,
         file_type=file_type,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
 
     data = load_csv("shadow_price.csv",folder_path=data_folder)
@@ -3326,6 +3630,10 @@ def main(custom_order=["Default", "Carbon Stock Changes"], file_type="png", expo
         custom_order,
         export_dir=export_dir,
         file_type=file_type,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
 
     data = load_csv("hydrogen_production.csv",folder_path=data_folder)
@@ -3341,6 +3649,10 @@ def main(custom_order=["Default", "Carbon Stock Changes"], file_type="png", expo
         include_total=True,
         export_dir=export_dir,
         file_type=file_type,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
 
     data = load_csv("heat_pumps.csv",folder_path=data_folder)
@@ -3356,6 +3668,10 @@ def main(custom_order=["Default", "Carbon Stock Changes"], file_type="png", expo
         include_total=True,
         export_dir=export_dir,
         file_type=file_type,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
 
     data = load_csv("gas_use.csv",folder_path=data_folder)
@@ -3370,6 +3686,10 @@ def main(custom_order=["Default", "Carbon Stock Changes"], file_type="png", expo
         include_total=False,
         export_dir=export_dir,
         file_type=file_type,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
 
     data = load_csv("weighted_prices.csv",folder_path=data_folder)
@@ -3381,6 +3701,10 @@ def main(custom_order=["Default", "Carbon Stock Changes"], file_type="png", expo
         "weighted_feedstock_prices",
         export_dir=export_dir,
         file_type=file_type,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
 
     data = load_csv("co2_use.csv",folder_path=data_folder)
@@ -3394,6 +3718,10 @@ def main(custom_order=["Default", "Carbon Stock Changes"], file_type="png", expo
         multiplier=1e-6,
         export_dir=export_dir,
         file_type=file_type,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
     data = load_csv("co2_capture.csv",folder_path=data_folder)
     plot_stacked_bar(
@@ -3406,6 +3734,10 @@ def main(custom_order=["Default", "Carbon Stock Changes"], file_type="png", expo
         multiplier=1e-6,
         export_dir=export_dir,
         file_type=file_type,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
 
     data = load_csv("biomass_use_by_sector.csv",folder_path=data_folder)
@@ -3419,6 +3751,10 @@ def main(custom_order=["Default", "Carbon Stock Changes"], file_type="png", expo
         multiplier=1e-6,
         export_dir=export_dir,
         file_type=file_type,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
 
     upstream_data = load_csv("upstream_emissions.csv",folder_path=data_folder)
@@ -3433,6 +3769,10 @@ def main(custom_order=["Default", "Carbon Stock Changes"], file_type="png", expo
         upstream_data=upstream_data,
         export_dir=export_dir,
         file_type=file_type,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
 
 
@@ -3491,7 +3831,8 @@ def main(custom_order=["Default", "Carbon Stock Changes"], file_type="png", expo
     #     usage_threshold=usage_threshold,
     # )
 
-def specific_plots(folder_path="export/main", export_path= "export/plots", file_type="png"):
+def specific_plots(folder_path="export/main", export_path= "export/plots", file_type="png",
+                   fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT, fontsize=DEFAULT_FONTSIZE, title_fontsize=DEFAULT_TITLE_FONTSIZE):
     """
     Create specific plots for the project.
     """
@@ -3506,6 +3847,10 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
         file_type="png",
         capacity_factors=capacity_factors,
         variant_plot=True,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
     create_gravitational_plot(
         "Cost vs Emissions/CSCs (Carbon Stock Changes)",
@@ -3516,6 +3861,10 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
         file_type="png",
         capacity_factors=capacity_factors,
         variant_plot=True,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
     bm_data = load_csv("biomass_use_by_sector.csv",folder_path=folder_path)
     plot_stacked_biomass_with_errorbars(
@@ -3523,6 +3872,10 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
         export_dir=export_path,
         file_name="biomass_stacked_errorbar",
         file_type="png",
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
     data = load_csv("primary_energy.csv",folder_path=folder_path)
     plot_technology_barplot_with_errorbars(
@@ -3530,7 +3883,11 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
         export_dir=export_path,
         file_name="primary_energy_errorbars",
         file_type="png",
-        color_error= False
+        color_error= False,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
     plot_technology_barplot_with_errorbars(
         data,
@@ -3538,7 +3895,11 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
         file_name="primary_energy_no_errorbars",
         file_type="png",
         color_error= False,
-        error_bars=False
+        error_bars=False,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
     # plot_stacked_biomass_with_errorbars(
     #     bm_data,
@@ -3546,13 +3907,14 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
     #     file_name="biomass_stacked_errorbar",
     #     file_type="tex",
     # )
-    carbon_flow_diagram(save_path="export/plots/carbon_flow_diagram.png")
-    data = load_csv("supply_difference.csv",folder_path=data_folder)
+    carbon_flow_diagram(save_path="export/plots/carbon_flow_diagram.png",
+                         fig_width=fig_width, fig_height=fig_height, fontsize=fontsize, title_fontsize=title_fontsize)
+    data = load_csv("supply_difference.csv",folder_path=folder_path)
     data = data[data["data_name"] != "total"]
-    data_variants = load_csv("supply_difference_variants.csv",folder_path=data_folder)
+    data_variants = load_csv("supply_difference_variants.csv",folder_path=folder_path)
     total_em_diff_variants = (
     data_variants.loc[data_variants["data_name"].str.strip().str.lower() == "total", "emission_difference"]
-      .iloc[0]
+      .iloc[0].item()
     )
     plot_stacked_bar(
         data,
@@ -3570,8 +3932,12 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
         file_type=file_type,
         no_xticks=True,
         error_bar_amount= total_em_diff_variants,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
-    data = load_csv("cost_difference.csv",folder_path=data_folder)
+    data = load_csv("cost_difference.csv",folder_path=folder_path)
     plot_costs(
         data,
         "Extra Costs Due to Carbon Stock Changes (larger 1 B€)",
@@ -3580,11 +3946,17 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
         "cost_difference",
         export_dir=export_path,
         file_type=file_type,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
-    data = load_csv("weighted_prices.csv",folder_path=data_folder)
-    supply_data = load_csv("biomass_supply.csv",folder_path=data_folder)
+    data = load_csv("weighted_prices.csv",folder_path=folder_path)
+    supply_data = load_csv("biomass_supply.csv",folder_path=folder_path)
     usage_dict_default = get_usage_dict(supply_data, "Default")
     usage_dict_carbon_costs = get_usage_dict(supply_data, "Carbon Stock Changes")
+    
+    # Create individual plots as before
     plot_costs_vs_prices(
         data,
         "Weighted Feedstock Prices vs. Costs",
@@ -3596,6 +3968,10 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
         export_dir=export_path,
         file_type=file_type,
         add_legend=False,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
     plot_costs_vs_prices(
         data,
@@ -3607,10 +3983,27 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
         usage_dict=usage_dict_carbon_costs,
         export_dir=export_path,
         file_type=file_type,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
+    )
+    
+    # Create combined costs vs prices plot with shared legend
+    plot_costs_vs_prices_combined(
+        data,
+        usage_dict_default=usage_dict_default,
+        usage_dict_carbon_costs=usage_dict_carbon_costs,
+        export_dir=export_path,
+        file_type=file_type,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
 
 
-def mga_plots():
+def mga_plots(fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT, fontsize=DEFAULT_FONTSIZE, title_fontsize=DEFAULT_TITLE_FONTSIZE):
     costs = load_csv("total_costs.csv",folder_path="export/mga",rename_scenarios=False)
     cost_diffs = make_cost_diffs(costs)
 
@@ -3624,6 +4017,10 @@ def mga_plots():
         unit="TWh",
         multiplier=1e-6,
         zero_lower_pct=cost_diffs["cscs_710"],
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
     mga_data = load_csv("biomass_use_carbon_costs.csv",folder_path="export/mga",rename_scenarios=False)
     plot_mga(
@@ -3635,6 +4032,10 @@ def mga_plots():
         unit="TWh",
         multiplier=1e-6,
         zero_lower_pct=cost_diffs["cscs"],
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
     mga_data = load_csv("biomass_use_default_710.csv",folder_path="export/mga",rename_scenarios=False)
     plot_mga(
@@ -3646,6 +4047,10 @@ def mga_plots():
         unit="TWh",
         multiplier=1e-6,
         zero_lower_pct=cost_diffs["default_710"],
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
     mga_data = load_csv("biomass_use_default.csv",folder_path="export/mga",rename_scenarios=False)
     plot_mga(
@@ -3657,9 +4062,13 @@ def mga_plots():
         unit="TWh",
         multiplier=1e-6,
         zero_lower_pct=cost_diffs["default"],
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
 
-def SA_plots(export_dir="export/GSA", data_folder="GSA/SA_results"):
+def SA_plots(export_dir="export/GSA", data_folder="GSA/SA_results", fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT, fontsize=DEFAULT_FONTSIZE, title_fontsize=DEFAULT_TITLE_FONTSIZE):
     """
     Create plots for the sensitivity analysis.
     """
@@ -3671,6 +4080,10 @@ def SA_plots(export_dir="export/GSA", data_folder="GSA/SA_results"):
         title="Morris μ* for Biomass Use",
         export_dir=export_dir,
         threshold=5,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
     data = load_csv("wind_electricity_production_SA_results.csv",folder_path=data_folder)
     plot_morris_mu_star(
@@ -3679,7 +4092,11 @@ def SA_plots(export_dir="export/GSA", data_folder="GSA/SA_results"):
         unit="TWh",
         title="Morris μ* for Wind Electricity Production",
         export_dir=export_dir,
-        threshold=5, 
+        threshold=5,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
     data = load_csv("solar_electricity_production_SA_results.csv",folder_path=data_folder)
     plot_morris_mu_star(
@@ -3689,6 +4106,10 @@ def SA_plots(export_dir="export/GSA", data_folder="GSA/SA_results"):
         title="Morris μ* for Solar Electricity Production",
         export_dir=export_dir,
         threshold=5,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
     data = load_csv("nuclear_electricity_production_SA_results.csv",folder_path=data_folder)
     plot_morris_mu_star(
@@ -3698,6 +4119,10 @@ def SA_plots(export_dir="export/GSA", data_folder="GSA/SA_results"):
         title="Morris μ* for Nuclear Electricity Production",
         export_dir=export_dir,
         threshold=5,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
     data = load_csv("oil_use_SA_results.csv",folder_path=data_folder)
     plot_morris_mu_star(
@@ -3707,6 +4132,10 @@ def SA_plots(export_dir="export/GSA", data_folder="GSA/SA_results"):
         title="Morris μ* for Oil Use",
         export_dir=export_dir,
         threshold=5,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
     data = load_csv("gas_use_SA_results.csv",folder_path=data_folder)
     plot_morris_mu_star(
@@ -3716,6 +4145,10 @@ def SA_plots(export_dir="export/GSA", data_folder="GSA/SA_results"):
         title="Morris μ* for Gas Use",
         export_dir=export_dir,
         threshold=5,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
     data = load_csv("system_costs_SA_results.csv",folder_path=data_folder)
     plot_morris_mu_star(
@@ -3725,6 +4158,10 @@ def SA_plots(export_dir="export/GSA", data_folder="GSA/SA_results"):
         title="Morris μ* for System Costs",
         export_dir=export_dir,
         threshold=1,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
     )
 
 if __name__ == "__main__":
@@ -3744,15 +4181,22 @@ if __name__ == "__main__":
     custom_order = ["Default", "Carbon Stock Changes", "Default 710", "Carbon Stock Changes 710"]  
     export_dir = "export/main_plots"
     data_folder = "export/main"
+    
+    # Configure plot dimensions and font sizes
+    fig_width = 12  # Change this to adjust all plot widths
+    fig_height = 8  # Change this to adjust all plot heights
+    fontsize = 14   # Change this to adjust general font size
+    title_fontsize = 18  # Change this to adjust title font size
 
-    #specific_plots()
-    #main(custom_order=custom_order, file_type=file_type, export_dir=export_dir, data_folder=data_folder)
+    specific_plots(fig_width=fig_width, fig_height=fig_height, fontsize=fontsize, title_fontsize=title_fontsize)
+    #main(custom_order=custom_order, file_type=file_type, export_dir=export_dir, data_folder=data_folder, 
+    #     fig_width=fig_width, fig_height=fig_height, fontsize=fontsize, title_fontsize=title_fontsize)
     # plot_efs(export_dir=export_dir)
     #plot_efs_for_presentation(export_dir=export_dir, file_type=file_type)
 
-    mga_plots()
+    #mga_plots(fig_width=fig_width, fig_height=fig_height, fontsize=fontsize, title_fontsize=title_fontsize)
 
-    #SA_plots()
+    #SA_plots(fig_width=fig_width, fig_height=fig_height, fontsize=fontsize, title_fontsize=title_fontsize)
 
     ########### Sankey Diagrams ###########
     # co2_data = load_csv("co2_sankey.csv",folder_path="export/seq")
