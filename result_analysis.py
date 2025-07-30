@@ -2045,10 +2045,21 @@ def main(results_dir="results", export_dir="export",scenarios=["default", "carbo
     export_results(nuclear_capacity, "nuclear_capacity.csv", export_dir=export_dir)
 
 def get_mga_results(results_dir="results/MGA", export_dir="export/mga"):
-
-    results= load_results("results/main", "all")
+    """
+    Extract and export MGA (Modeling to Generate Alternatives) results.
+    
+    Parameters
+    ----------
+    results_dir : str
+        Directory containing MGA results
+    export_dir : str
+        Directory to export processed results
+    """
+    
+    # Export total costs from main results
+    main_results = load_results("results/main", "all")
     costs = get_data(
-        results,
+        main_results,
         "all",
         "metrics",
         [["total costs"]],
@@ -2060,85 +2071,100 @@ def get_mga_results(results_dir="results/MGA", export_dir="export/mga"):
     )
     export_results(costs, "total_costs.csv", export_dir=export_dir)
 
+    # Load MGA results and categorize scenarios
     results = load_results(results_dir, "all")
-    cscs = []
-    cscs_710 = []
-    defaults = []
-    defaults_710 = []
-    for folder in results.keys():
-        if "710" not in folder and "default" not in folder:
-            cscs.append(folder)
-        elif "710" in folder and "default" not in folder:
-            cscs_710.append(folder)
-        elif "default" in folder and "710" not in folder:
-            defaults.append(folder)
-        elif "default" in folder and "710" in folder:
-            defaults_710.append(folder)
+    scenario_groups = _categorize_scenarios(results.keys())
+    
+    # Common parameters for data extraction
+    common_params = {
+        "dataframe": "energy_balance",
+        "value_column": "D",
+        "data_name_column": "B", 
+        "year": "2050",
+        "filter_positive": True,
+    }
+    
+    # Biomass-specific parameters
+    biomass_params = {
+        **common_params,
+        "fields_list": [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
+        "merge_fields": [[[""], "biomass"]],
+        "remove_list": ["biomass transport", "solid biomass for industry", "solid biomass for industry CC"],
+    }
+    
+    # Fossil fuel-specific parameters
+    fossil_fuel_params = {
+        **common_params,
+        "fields_list": [["Generator", "", "oil primary"], ["Generator", "", "gas"], ["Generator", "", "coal"]],
+        "merge_fields": [],
+    }
+    
+    # Process each scenario group for both biomass and fossil fuels
+    scenario_mappings = {
+        "cscs": {
+            "biomass": "biomass_use_carbon_costs.csv",
+            "fossil": "fossil_fuel_supply_carbon_costs.csv"
+        },
+        "cscs_710": {
+            "biomass": "biomass_use_carbon_costs_710.csv",
+            "fossil": "fossil_fuel_supply_carbon_costs_710.csv"
+        },
+        "defaults": {
+            "biomass": "biomass_use_default.csv", 
+            "fossil": "fossil_fuel_supply_default.csv"
+        },
+        "defaults_710": {
+            "biomass": "biomass_use_default_710.csv",
+            "fossil": "fossil_fuel_supply_default_710.csv"
+        }
+    }
+    
+    for group_name, filenames in scenario_mappings.items():
+        if scenario_groups[group_name]:  # Only process if group has scenarios
+            # Extract and export biomass data
+            biomass_data = get_data(results, scenario_groups[group_name], **biomass_params)
+            export_results(biomass_data, filenames["biomass"], export_dir=export_dir)
+            
+            # Extract and export fossil fuel data
+            fossil_data = get_data(results, scenario_groups[group_name], **fossil_fuel_params)
+            export_results(fossil_data, filenames["fossil"], export_dir=export_dir)
 
-    all_biomass_supply = get_data(
-        results,
-        cscs,
-        "energy_balance",
-        [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
-        [
-            [[""], "biomass"],
-        ],
-        "D",
-        "B",
-        "2050",
-        filter_positive=True,
-        remove_list=["biomass transport", "solid biomass for industry","solid biomass for industry CC"],
-    )
-    export_results(all_biomass_supply, "biomass_use_carbon_costs.csv", export_dir=export_dir)
 
-    all_biomass_supply = get_data(
-        results,
-        cscs_710,
-        "energy_balance",
-        [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
-        [
-            [[""], "biomass"],
-        ],
-        "D",
-        "B",
-        "2050",
-        filter_positive=True,
-        remove_list=["biomass transport", "solid biomass for industry","solid biomass for industry CC"],
-    )
-    export_results(all_biomass_supply, "biomass_use_carbon_costs_710.csv", export_dir=export_dir)
-
-
-    all_biomass_supply = get_data(
-        results,
-        defaults,
-        "energy_balance",
-        [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
-        [
-            [[""], "biomass"],
-        ],
-        "D",
-        "B",
-        "2050",
-        filter_positive=True,
-        remove_list=["biomass transport", "solid biomass for industry","solid biomass for industry CC"],
-    )
-    export_results(all_biomass_supply, "biomass_use_default.csv", export_dir=export_dir)
-
-    all_biomass_supply = get_data(
-        results,
-        defaults_710,
-        "energy_balance",
-        [["Link", "", "solid biomass"], ["Link", "", "biogas"]],
-        [
-            [[""], "biomass"],
-        ],
-        "D",
-        "B",
-        "2050",
-        filter_positive=True,
-        remove_list=["biomass transport", "solid biomass for industry","solid biomass for industry CC"],
-    )
-    export_results(all_biomass_supply, "biomass_use_default_710.csv", export_dir=export_dir)
+def _categorize_scenarios(folder_names):
+    """
+    Categorize scenario folders based on naming patterns.
+    
+    Parameters
+    ----------
+    folder_names : iterable
+        Collection of folder names to categorize
+        
+    Returns
+    -------
+    dict
+        Dictionary with scenario categories as keys and lists of matching folders as values
+    """
+    categories = {
+        "cscs": [],
+        "cscs_710": [], 
+        "defaults": [],
+        "defaults_710": []
+    }
+    
+    for folder in folder_names:
+        has_710 = "710" in folder
+        has_default = "default" in folder
+        
+        if has_default and has_710:
+            categories["defaults_710"].append(folder)
+        elif has_default and not has_710:
+            categories["defaults"].append(folder)
+        elif not has_default and has_710:
+            categories["cscs_710"].append(folder)
+        elif not has_default and not has_710:
+            categories["cscs"].append(folder)
+    
+    return categories
 
  
 def check_result_quality(results_dir="results"):

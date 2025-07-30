@@ -2896,10 +2896,13 @@ def make_cost_diffs(df, name_col="Folder", cost_col="Values"):
 def plot_mga(df, file_name, title="Near Optimal Biomass Use", export_dir='export/plots',
              file_type='png', unit='MWh', multiplier=1, y_range=(0, 4300),
              allow_incomplete=True, zero_lower_pct=None,
+             include_fossil=False, fossil_df=None, fossil_unit='MWh', fossil_multiplier=1,
+             fossil_y_range=None, fossil_breakdown=False,
              fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT,
              fontsize=DEFAULT_FONTSIZE, title_fontsize=DEFAULT_TITLE_FONTSIZE):
     """
     Plot the near‑optimal solution space for biomass use under various cost deviations.
+    Optionally include fossil fuel data on a secondary y-axis.
 
     Parameters
     ----------
@@ -2929,6 +2932,19 @@ def plot_mga(df, file_name, title="Near Optimal Biomass Use", export_dir='export
         One or several cost‑deviation percentages at which the lower bound is forced to
         zero. Can be passed as fractions (e.g., 0.04 for 4%) or percentages (e.g., 4.0).
         All min values at this percentage and higher will be set to zero.
+    include_fossil : bool, default False
+        Whether to include fossil fuel data on a secondary y-axis.
+    fossil_df : pandas.DataFrame or None, default None
+        DataFrame with fossil fuel MGA results. Same structure as df.
+    fossil_unit : str, default 'MWh'
+        Unit label for fossil fuel values (secondary y-axis).
+    fossil_multiplier : float, default 1
+        Factor for scaling the fossil fuel values.
+    fossil_y_range : tuple or None, default None
+        Limits for the fossil fuel y-axis. If None, let matplotlib choose.
+    fossil_breakdown : bool, default False
+        If True, show gas and oil individually on secondary axis.
+        If False, show total fossil fuel supply.
     """
     os.makedirs(export_dir, exist_ok=True)
 
@@ -3043,6 +3059,158 @@ def plot_mga(df, file_name, title="Near Optimal Biomass Use", export_dir='export
     interpolate(min_vals, original_min, "min values")
     interpolate(max_vals, original_max, "max values")
 
+    # Process fossil fuel data if provided
+    fossil_min_vals, fossil_max_vals = {}, {}
+    fossil_original_min, fossil_original_max = set(), set()
+    fossil_optimal_value = None
+    
+    # For breakdown: separate gas and oil data
+    gas_min_vals, gas_max_vals = {}, {}
+    oil_min_vals, oil_max_vals = {}, {}
+    gas_original_min, gas_original_max = set(), set()
+    oil_original_min, oil_original_max = set(), set()
+    gas_optimal_value, oil_optimal_value = None, None
+    
+    if include_fossil and fossil_df is not None:
+        # Filter fossil fuel data
+        if "Data Name" in fossil_df.columns:
+            if fossil_breakdown:
+                # Filter for gas and oil separately using exact matches
+                gas_df_plot = fossil_df[fossil_df["Data Name"] == "gas"].copy()
+                oil_df_plot = fossil_df[fossil_df["Data Name"] == "oil primary"].copy()
+                # If no exact matches, try partial matches
+                if gas_df_plot.empty:
+                    gas_mask = fossil_df["Data Name"].str.contains("gas", case=False, na=False)
+                    gas_df_plot = fossil_df[gas_mask].copy() if gas_mask.any() else None
+                if oil_df_plot.empty:
+                    oil_mask = fossil_df["Data Name"].str.contains("oil", case=False, na=False)
+                    oil_df_plot = fossil_df[oil_mask].copy() if oil_mask.any() else None
+            else:
+                # Use total fossil fuel data - sum gas and oil if breakdown data available
+                gas_mask = fossil_df["Data Name"] == "gas"
+                oil_mask = fossil_df["Data Name"] == "oil primary"
+                if gas_mask.any() and oil_mask.any():
+                    # Sum gas and oil values for each scenario
+                    gas_data = fossil_df[gas_mask].copy()
+                    oil_data = fossil_df[oil_mask].copy()
+                    # Create combined dataframe
+                    fossil_df_plot = gas_data.copy()
+                    fossil_df_plot["Values"] = gas_data["Values"].values + oil_data["Values"].values
+                    fossil_df_plot["Data Name"] = "total fossil fuel"
+                else:
+                    # Fallback to any fossil data
+                    fossil_mask = fossil_df["Data Name"].str.contains("fossil", case=False, na=False)
+                    fossil_df_plot = fossil_df[fossil_mask].copy() if fossil_mask.any() else fossil_df.copy()
+        else:
+            if fossil_breakdown:
+                # If no Data Name column, assume the dataframe contains the right data
+                gas_df_plot = fossil_df.copy()
+                oil_df_plot = fossil_df.copy()  # User should provide separate data
+            else:
+                fossil_df_plot = fossil_df.copy()
+
+        if fossil_breakdown and gas_df_plot is not None and oil_df_plot is not None and not gas_df_plot.empty and not oil_df_plot.empty:
+            # Process gas data
+            for _, row in gas_df_plot.iterrows():
+                scenario = str(row["Folder"]).lower()
+                val = float(row["Values"]) * fossil_multiplier
+
+                if "optimal" in scenario:
+                    gas_optimal_value = val
+                    gas_min_vals[0] = gas_max_vals[0] = val
+                    gas_original_min.add(0)
+                    gas_original_max.add(0)
+                    continue
+
+                for kind in ("min_", "max_"):
+                    if kind in scenario:
+                        dev = scenario.split(kind, 1)[1]
+                        try:
+                            frac = float(dev)
+                        except ValueError:
+                            frac = float(dev.strip("%")) / 100.0
+                        pct = frac * 100
+                        
+                        if kind == "min_":
+                            gas_min_vals[pct] = val
+                            gas_original_min.add(pct)
+                        else:
+                            gas_max_vals[pct] = val
+                            gas_original_max.add(pct)
+                        break
+
+            # Process oil data
+            for _, row in oil_df_plot.iterrows():
+                scenario = str(row["Folder"]).lower()
+                val = float(row["Values"]) * fossil_multiplier
+
+                if "optimal" in scenario:
+                    oil_optimal_value = val
+                    oil_min_vals[0] = oil_max_vals[0] = val
+                    oil_original_min.add(0)
+                    oil_original_max.add(0)
+                    continue
+
+                for kind in ("min_", "max_"):
+                    if kind in scenario:
+                        dev = scenario.split(kind, 1)[1]
+                        try:
+                            frac = float(dev)
+                        except ValueError:
+                            frac = float(dev.strip("%")) / 100.0
+                        pct = frac * 100
+                        
+                        if kind == "min_":
+                            oil_min_vals[pct] = val
+                            oil_original_min.add(pct)
+                        else:
+                            oil_max_vals[pct] = val
+                            oil_original_max.add(pct)
+                        break
+
+            # Interpolate gas and oil data
+            if gas_min_vals or gas_max_vals:
+                interpolate(gas_min_vals, gas_original_min, "gas min values")
+                interpolate(gas_max_vals, gas_original_max, "gas max values")
+            if oil_min_vals or oil_max_vals:
+                interpolate(oil_min_vals, oil_original_min, "oil min values")
+                interpolate(oil_max_vals, oil_original_max, "oil max values")
+        
+        elif not fossil_breakdown:
+            # Process total fossil fuel data (original logic)
+            for _, row in fossil_df_plot.iterrows():
+                scenario = str(row["Folder"]).lower()
+                val = float(row["Values"]) * fossil_multiplier
+
+                if "optimal" in scenario:
+                    fossil_optimal_value = val
+                    fossil_min_vals[0] = fossil_max_vals[0] = val
+                    fossil_original_min.add(0)
+                    fossil_original_max.add(0)
+                    continue
+
+                for kind in ("min_", "max_"):
+                    if kind in scenario:
+                        dev = scenario.split(kind, 1)[1]
+                        try:
+                            frac = float(dev)
+                        except ValueError:
+                            frac = float(dev.strip("%")) / 100.0
+                        pct = frac * 100
+                        
+                        if kind == "min_":
+                            fossil_min_vals[pct] = val
+                            fossil_original_min.add(pct)
+                        else:
+                            fossil_max_vals[pct] = val
+                            fossil_original_max.add(pct)
+                        break
+
+            # Interpolate fossil fuel data
+            if fossil_min_vals or fossil_max_vals:
+                interpolate(fossil_min_vals, fossil_original_min, "fossil min values")
+                interpolate(fossil_max_vals, fossil_original_max, "fossil max values")
+
     # Prepare plotting data
     cost_devs = sorted(set(min_vals) | set(max_vals))
     x_vals, y_min, y_max = [], [], []
@@ -3056,15 +3224,15 @@ def plot_mga(df, file_name, title="Near Optimal Biomass Use", export_dir='export
     # Create plot
     fig, ax = plt.subplots(figsize=(fig_width, fig_height))
     
-    # Plot solution space
+    # Plot biomass solution space
     ax.fill_between(x_vals, y_min, y_max, color="grey", alpha=0.3,
-                    label="Near optimal solution space")
+                    label="Near optimal solution space (biomass)")
     
-    # Plot min/max lines
+    # Plot biomass min/max lines
     ax.plot(x_vals, y_min, color="tab:blue", linewidth=2, label="Min biomass use")
     ax.plot(x_vals, y_max, color="tab:orange", linewidth=2, label="Max biomass use")
     
-    # Mark original (non-interpolated) points
+    # Mark original (non-interpolated) biomass points
     original_min_x = [d for d in x_vals if d in original_min]
     original_max_x = [d for d in x_vals if d in original_max]
     
@@ -3075,9 +3243,123 @@ def plot_mga(df, file_name, title="Near Optimal Biomass Use", export_dir='export
         ax.scatter(original_max_x, [max_vals[d] for d in original_max_x],
                    color="tab:orange", marker="o", s=50, zorder=5)
     
-    # Mark optimal solution
+    # Mark optimal biomass solution
     ax.plot([0], [optimal_value], color="black", marker="o", markersize=10,
-            linestyle="none", label="Cost optimal solution", zorder=6)
+            linestyle="none", label="Cost optimal solution (biomass)", zorder=6)
+
+    # Add fossil fuel data on secondary axis if requested
+    ax2 = None
+    if include_fossil and fossil_df is not None:
+        ax2 = ax.twinx()
+        
+        if fossil_breakdown and ((gas_min_vals or gas_max_vals) or (oil_min_vals or oil_max_vals)):
+            # Plot gas and oil separately using consistent blue/orange colors
+            if gas_min_vals or gas_max_vals:
+                gas_cost_devs = sorted(set(gas_min_vals) | set(gas_max_vals))
+                gas_x_vals, gas_y_min, gas_y_max = [], [], []
+                
+                for d in gas_cost_devs:
+                    if allow_incomplete or (d in gas_min_vals and d in gas_max_vals):
+                        gas_x_vals.append(d)
+                        gas_y_min.append(gas_min_vals.get(d, 0))
+                        gas_y_max.append(gas_max_vals.get(d, 0))
+                
+                # Plot gas lines with blue/orange colors and dotted lines
+                ax2.plot(gas_x_vals, gas_y_min, color="tab:blue", linewidth=2, linestyle="dotted", 
+                        label="Gas use at min biomass", alpha=0.8)
+                ax2.plot(gas_x_vals, gas_y_max, color="tab:orange", linewidth=2, linestyle="dotted", 
+                        label="Gas use at max biomass", alpha=0.8)
+                
+                # Mark original gas points with square markers
+                gas_original_min_x = [d for d in gas_x_vals if d in gas_original_min]
+                gas_original_max_x = [d for d in gas_x_vals if d in gas_original_max]
+                
+                if gas_original_min_x:
+                    ax2.scatter(gas_original_min_x, [gas_min_vals[d] for d in gas_original_min_x],
+                               color="tab:blue", marker="s", s=50, zorder=5, alpha=0.8)
+                if gas_original_max_x:
+                    ax2.scatter(gas_original_max_x, [gas_max_vals[d] for d in gas_original_max_x],
+                               color="tab:orange", marker="s", s=50, zorder=5, alpha=0.8)
+                
+                # Mark optimal gas solution with square marker
+                if gas_optimal_value is not None:
+                    ax2.plot([0], [gas_optimal_value], color="black", marker="s", markersize=10,
+                            linestyle="none", label="Cost optimal solution (gas)", zorder=6, alpha=0.8)
+            
+            if oil_min_vals or oil_max_vals:
+                oil_cost_devs = sorted(set(oil_min_vals) | set(oil_max_vals))
+                oil_x_vals, oil_y_min, oil_y_max = [], [], []
+                
+                for d in oil_cost_devs:
+                    if allow_incomplete or (d in oil_min_vals and d in oil_max_vals):
+                        oil_x_vals.append(d)
+                        oil_y_min.append(oil_min_vals.get(d, 0))
+                        oil_y_max.append(oil_max_vals.get(d, 0))
+                
+                # Plot oil lines with blue/orange colors and dash-dot lines
+                ax2.plot(oil_x_vals, oil_y_min, color="tab:blue", linewidth=2, linestyle="dashdot", 
+                        label="Oil use at min biomass", alpha=0.8)
+                ax2.plot(oil_x_vals, oil_y_max, color="tab:orange", linewidth=2, linestyle="dashdot", 
+                        label="Oil use at max biomass", alpha=0.8)
+                
+                # Mark original oil points with triangle markers
+                oil_original_min_x = [d for d in oil_x_vals if d in oil_original_min]
+                oil_original_max_x = [d for d in oil_x_vals if d in oil_original_max]
+                
+                if oil_original_min_x:
+                    ax2.scatter(oil_original_min_x, [oil_min_vals[d] for d in oil_original_min_x],
+                               color="tab:blue", marker="^", s=50, zorder=5, alpha=0.8)
+                if oil_original_max_x:
+                    ax2.scatter(oil_original_max_x, [oil_max_vals[d] for d in oil_original_max_x],
+                               color="tab:orange", marker="^", s=50, zorder=5, alpha=0.8)
+                
+                # Mark optimal oil solution with triangle marker
+                if oil_optimal_value is not None:
+                    ax2.plot([0], [oil_optimal_value], color="black", marker="^", markersize=10,
+                            linestyle="none", label="Cost optimal solution (oil)", zorder=6, alpha=0.8)
+        
+        elif not fossil_breakdown and (fossil_min_vals or fossil_max_vals):
+            # Plot total fossil fuels (original logic)
+            fossil_cost_devs = sorted(set(fossil_min_vals) | set(fossil_max_vals))
+            fossil_x_vals, fossil_y_min, fossil_y_max = [], [], []
+            
+            for d in fossil_cost_devs:
+                if allow_incomplete or (d in fossil_min_vals and d in fossil_max_vals):
+                    fossil_x_vals.append(d)
+                    fossil_y_min.append(fossil_min_vals.get(d, 0))
+                    fossil_y_max.append(fossil_max_vals.get(d, 0))
+            
+            # Plot fossil fuel lines (corresponding to biomass boundaries, not feasible space)
+            # Use similar colors to biomass but distinguish as fossil fuel data
+            ax2.plot(fossil_x_vals, fossil_y_min, color="tab:blue", linewidth=2, linestyle="dotted", 
+                    label="Fossil fuel use at min biomass", alpha=0.8)
+            ax2.plot(fossil_x_vals, fossil_y_max, color="tab:orange", linewidth=2, linestyle="dotted", 
+                    label="Fossil fuel use at max biomass", alpha=0.8)
+            
+            # Mark original fossil fuel points with same markers as corresponding biomass data
+            fossil_original_min_x = [d for d in fossil_x_vals if d in fossil_original_min]
+            fossil_original_max_x = [d for d in fossil_x_vals if d in fossil_original_max]
+            
+            if fossil_original_min_x:
+                ax2.scatter(fossil_original_min_x, [fossil_min_vals[d] for d in fossil_original_min_x],
+                           color="tab:blue", marker="o", s=50, zorder=5, alpha=0.8)
+            if fossil_original_max_x:
+                ax2.scatter(fossil_original_max_x, [fossil_max_vals[d] for d in fossil_original_max_x],
+                           color="tab:orange", marker="o", s=50, zorder=5, alpha=0.8)
+            
+            # Mark optimal fossil fuel solution
+            if fossil_optimal_value is not None:
+                ax2.plot([0], [fossil_optimal_value], color="black", marker="o", markersize=10,
+                        linestyle="none", label="Cost optimal solution (fossil)", zorder=6, alpha=0.8)
+        
+        # Customize secondary axis
+        if fossil_breakdown:
+            ax2.set_ylabel(f"Gas & Oil use ({fossil_unit})", color="black")
+        else:
+            ax2.set_ylabel(f"Fossil fuel use ({fossil_unit})", color="black")
+        ax2.tick_params(axis='y', labelcolor="black")
+        if fossil_y_range:
+            ax2.set_ylim(fossil_y_range)
 
     # Customize plot
     ax.set_xlabel("ε (%)")
@@ -3113,22 +3395,58 @@ def plot_mga(df, file_name, title="Near Optimal Biomass Use", export_dir='export
         ax.set_ylim(y_range)
 
     # Order legend consistently
-    legend_order = [
-        "Cost optimal solution", "Max biomass use",
-        "Min biomass use", "Near optimal solution space",
-    ]
-    handles, labels = ax.get_legend_handles_labels()
-    ordered_handles = []
-    ordered_labels = []
-    
-    for desired_label in legend_order:
-        for handle, label in zip(handles, labels):
-            if label == desired_label:
-                ordered_handles.append(handle)
-                ordered_labels.append(label)
-                break
-    
-    ax.legend(ordered_handles, ordered_labels, loc="best")
+    if include_fossil and ax2 is not None:
+        # Combined legend for both axes
+        if fossil_breakdown:
+            legend_order = [
+                "Cost optimal solution (biomass)", "Max biomass use", "Min biomass use", 
+                "Near optimal solution space (biomass)",
+                "Cost optimal solution (gas)", "Gas use at max biomass", "Gas use at min biomass",
+                "Cost optimal solution (oil)", "Oil use at max biomass", "Oil use at min biomass"
+            ]
+        else:
+            legend_order = [
+                "Cost optimal solution (biomass)", "Max biomass use", "Min biomass use", 
+                "Near optimal solution space (biomass)",
+                "Cost optimal solution (fossil)", "Fossil fuel use at max biomass", "Fossil fuel use at min biomass"
+            ]
+        
+        # Get handles and labels from both axes
+        handles1, labels1 = ax.get_legend_handles_labels()
+        handles2, labels2 = ax2.get_legend_handles_labels()
+        
+        all_handles = handles1 + handles2
+        all_labels = labels1 + labels2
+        
+        ordered_handles = []
+        ordered_labels = []
+        
+        for desired_label in legend_order:
+            for handle, label in zip(all_handles, all_labels):
+                if label == desired_label:
+                    ordered_handles.append(handle)
+                    ordered_labels.append(label)
+                    break
+        
+        ax.legend(ordered_handles, ordered_labels, loc="best", frameon=True)
+    else:
+        # Original single-axis legend
+        legend_order = [
+            "Cost optimal solution (biomass)", "Max biomass use",
+            "Min biomass use", "Near optimal solution space (biomass)",
+        ]
+        handles, labels = ax.get_legend_handles_labels()
+        ordered_handles = []
+        ordered_labels = []
+        
+        for desired_label in legend_order:
+            for handle, label in zip(handles, labels):
+                if label == desired_label:
+                    ordered_handles.append(handle)
+                    ordered_labels.append(label)
+                    break
+        
+        ax.legend(ordered_handles, ordered_labels, loc="best", frameon=True)
 
     # Save plot
     out_path = os.path.join(export_dir, f"{file_name}.{file_type}")
@@ -4003,9 +4321,26 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
     )
 
 
-def mga_plots(fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT, fontsize=DEFAULT_FONTSIZE, title_fontsize=DEFAULT_TITLE_FONTSIZE):
+def mga_plots(include_fossils=False, fossil_breakdown=False, fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT, fontsize=DEFAULT_FONTSIZE, title_fontsize=DEFAULT_TITLE_FONTSIZE):
     costs = load_csv("total_costs.csv",folder_path="export/mga",rename_scenarios=False)
     cost_diffs = make_cost_diffs(costs)
+
+    # Load fossil fuel data if requested
+    fossil_carbon_costs_710 = None
+    fossil_carbon_costs = None
+    fossil_default_710 = None
+    fossil_default = None
+    
+    if include_fossils:
+        try:
+            # Load fossil fuel data (same files used for both breakdown and total modes)
+            fossil_carbon_costs_710 = load_csv("fossil_fuel_supply_carbon_costs_710.csv", folder_path="export/mga", rename_scenarios=False)
+            fossil_carbon_costs = load_csv("fossil_fuel_supply_carbon_costs.csv", folder_path="export/mga", rename_scenarios=False)
+            fossil_default_710 = load_csv("fossil_fuel_supply_default_710.csv", folder_path="export/mga", rename_scenarios=False)
+            fossil_default = load_csv("fossil_fuel_supply_default.csv", folder_path="export/mga", rename_scenarios=False)
+        except Exception as e:
+            print(f"Warning: Could not load fossil fuel data: {e}")
+            include_fossils = False
 
     mga_data = load_csv("biomass_use_carbon_costs_710.csv",folder_path="export/mga",rename_scenarios=False)
     plot_mga(
@@ -4017,6 +4352,11 @@ def mga_plots(fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT, 
         unit="TWh",
         multiplier=1e-6,
         zero_lower_pct=cost_diffs["cscs_710"],
+        include_fossil=include_fossils,
+        fossil_df=fossil_carbon_costs_710,
+        fossil_unit="TWh",
+        fossil_multiplier=1e-6,
+        fossil_breakdown=fossil_breakdown,
         fig_width=fig_width,
         fig_height=fig_height,
         fontsize=fontsize,
@@ -4032,6 +4372,11 @@ def mga_plots(fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT, 
         unit="TWh",
         multiplier=1e-6,
         zero_lower_pct=cost_diffs["cscs"],
+        include_fossil=include_fossils,
+        fossil_df=fossil_carbon_costs,
+        fossil_unit="TWh",
+        fossil_multiplier=1e-6,
+        fossil_breakdown=fossil_breakdown,
         fig_width=fig_width,
         fig_height=fig_height,
         fontsize=fontsize,
@@ -4047,6 +4392,11 @@ def mga_plots(fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT, 
         unit="TWh",
         multiplier=1e-6,
         zero_lower_pct=cost_diffs["default_710"],
+        include_fossil=include_fossils,
+        fossil_df=fossil_default_710,
+        fossil_unit="TWh",
+        fossil_multiplier=1e-6,
+        fossil_breakdown=fossil_breakdown,
         fig_width=fig_width,
         fig_height=fig_height,
         fontsize=fontsize,
@@ -4062,6 +4412,11 @@ def mga_plots(fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT, 
         unit="TWh",
         multiplier=1e-6,
         zero_lower_pct=cost_diffs["default"],
+        include_fossil=include_fossils,
+        fossil_df=fossil_default,
+        fossil_unit="TWh",
+        fossil_multiplier=1e-6,
+        fossil_breakdown=fossil_breakdown,
         fig_width=fig_width,
         fig_height=fig_height,
         fontsize=fontsize,
@@ -4188,13 +4543,13 @@ if __name__ == "__main__":
     fontsize = 14   # Change this to adjust general font size
     title_fontsize = 18  # Change this to adjust title font size
 
-    specific_plots(fig_width=fig_width, fig_height=fig_height, fontsize=fontsize, title_fontsize=title_fontsize)
+    #specific_plots(fig_width=fig_width, fig_height=fig_height, fontsize=fontsize, title_fontsize=title_fontsize)
     #main(custom_order=custom_order, file_type=file_type, export_dir=export_dir, data_folder=data_folder, 
     #     fig_width=fig_width, fig_height=fig_height, fontsize=fontsize, title_fontsize=title_fontsize)
     # plot_efs(export_dir=export_dir)
     #plot_efs_for_presentation(export_dir=export_dir, file_type=file_type)
 
-    #mga_plots(fig_width=fig_width, fig_height=fig_height, fontsize=fontsize, title_fontsize=title_fontsize)
+    mga_plots(include_fossils=True, fossil_breakdown=True, fig_width=fig_width, fig_height=fig_height, fontsize=fontsize, title_fontsize=title_fontsize)
 
     #SA_plots(fig_width=fig_width, fig_height=fig_height, fontsize=fontsize, title_fontsize=title_fontsize)
 
