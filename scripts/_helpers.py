@@ -4,17 +4,14 @@
 
 import contextlib
 import copy
-import hashlib
 import logging
 import os
 import re
 import time
+from collections.abc import Callable
 from functools import partial, wraps
-from os.path import exists
 from pathlib import Path
-from shutil import copyfile
 from tempfile import NamedTemporaryFile
-from typing import Callable, Union
 
 import atlite
 import fiona
@@ -31,17 +28,7 @@ logger = logging.getLogger(__name__)
 
 REGION_COLS = ["geometry", "name", "x", "y", "country"]
 
-
-def copy_default_files(workflow):
-    default_files = {
-        "config/config.default.yaml": "config/config.yaml",
-        "config/scenarios.template.yaml": "config/scenarios.yaml",
-    }
-    for template, target in default_files.items():
-        target = os.path.join(workflow.current_basedir, target)
-        template = os.path.join(workflow.current_basedir, template)
-        if not exists(target) and exists(template):
-            copyfile(template, target)
+PYPSA_V1 = bool(re.match(r"^1\.\d", pypsa.__version__))
 
 
 def get_scenarios(run):
@@ -164,6 +151,27 @@ def path_provider(dir, rdir, shared_resources, exclude_from_shared):
         shared_resources=shared_resources,
         exclude_from_shared=exclude_from_shared,
     )
+
+
+def script_path_provider(project_dir: Path) -> Callable[[str], Path]:
+    """
+    Returns a function that provides the full path to a script given its name.
+
+    Parameters
+    ----------
+    project_dir : Path
+        The root directory of the project (where the script directory is located).
+
+    Returns
+    -------
+    Callable[[str], Path]
+        A function that takes a script name as input and returns the full path to the script.
+    """
+
+    def _get_script_path(script: str) -> Path:
+        return Path("file://") / project_dir / "scripts" / script
+
+    return _get_script_path
 
 
 def get_shadow(run):
@@ -421,29 +429,30 @@ def aggregate_costs(n, flatten=False, opts=None, existing_only=False):
 
 def progress_retrieve(url, file, disable=False):
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-    # Hotfix - Bug, tqdm not working with disable=False
-    disable = True
 
-    if disable:
-        response = requests.get(url, headers=headers, stream=True)
+    Path(file).parent.mkdir(parents=True, exist_ok=True)
+
+    # Raise HTTPError for transient errors
+    # 429: Too Many Requests (rate limiting)
+    # 500, 502, 503, 504: Server errors
+    response = requests.get(url, headers=headers, stream=True)
+    if response.status_code in (429, 500, 502, 503, 504):
+        response.raise_for_status()
+    total_size = int(response.headers.get("content-length", 0))
+    chunk_size = 1024
+
+    with tqdm(
+        total=total_size,
+        unit="B",
+        unit_scale=True,
+        unit_divisor=1024,
+        desc=str(file),
+        disable=disable,
+    ) as t:
         with open(file, "wb") as f:
-            f.write(response.content)
-    else:
-        response = requests.get(url, headers=headers, stream=True)
-        total_size = int(response.headers.get("content-length", 0))
-        chunk_size = 1024
-
-        with tqdm(
-            total=total_size,
-            unit="B",
-            unit_scale=True,
-            unit_divisor=1024,
-            desc=str(file),
-        ) as t:
-            with open(file, "wb") as f:
-                for data in response.iter_content(chunk_size=chunk_size):
-                    f.write(data)
-                    t.update(len(data))
+            for data in response.iter_content(chunk_size=chunk_size):
+                f.write(data)
+                t.update(len(data))
 
 
 def retry(func: Callable) -> Callable:
@@ -519,13 +528,17 @@ def mock_snakemake(
     import os
 
     import snakemake as sm
+    from packaging import version
     from pypsa.definitions.structures import Dict
+    from snakemake import __version__ as sm_version
     from snakemake.api import Workflow
     from snakemake.common import SNAKEFILE_CHOICES
+    from snakemake.logging import LoggerManager
     from snakemake.script import Snakemake
     from snakemake.settings.types import (
         ConfigSettings,
         DAGSettings,
+        OutputSettings,
         ResourceSettings,
         StorageSettings,
         WorkflowSettings,
@@ -566,15 +579,25 @@ def mock_snakemake(
         workflow_settings = WorkflowSettings()
         storage_settings = StorageSettings()
         dag_settings = DAGSettings(rerun_triggers=[])
-        workflow = Workflow(
-            config_settings,
-            resource_settings,
-            workflow_settings,
-            storage_settings,
-            dag_settings,
+
+        workflow_kwargs = dict(
+            config_settings=config_settings,
+            resource_settings=resource_settings,
+            workflow_settings=workflow_settings,
+            storage_settings=storage_settings,
+            dag_settings=dag_settings,
             storage_provider_settings=dict(),
             overwrite_workdir=workdir,
         )
+
+        # Snakemake version-dependent logger handling
+        if version.parse(sm_version) >= version.parse("9.14.6"):
+            output_settings = OutputSettings()
+            workflow_kwargs["logger_manager"] = LoggerManager(
+                logger=logger, settings=output_settings
+            )
+
+        workflow = Workflow(**workflow_kwargs)
         workflow.include(snakefile)
 
         if configfiles:
@@ -712,18 +735,19 @@ def update_config_from_wildcards(config, w, inplace=True):
             flags = ["+e", "+p", "+m", "+c"]
             if all(flag not in o for flag in flags):
                 continue
-            carrier, attr_factor = o.split("+")
+            carrier, component, attr_factor = o.split("+")
             attr = attr_lookup[attr_factor[0]]
             factor = float(attr_factor[1:])
             if not isinstance(config["adjustments"]["electricity"], dict):
                 config["adjustments"]["electricity"] = dict()
             update_config(
-                config["adjustments"]["electricity"], {attr: {carrier: factor}}
+                config["adjustments"]["electricity"],
+                {"factor": {component: {carrier: {attr: factor}}}},
             )
 
         for o in opts:
             if o.startswith("lv") or o.startswith("lc"):
-                config["electricity"]["transmission_expansion"] = o[1:]
+                config["electricity"]["transmission_limit"] = o[1:]
                 break
 
     if w.get("sector_opts"):
@@ -817,12 +841,15 @@ def update_config_from_wildcards(config, w, inplace=True):
             flags = ["+e", "+p", "+m", "+c"]
             if all(flag not in o for flag in flags):
                 continue
-            carrier, attr_factor = o.split("+")
+            carrier, component, attr_factor = o.split("+")
             attr = attr_lookup[attr_factor[0]]
             factor = float(attr_factor[1:])
             if not isinstance(config["adjustments"]["sector"], dict):
                 config["adjustments"]["sector"] = dict()
-            update_config(config["adjustments"]["sector"], {attr: {carrier: factor}})
+            update_config(
+                config["adjustments"]["sector"],
+                {"factor": {component: {carrier: {attr: factor}}}},
+            )
 
         _, sdr_value = find_opt(opts, "sdr")
         if sdr_value is not None:
@@ -840,66 +867,6 @@ def update_config_from_wildcards(config, w, inplace=True):
 
     if not inplace:
         return config
-
-
-def get_checksum_from_zenodo(file_url):
-    parts = file_url.split("/")
-    record_id = parts[parts.index("records") + 1]
-    filename = parts[-1]
-
-    response = requests.get(f"https://zenodo.org/api/records/{record_id}", timeout=30)
-    response.raise_for_status()
-    data = response.json()
-
-    for file in data["files"]:
-        if file["key"] == filename:
-            return file["checksum"]
-    return None
-
-
-def validate_checksum(file_path, zenodo_url=None, checksum=None):
-    """
-    Validate file checksum against provided or Zenodo-retrieved checksum.
-    Calculates the hash of a file using 64KB chunks. Compares it against a
-    given checksum or one from a Zenodo URL.
-
-    Parameters
-    ----------
-    file_path : str
-        Path to the file for checksum validation.
-    zenodo_url : str, optional
-        URL of the file on Zenodo to fetch the checksum.
-    checksum : str, optional
-        Checksum (format 'hash_type:checksum_value') for validation.
-
-    Raises
-    ------
-    AssertionError
-        If the checksum does not match, or if neither `checksum` nor `zenodo_url` is provided.
-
-
-    Examples
-    --------
-    >>> validate_checksum("/path/to/file", checksum="md5:abc123...")
-    >>> validate_checksum(
-    ...     "/path/to/file",
-    ...     zenodo_url="https://zenodo.org/records/12345/files/example.txt",
-    ... )
-
-    If the checksum is invalid, an AssertionError will be raised.
-    """
-    assert checksum or zenodo_url, "Either checksum or zenodo_url must be provided"
-    if zenodo_url:
-        checksum = get_checksum_from_zenodo(zenodo_url)
-    hash_type, checksum = checksum.split(":")
-    hasher = hashlib.new(hash_type)
-    with open(file_path, "rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):  # 64kb chunks
-            hasher.update(chunk)
-    calculated_checksum = hasher.hexdigest()
-    assert calculated_checksum == checksum, (
-        "Checksum is invalid. This may be due to an incomplete download. Delete the file and re-execute the rule."
-    )
 
 
 def get_snapshots(
@@ -1058,7 +1025,7 @@ def rename_techs(label: str) -> str:
 
 
 def load_cutout(
-    cutout_files: Union[str, list[str]], time: Union[None, pd.DatetimeIndex] = None
+    cutout_files: str | list[str], time: None | pd.DatetimeIndex = None
 ) -> atlite.Cutout:
     """
     Load and optionally combine multiple cutout files.
@@ -1087,3 +1054,21 @@ def load_cutout(
         cutout.data = cutout.data.sel(time=time)
 
     return cutout
+
+
+def load_costs(cost_file: str) -> pd.DataFrame:
+    """
+    Load prepared cost data from CSV.
+
+    Parameters
+    ----------
+    cost_file : str
+        Path to the CSV file containing cost data
+
+    Returns
+    -------
+    costs : pd.DataFrame
+        DataFrame containing the prepared cost data
+    """
+
+    return pd.read_csv(cost_file, index_col=0)

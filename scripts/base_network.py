@@ -165,7 +165,7 @@ def _load_converters_from_eg(buses, converters):
     return converters
 
 
-def _load_converters_from_osm(buses, converters):
+def _load_converters_from_raw(buses, converters):
     converters = pd.read_csv(
         converters,
         quotechar="'",
@@ -204,7 +204,7 @@ def _load_links_from_eg(buses, links):
     return links
 
 
-def _load_links_from_osm(buses, links):
+def _load_links_from_raw(buses, links):
     links = pd.read_csv(
         links,
         quotechar="'",
@@ -312,7 +312,7 @@ def _set_electrical_parameters_lines_eg(lines, config):
     return lines
 
 
-def _set_electrical_parameters_lines_osm(lines, config):
+def _set_electrical_parameters_lines_raw(lines, config):
     if lines.empty:
         lines["type"] = []
         return lines
@@ -374,7 +374,7 @@ def _set_electrical_parameters_links_eg(links, config, links_p_nom):
     return links
 
 
-def _set_electrical_parameters_links_osm(links, config):
+def _set_electrical_parameters_links_raw(links, config):
     if links.empty:
         return links
 
@@ -401,6 +401,7 @@ def _set_electrical_parameters_converters(converters, config):
     # Converters are combined with links
     converters["under_construction"] = False
     converters["underground"] = False
+    converters["dc"] = False  # ToDo Find a better assumption
 
     return converters
 
@@ -674,23 +675,19 @@ def base_network(
     config,
 ):
     base_network = config["electricity"].get("base_network")
-    osm_prebuilt_version = config["electricity"].get("osm-prebuilt-version")
-    assert base_network in {
-        "entsoegridkit",
-        "osm-raw",
-        "osm-prebuilt",
-    }, (
-        f"base_network must be either 'entsoegridkit', 'osm-raw' or 'osm-prebuilt', but got '{base_network}'"
+    osm_version = config["data"]["osm"]["version"]
+    assert base_network in {"entsoegridkit", "osm", "tyndp"}, (
+        f"base_network must be either 'entsoegridkit', 'osm' or 'tyndp', but got '{base_network}'"
     )
     if base_network == "entsoegridkit":
         warnings.warn(
-            "The 'entsoegridkit' base network is deprecated and will be removed in future versions. Please use 'osm-raw' or 'osm-prebuilt' instead.",
+            "The 'entsoegridkit' base network is deprecated and will be removed in future versions. Please use 'osm' instead.",
             DeprecationWarning,
         )
 
     logger_str = (
         f"Creating base network using {base_network}"
-        + (f" v{osm_prebuilt_version}" if base_network == "osm-prebuilt" else "")
+        + (f" v{osm_version}" if base_network == "osm" else "")
         + "."
     )
     logger.info(logger_str)
@@ -712,16 +709,16 @@ def base_network(
         # Set electrical parameters of lines and links
         lines = _set_electrical_parameters_lines_eg(lines, config)
         links = _set_electrical_parameters_links_eg(links, config, links_p_nom)
-    elif base_network in {"osm-prebuilt", "osm-raw"}:
-        links = _load_links_from_osm(buses, links)
-        converters = _load_converters_from_osm(buses, converters)
+    elif base_network in {"osm", "tyndp"}:
+        links = _load_links_from_raw(buses, links)
+        converters = _load_converters_from_raw(buses, converters)
 
         # Set electrical parameters of lines and links
-        lines = _set_electrical_parameters_lines_osm(lines, config)
-        links = _set_electrical_parameters_links_osm(links, config)
+        lines = _set_electrical_parameters_lines_raw(lines, config)
+        links = _set_electrical_parameters_links_raw(links, config)
     else:
         raise ValueError(
-            "base_network must be either 'entsoegridkit', 'osm-raw', or 'osm-prebuilt'"
+            "base_network must be either 'entsoegridkit', 'osm', or 'tyndp'"
         )
 
     # Set electrical parameters of transformers and converters
@@ -731,7 +728,7 @@ def base_network(
     n = pypsa.Network()
     n.name = (
         f"PyPSA-Eur ({base_network}"
-        + (f" v{osm_prebuilt_version}" if base_network == "osm-prebuilt" else "")
+        + (f" v{osm_version}" if base_network == "osm" else "")
         + ")"
     )
 
@@ -837,7 +834,7 @@ def voronoi(points, outline, crs=4326):
         voronoi = gpd.GeoDataFrame(geometry=voronoi)
         joined = gpd.sjoin_nearest(pts, voronoi, how="right")
 
-    return joined.dissolve(by="Bus").reindex(points.index).squeeze()
+    return joined.dissolve(by="name").reindex(points.index).squeeze()
 
 
 def process_onshore_regions(
@@ -856,6 +853,7 @@ def process_onshore_regions(
         .drop_duplicates(subset=["x", "y", "country"], keep="first")[
             ["x", "y", "country"]
         ]
+        .rename_axis("name")
     )
     onshore_regions_adm = gpd.GeoDataFrame(
         {
@@ -891,7 +889,9 @@ def process_offshore_regions(
 
         c_b = buses.country == country
         offshore_shape = offshore_shapes[country]
-        offshore_locs = buses.loc[c_b & buses.substation_off, ["x", "y"]]
+        offshore_locs = buses.loc[c_b & buses.substation_off, ["x", "y"]].rename_axis(
+            "name"
+        )
         offshore_regions_c = gpd.GeoDataFrame(
             {
                 "name": offshore_locs.index,
@@ -1304,14 +1304,18 @@ def get_nearest_neighbour(
         ["country", "geometry"],
     ]
 
-    nearest_neighbour = (
-        gdf.to_crs(epsg=3035)
-        .sjoin_nearest(
-            nearest_neighbours.to_crs(epsg=3035),
-            how="left",
-        )["index_right"]
-        .values[0]
-    )
+    try:
+        nearest_neighbour = (
+            gdf.to_crs(epsg=3035)
+            .sjoin_nearest(
+                nearest_neighbours.to_crs(epsg=3035),
+                how="left",
+            )["index_right"]
+            .values[0]
+        )
+    except KeyError:
+        logger.warning(f"Skipping for {country}")
+        nearest_neighbour = ""
 
     return nearest_neighbour
 
@@ -1452,6 +1456,7 @@ def build_admin_shapes(
         1: "level1",
         2: "level2",
         3: "level3",
+        "bz": "bidding_zone",
     }
 
     adm1_countries = ["BA", "MD", "UA", "XK"]
@@ -1464,6 +1469,7 @@ def build_admin_shapes(
 
     if clustering == "administrative":
         logger.info(f"Building bus regions at administrative level {level}")
+
         nuts3_regions["column"] = level_map[level]
 
         # Only keep the values whose keys are in countries
@@ -1488,7 +1494,7 @@ def build_admin_shapes(
             )
 
         # If GB is in the countries, set the level, aggregate London area to level 1 due to converging issues
-        if "GB" in countries:
+        if "GB" in countries and level != "bz":
             nuts3_regions.loc[nuts3_regions.level1 == "GBI", "column"] = "level1"
 
         nuts3_regions["admin"] = nuts3_regions.apply(
@@ -1499,14 +1505,8 @@ def build_admin_shapes(
         nuts3_regions["admin"] = nuts3_regions["country"]
 
     # Group by busmap
-    admin_shapes = nuts3_regions[["admin", "geometry"]]
-    admin_shapes = admin_shapes.groupby("admin")["geometry"].apply(
-        lambda x: x.union_all()
-    )
-    admin_shapes = gpd.GeoDataFrame(
-        admin_shapes, geometry="geometry", crs=nuts3_regions.crs
-    )
-    admin_shapes["country"] = admin_shapes.index.str[:2]
+    admin_shapes = nuts3_regions[["admin", "geometry", "country"]]
+    admin_shapes = admin_shapes.dissolve("admin")
 
     # Identify regions that do not contain buses and merge them with smallest
     # neighbouring area of the same parent region (NUTS3 -> NUTS2 -> NUTS1 -> country)
@@ -1561,7 +1561,8 @@ def build_admin_shapes(
             lambda row: [get_nearest_neighbour(row, admin_shapes)],
             axis=1,
         )
-
+        # remove detached regions that don't contain substations
+        admin_shapes = admin_shapes[~admin_shapes.isempty]
         admin_shapes = merge_regions_recursive(admin_shapes, neighbours_missing=False)
 
         # Update names

@@ -262,7 +262,7 @@ def remove_stubs(
 
 
 def remove_stubs_within_admin(
-    n: pypsa.Network, admin_shapes: str
+    n: pypsa.Network, simplify_network: dict, admin_shapes: str
 ) -> tuple[pypsa.Network, pd.Series]:
     busmap = busmap_for_admin_regions(
         n,
@@ -272,7 +272,8 @@ def remove_stubs_within_admin(
     n.buses["admin"] = n.buses.index.map(busmap)
 
     logger.info("Removing stubs within administrative regions.")
-    matching_attrs = ["admin"]
+    across_borders = simplify_network["remove_stubs_across_borders"]
+    matching_attrs = [] if across_borders else ["admin"]
     busmap = busmap_by_stubs(n, matching_attrs)
 
     _remove_clustered_buses_and_branches(n, busmap)
@@ -285,7 +286,7 @@ def remove_stubs_within_admin(
 
 def aggregate_to_substations(
     n: pypsa.Network,
-    buses_i: pd.Index | list,
+    substation_i: pd.Index | list,
     aggregation_strategies: dict | None = None,
 ) -> tuple[pypsa.Network, pd.Series]:
     # can be used to aggregate a selection of buses to electrically closest neighbors
@@ -300,23 +301,23 @@ def aggregate_to_substations(
         }
     )
 
-    adj = n.adjacency_matrix(branch_components=["Line", "Link"], weights=weight)
+    adj = n.adjacency_matrix(branch_components=["Line", "Link"], weights=weight).tocsr()
 
-    bus_indexer = n.buses.index.get_indexer(buses_i)
+    no_substation_i = n.buses.index.difference(substation_i)
+    bus_indexer = n.buses.index.get_indexer(substation_i)
     dist = pd.DataFrame(
-        dijkstra(adj, directed=False, indices=bus_indexer), buses_i, n.buses.index
-    )
+        dijkstra(adj, directed=False, indices=bus_indexer), substation_i, n.buses.index
+    )[no_substation_i]
 
-    dist[buses_i] = (
-        np.inf
-    )  # bus in buses_i should not be assigned to different bus in buses_i
-
-    for c in n.buses.country.unique():
-        incountry_b = n.buses.country == c
-        dist.loc[incountry_b, ~incountry_b] = np.inf
+    country_values = n.buses.country.values
+    country_mask = pd.DataFrame(
+        country_values[:, np.newaxis] == country_values,
+        index=n.buses.index,
+        columns=n.buses.index,
+    )[no_substation_i]
 
     busmap = n.buses.index.to_series()
-    busmap.loc[buses_i] = dist.idxmin(1)
+    busmap.loc[no_substation_i] = dist.where(country_mask, np.inf).idxmin(0)
 
     line_strategies = aggregation_strategies.get("lines", dict())
 
@@ -443,7 +444,9 @@ if __name__ == "__main__":
 
     if params.simplify_network["remove_stubs"]:
         if params.mode == "administrative":
-            n, stub_map = remove_stubs_within_admin(n, snakemake.input.admin_shapes)
+            n, stub_map = remove_stubs_within_admin(
+                n, params.simplify_network, snakemake.input.admin_shapes
+            )
             busmaps.append(stub_map)
         else:
             n, stub_map = remove_stubs(n, params.simplify_network)

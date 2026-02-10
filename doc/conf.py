@@ -39,6 +39,7 @@ def setup(app):
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 sys.path.insert(0, os.path.abspath("../scripts"))
+sys.path.insert(0, os.path.abspath(".."))
 
 # -- General configuration ------------------------------------------------
 
@@ -63,6 +64,8 @@ extensions = [
     #'sphinxcontrib.tikz',
     #'rinoh.frontend.sphinx',
     "sphinx.ext.imgconverter",  # for SVG conversion
+    "sphinx-jsonschema",
+    "sphinx_design",
 ]
 
 autodoc_mock_imports = [
@@ -99,15 +102,15 @@ master_doc = "index"
 
 # General information about the project.
 project = "PyPSA-Eur"
-copyright = "2017-2025 Tom Brown (KIT, TUB, FIAS), Jonas Hoersch (KIT, FIAS), Fabian Hofmann (TUB, FIAS), Fabian Neumann (TUB, KIT), Marta Victoria (Aarhus University), Lisa Zeyen (KIT, TUB)"
-author = "Tom Brown (KIT, TUB, FIAS), Jonas Hoersch (KIT, FIAS), Fabian Hofmann (TUB, FIAS), Fabian Neumann (TUB, KIT), Marta Victoria (Aarhus University), Lisa Zeyen (KIT, TUB)"
+copyright = "PyPSA-Eur Contributors"
+author = "PyPSA-Eur Contributors"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
 # built documents.
 #
 # The short X.Y version.
-version = "v2025.04.0"
+version = "v2025.07.0"
 # The full version, including alpha/beta/rc tags.
 release = version + ""
 
@@ -184,7 +187,7 @@ html_short_title = "PyPSA-Eur"
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-html_logo = "img/pypsa-logo.png"
+html_logo = "img/logo.svg"
 
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32

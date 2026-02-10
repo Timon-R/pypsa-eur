@@ -10,10 +10,10 @@ import logging
 import numpy as np
 import pandas as pd
 import pypsa
-from pypsa.descriptors import expand_series
 from six import iterkeys
 
 from scripts._helpers import (
+    PYPSA_V1,
     configure_logging,
     sanitize_custom_columns,
     set_scenario_config,
@@ -22,7 +22,22 @@ from scripts._helpers import (
 from scripts.add_electricity import sanitize_carriers
 from scripts.add_existing_baseyear import add_build_year_to_new_assets
 
+# Allow for PyPSA versions <0.35
+if PYPSA_V1:
+    from pypsa.common import expand_series
+else:
+    from pypsa.descriptors import expand_series
+
 logger = logging.getLogger(__name__)
+
+logger.warning(
+    "Running perfect foresight is not properly tested and may not work as expected. "
+    "Use at your own risk!"
+)
+
+if PYPSA_V1:
+    msg = "PyPSA versions >=1.0 are not supported for perfect foresight."
+    raise UserWarning(msg)
 
 
 # helper functions ---------------------------------------------------
@@ -397,7 +412,7 @@ def set_carbon_constraints(
     pypsa.Network
         Network with carbon constraints added
     """
-    if co2_budget and isinstance(co2_budget, float):
+    if co2_budget is not None and isinstance(co2_budget, float):
         budget = co2_budget * 1e9  # convert to t CO2
 
         logger.info(f"add carbon budget of {budget}")
