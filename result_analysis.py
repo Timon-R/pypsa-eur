@@ -361,6 +361,7 @@ def get_data(
     calculate_share=True,
     optional_columns = None,
     round_digits = 1,
+    convert_fields=None
 ):
     """
     Aggregate data and optionally calculate the share of each unique data name of the overall sum.
@@ -419,6 +420,14 @@ def get_data(
             if filter_positive is None:
                 data = data
             elif filter_positive:
+                #make all convert fields absolute values before deleting all non negatives
+                if convert_fields is not None:
+                    for field in convert_fields:
+                        # Check if any rows contain the field in the data_name_column
+                        mask = data[data_name_column].str.contains(field, case=False, na=False)
+                        if mask.any():
+                            # Convert the value_column to absolute values for matching rows
+                            data.loc[mask, value_column] = abs(data.loc[mask, value_column])
                 data = data[data[value_column] > 0]
             else:
                 data = data[data[value_column] < 0]
@@ -486,6 +495,287 @@ def get_data(
                     result_data[key] = new_row
 
     return result_data
+
+
+# -----------------------------
+# NEW FUNCTION: get_final_bioenergy_supply
+# -----------------------------
+def get_final_bioenergy_supply(
+    results,
+    scenarios,
+    year="2050",
+    include_electricity=True,
+    include_waste=False,
+    waste_biogenic_share=1,
+    allocate_hybrids=True,
+    aggregate=True,
+    round_digits=1,
+):
+    """
+    Calculate *final energy supply from bioenergy* (delivered energy basis), with
+    an **optional** inclusion of municipal solid waste (MSW) based CHP scaled by
+    a user-defined **biogenic share**.
+
+    What is counted:
+    - Positive output flows from **bio-derived conversion links** to **final-energy buses**
+      (including **bio-hydrogen**) (fuels and end-use heat). Electricity from biomass CHP can be optionally
+      included.
+    - If `include_waste` is True, MSW CHP outputs are included and scaled by
+      `waste_biogenic_share` (e.g. 0.5 → 50% biogenic).
+    - **Hybrid attribution (optional):** when `allocate_hybrids` is True, outputs from hybrid links (currently: "electrobiofuels") are attributed to biomass proportionally to energy inputs (solid biomass vs H2). CO2 streams are ignored as they carry no energy.
+
+    Avoids double counting by summing **only the final buses reached by the bio/waste links**
+    (e.g. oil/gas/methanol/heat), not intermediate carriers.
+
+    Parameters
+    ----------
+    results : dict
+        Output of `load_results()`.
+    scenarios : list[str]
+        Scenario folder names to include.
+    year : str, optional
+        Year filter passed to `get_data` (default "2050").
+    include_electricity : bool, optional
+        If True, include electricity from solid-biomass CHP (and waste CHP if enabled).
+        Default False.
+    include_waste : bool, optional
+        If True, include *biogenic share* of waste CHP outputs.
+    waste_biogenic_share : float, optional
+        Fraction (0–1) of MSW assumed **biogenic**. Applied to heat/electricity
+        from `waste CHP`/`waste CHP CC`. Default 0.5.
+    aggregate : bool, optional
+        If True, return aggregated categories (bio-liquids, bio-methane,
+        bio-methanol, bio-heat industry, bio-heat buildings, optional
+        bio-electricity, optional waste-heat buildings, waste-electricity).
+        If False, return each contributing link as its own row. Default True.
+    round_digits : int, optional
+        Rounding for values. Default 1.
+
+    Returns
+    -------
+    dict
+        Dictionary keyed like other extractors, with fields
+        {folder, year, data_name, values, (optional share)}.
+    """
+    # -----------------------------
+    # Define BIO routes (final outputs only)
+    # -----------------------------
+    bio_fields = [
+        # Bio-liquids (oil products)
+        ["Link", "biomass to liquid", "oil"],
+        ["Link", "biomass to liquid CC", "oil"],
+        ["Link", "electrobiofuels", "oil"],        
+        # Bio-hydrogen (direct biomass → H2)
+        ["Link", "solid biomass to hydrogen", "H2"],
+        # Bio-methanol (as an energy carrier to end-uses)
+        ["Link", "biomass-to-methanol", "methanol"],
+        ["Link", "biomass-to-methanol CC", "methanol"],
+        # Bio-methane (gas delivered to end-uses)
+        ["Link", "biogas to gas", "gas"],
+        ["Link", "biogas to gas CC", "gas"],
+        ["Link", "BioSNG", "gas"],
+        ["Link", "BioSNG CC", "gas"],
+        # Direct bioheat for industry (final heat vectors)
+        ["Link", "solid biomass for mediumT industry", "mediumT industry"],
+        ["Link", "solid biomass for mediumT industry CC", "mediumT industry"],
+        ["Link", "lowT industry solid biomass", "lowT industry"],
+        ["Link", "lowT industry solid biomass CC", "lowT industry"],
+        # Naming variants seen in some runs
+        ["Link", "solid biomass for lowT industry", "lowT industry"],
+        ["Link", "solid biomass for lowT industry CC", "lowT industry"],
+        ["Link", "solid biomass for industry", "mediumT industry"],
+        ["Link", "solid biomass for industry CC", "mediumT industry"],
+        ["Link", "solid biomass for industry", "highT industry"],
+        ["Link", "solid biomass for industry CC", "highT industry"],
+        # Direct bioheat for buildings/districts
+        ["Link", "rural biomass boiler", "rural heat"],
+        ["Link", "urban decentral biomass boiler", "urban decentral heat"],
+        ["Link", "urban central biomass boiler", "urban central heat"],
+        ["Link", "urban central solid biomass CHP", "urban central heat"],
+        ["Link", "urban central solid biomass CHP CC", "urban central heat"],
+    ]
+
+    # Optionally add bio-electricity from solid-biomass CHP / bioliquids
+    bio_elec_fields = []
+    if include_electricity:
+        bio_elec_fields = [
+            ["Link", "urban central solid biomass CHP", "AC"],
+            ["Link", "urban central solid biomass CHP CC", "AC"],
+            ["Generator", "bioliquids", "AC"],  # if present in some runs
+        ]
+
+    # Aggregation (categories) for BIO
+    bio_merge = []
+    if aggregate:
+        bio_merge = [
+            [["biomass to liquid", "biomass to liquid CC", "electrobiofuels"], "bio-liquids"],
+            [["biogas to gas", "biogas to gas CC", "BioSNG", "BioSNG CC"], "bio-methane"],
+            [["biomass-to-methanol", "biomass-to-methanol CC"], "bio-methanol"],
+            [[
+                "solid biomass for mediumT industry",
+                "solid biomass for mediumT industry CC",
+                "lowT industry solid biomass",
+                "lowT industry solid biomass CC",
+                "solid biomass for lowT industry",
+                "solid biomass for lowT industry CC",
+                "solid biomass for industry",
+                "solid biomass for industry CC",
+            ], "bio-heat industry"],
+            [[
+                "rural biomass boiler",
+                "urban decentral biomass boiler",
+                "urban central biomass boiler",
+                "urban central solid biomass CHP",
+                "urban central solid biomass CHP CC",
+            ], "bio-heat buildings"],
+            [["solid biomass to hydrogen"], "bio-hydrogen"],
+        ]
+        if include_electricity:
+            bio_merge.append([["urban central solid biomass CHP", "urban central solid biomass CHP CC", "bioliquids"], "bio-electricity"])
+
+    # Extract BIO (no shares yet — we'll recompute after optional waste scaling)
+    bio = get_data(
+        results,
+        scenarios,
+        "energy_balance",
+        bio_fields + bio_elec_fields,
+        bio_merge,
+        "D",
+        "B",
+        year,
+        filter_positive=True,
+        remove_list=["biomass transport"],
+        calculate_share=False,
+        round_digits=round_digits,
+    )
+
+    # -----------------------------
+    # Hybrid attribution: split electrobiofuels by biomass vs H2 energy input
+    # -----------------------------
+    if allocate_hybrids:
+        # Get inputs (negative flows) for electrobiofuels: H2 and solid biomass
+        eb_in_h2 = get_data(
+            results, scenarios, "energy_balance",
+            [["Link", "electrobiofuels", "H2"]], [], "D", "B", year,
+            filter_positive=False, calculate_share=False, round_digits=round_digits,
+        )
+        eb_in_bio = get_data(
+            results, scenarios, "energy_balance",
+            [["Link", "electrobiofuels", "solid biomass"]], [], "D", "B", year,
+            filter_positive=False, calculate_share=False, round_digits=round_digits,
+        )
+        # Get output (positive flow) to oil
+        eb_oil = get_data(
+            results, scenarios, "energy_balance",
+            [["Link", "electrobiofuels", "oil"]], [], "D", "B", year,
+            filter_positive=True, calculate_share=False, round_digits=round_digits,
+        )
+
+        # Build folder-wise biomass shares and adjust
+        folders = set([c["folder"] for c in eb_oil.values()]) if eb_oil else set()
+        for f in folders:
+            h2_in = abs(next((v["values"] for v in eb_in_h2.values() if v["folder"] == f), 0.0))
+            bio_in = abs(next((v["values"] for v in eb_in_bio.values() if v["folder"] == f), 0.0))
+            denom = h2_in + bio_in
+            bio_share = (bio_in / denom) if denom > 0 else 1.0
+
+            oil_out = next((v["values"] for v in eb_oil.values() if v["folder"] == f), 0.0)
+            biomass_attributed_oil = round(oil_out * bio_share, round_digits)
+            non_bio_part = round(oil_out - biomass_attributed_oil, round_digits)
+
+            if aggregate:
+                # Reduce the aggregated bio-liquids bucket by the non-biomass share
+                # Find the entry for this folder
+                for k, r in bio.items():
+                    if r["folder"] == f and r["data_name"] == "bio-liquids":
+                        r["values"] = round(r["values"] - non_bio_part, round_digits)
+                        bio[k] = r
+                        break
+            else:
+                # Directly set the electrobiofuels→oil row to the biomass-attributed amount
+                for k, r in bio.items():
+                    if r["folder"] == f and r["data_name"] == "electrobiofuels":
+                        r["values"] = biomass_attributed_oil
+                        bio[k] = r
+                        break
+
+    # -----------------------------
+    # Define WASTE routes (optional) and extract
+    # -----------------------------
+    waste = {}
+    if include_waste:
+        waste_heat_fields = [
+            ["Link", "waste CHP", "urban central heat"],
+            ["Link", "waste CHP CC", "urban central heat"],
+        ]
+        waste_elec_fields = []
+        if include_electricity:
+            waste_elec_fields = [
+                ["Link", "waste CHP", "AC"],
+                ["Link", "waste CHP CC", "AC"],
+            ]
+
+        waste_merge = []
+        if aggregate:
+            # Keep waste heat separate from bio-heat to avoid mixing categories
+            waste_merge = [
+                [["waste CHP", "waste CHP CC"], "waste-heat buildings"],
+            ]
+            if include_electricity:
+                # electricity is a separate category
+                waste_merge.append([["waste CHP", "waste CHP CC"], "waste-electricity"])
+
+        # Get waste HEAT (and optional ELEC) first, then scale by biogenic share
+        waste = get_data(
+            results,
+            scenarios,
+            "energy_balance",
+            waste_heat_fields + waste_elec_fields,
+            waste_merge,
+            "D",
+            "B",
+            year,
+            filter_positive=True,
+            calculate_share=False,
+            round_digits=round_digits,
+        )
+
+        # Scale waste outputs by the biogenic share BEFORE combining and computing shares
+        for key, content in list(waste.items()):
+            content["values"] = round(content["values"] * waste_biogenic_share, round_digits)
+            waste[key] = content
+
+    # -----------------------------
+    # Combine and compute shares across all included categories
+    # -----------------------------
+    combined = {}
+    combined.update(bio)
+    combined.update(waste)
+
+    # Compute per-folder shares now (uses the helper already present in this file)
+    combined = calculate_share(combined) if aggregate else combined
+
+    # Append a total per folder entry
+    totals = {}
+    for key, content in combined.items():
+        folder = content["folder"]
+        totals.setdefault(folder, 0)
+        totals[folder] += content["values"]
+
+    for folder, total in totals.items():
+        total_key = f"{folder}_{year}_bioenergy_final_supply_total"
+        total_row = {
+            "folder": folder,
+            "year": year,
+            "data_name": "bioenergy final supply (total)",
+            "values": round(total, round_digits),
+        }
+        # If shares exist, set to 1.0 for the total rows
+        if any("share" in v for v in combined.values()):
+            total_row["share"] = 1.0
+        combined[total_key] = total_row
+
+    return combined
 
 
 def add_costs(data, shadow_prices):
@@ -1378,14 +1668,14 @@ def main(results_dir="results", export_dir="export",scenarios=["default", "carbo
     fields_list = [
         ["Generator", "", "bioliquids"],
         ["Generator", "", "AC"],
-        ["Link", "waste", "AC"],
+        ["Link", "waste CHP", "non-sequestered HVC"],
+        ["Link", "waste CHP CC", "non-sequestered HVC"],
         ["StorageUnit", "hydro", "AC"],
         ["Generator", "", "biogas"],
         ["Link", "", "biogas"],
         ["Generator", "", "coal"],
         ["Generator", "", "gas"],
         ["Generator", "solar rooftop", "low voltage"],
-        ["Generator", "", "waste"],
         ["Generator", "", "oil primary"],
         ["Link", "", "solid biomass"],
         ["Generator", "", "solid biomass"],
@@ -1411,8 +1701,9 @@ def main(results_dir="results", export_dir="export",scenarios=["default", "carbo
         [["onwind","offwind-ac","offwind-dc","offwind-float"], "wind"],
         [["solar","solar-hsat","solar rooftop"], "solar"],
         [["hydro", "ror"], "hydro"],
+        [["waste CHP","waste CHP CC"], "municipal waste"],
     ]
-    remove_list = ["biomass transport", "waste CHP"]
+    remove_list = ["biomass transport"]
     primary_energy = get_data(
         results,
         scenarios,
@@ -1424,6 +1715,7 @@ def main(results_dir="results", export_dir="export",scenarios=["default", "carbo
         "2050",
         filter_positive=True,
         remove_list=remove_list,
+        convert_fields=["waste CHP","waste CHP CC"],
     )
     export_results(primary_energy, "primary_energy.csv", include_share=True, export_dir=export_dir)
 
@@ -1562,6 +1854,16 @@ def main(results_dir="results", export_dir="export",scenarios=["default", "carbo
         remove_list=["pipeline"],
     )
     export_results(hydrogen_production, "hydrogen_production.csv", export_dir=export_dir)
+
+    # Final energy *supply* from bioenergy (delivered energy basis)
+    final_bioenergy = get_final_bioenergy_supply(
+        results,
+        scenarios,
+        year="2050",
+        include_electricity=True, 
+        aggregate=True,
+    )
+    export_results(final_bioenergy, "final_bioenergy_supply.csv", include_share=True, export_dir=export_dir)
 
     heat_pumps = get_data(
         results,
@@ -1905,6 +2207,20 @@ def main(results_dir="results", export_dir="export",scenarios=["default", "carbo
     )
     export_results(beccs, "beccs.csv", export_dir=export_dir)
 
+    capacities = get_data(
+        results,
+        scenarios,
+        "capacities",
+        ["",""],
+        [],
+        "C",
+        "B",
+        "2050",
+        filter_positive=None,
+        remove_list=["solar-hsat landuse emission","solar landuse emission","onwind landuse emission"]
+    )
+    export_results(capacities, "capacities.csv", export_dir=export_dir)
+
     # fields_list = [
     #     ["Link", "", "highT industry"],
     #     ["Link", "", "mediumT industry"],
@@ -2228,11 +2544,11 @@ if __name__ == "__main__":
     # scenarios = ["default_optimal", "optimal"]
     # export_dir = "export/basic"
 
-    #main(results_dir=results_dir, export_dir=export_dir, scenarios=scenarios, difference_scenarios=difference_scenarios)
+    main(results_dir=results_dir, export_dir=export_dir, scenarios=scenarios, difference_scenarios=difference_scenarios)
 
     #get_biomass_potentials(export_dir=export_dir)
 
-    get_mga_results(results_dir="results/MGA", export_dir="export/mga")
+    #get_mga_results(results_dir="results/MGA", export_dir="export/mga")
 
 
     # results = load_results("results/GSA", "all")

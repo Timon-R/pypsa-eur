@@ -1333,12 +1333,29 @@ def plot_costs_vs_prices_combined(df, usage_dict_default, usage_dict_carbon_cost
         biomass: palette[i % len(palette)] for i, biomass in enumerate(biomass_types)
     }
     
-    # Create figure with two subplots side by side with optimized spacing
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(fig_width, fig_height/1.2))
-    plt.subplots_adjust(wspace=0.2)  # Optimal space between subplots
+    # Calculate dimensions to fit legend within the specified figure size
+    # Reserve space for legend (approximately 20% of width)
+    legend_width_fraction = 0.22
+    plots_width_fraction = 1 - legend_width_fraction
+    
+    # Create figure with exact specified dimensions
+    fig = plt.figure(figsize=(fig_width, fig_height))
+    
+    # Calculate subplot positions to fit within the figure
+    # Leave space for title at top and margins
+    left_margin = 0.08
+    bottom_margin = 0.12
+    top_margin = 0.15  # Space for title
+    subplot_height = 1 - top_margin - bottom_margin
+    subplot_width = (plots_width_fraction - left_margin) / 2
+    spacing_between_plots = 0.02
+    
+    # Create subplots with precise positioning
+    ax1 = fig.add_axes([left_margin, bottom_margin, subplot_width, subplot_height])
+    ax2 = fig.add_axes([left_margin + subplot_width + spacing_between_plots, bottom_margin, subplot_width, subplot_height])
     
     # Add main title to the figure
-    fig.suptitle("Weighted Feedstock Prices vs. Costs", fontsize=title_fontsize, y=0.88)
+    fig.suptitle("Weighted Feedstock Prices vs. Costs", fontsize=title_fontsize, y=0.92)
     
     scenarios = ["Default", "Carbon Stock Changes"]
     usage_dicts = [usage_dict_default, usage_dict_carbon_costs]
@@ -1424,7 +1441,7 @@ def plot_costs_vs_prices_combined(df, usage_dict_default, usage_dict_carbon_cost
                                 [],
                                 marker="o",
                                 linestyle="None",
-                                markersize=10,
+                                markersize=8,  # Slightly smaller for better fit
                                 markerfacecolor=color,
                                 markeredgecolor=color,
                                 label=new_names_dict[biomass],
@@ -1436,7 +1453,7 @@ def plot_costs_vs_prices_combined(df, usage_dict_default, usage_dict_carbon_cost
         ax.set_ylim(0, max_limit)
         ax.set_xlabel("Costs in Euro/MWh", fontsize=fontsize)
         
-        # Only add y-label and y-ticks to the left plot
+        # Only add y-label to the left plot
         if ax == ax1:  # Left plot
             ax.set_ylabel("Prices in EUR/MWh", fontsize=fontsize)
         else:  # Right plot
@@ -1444,26 +1461,33 @@ def plot_costs_vs_prices_combined(df, usage_dict_default, usage_dict_carbon_cost
             ax.set_yticklabels([])  # No y-tick labels
             
         # Set subplot titles (scenarios)
-        ax.set_title(f"{scenario}", fontsize=title_fontsize, loc="center")
+        ax.set_title(f"{scenario}", fontsize=fontsize, loc="center", pad=10)
         ax.grid(True)
         ax.tick_params(axis='both', which='major', labelsize=fontsize)
     
-    # Add shared legend positioned to minimize space waste
+    # Add shared legend positioned within the figure boundaries
     by_label = {handle.get_label(): handle for handle in legend_handles}
+    
+    # Position legend in the reserved space on the right
+    legend_x = left_margin + 2.1 * subplot_width + spacing_between_plots + 0.02
+    legend_y = 0.5
+    
     fig.legend(
         by_label.values(),
         by_label.keys(),
         title="Biomass Types",
-        loc="center left",
-        bbox_to_anchor=(0.9, 0.5),  # Position legend closer to the plots
+        loc="center",
+        bbox_to_anchor=(legend_x, legend_y),
+        bbox_transform=fig.transFigure,
         borderaxespad=0,
-        fontsize=fontsize,
-        title_fontsize=fontsize,
+        fontsize=fontsize * 0.8,  # Slightly smaller font for legend to fit better
+        title_fontsize=fontsize * 0.85,
+        frameon=True,
+        fancybox=False,
+        shadow=False,
+        facecolor='white',  # Solid white background
+        framealpha=0.95,     # Make background less transparent (90% opaque)
     )
-    
-    # Adjust layout for minimal space waste
-    plt.tight_layout()
-    plt.subplots_adjust(right=0.88, top=0.82)  # Minimize both right margin and top spacing
     
     # Save the plot
     file_path = f"prices_costs_combined.{file_type}"
@@ -1473,7 +1497,8 @@ def plot_costs_vs_prices_combined(df, usage_dict_default, usage_dict_carbon_cost
     if file_path.endswith(".pgf"):
         configure_for_pgf()
     
-    plt.savefig(file_path, bbox_inches="tight", pad_inches=0.3, dpi=300)
+    # Save with exact dimensions - no bbox_inches to avoid changing size
+    plt.savefig(file_path, dpi=300)
     plt.close()
     
     print(f"Combined costs vs prices plot saved to {file_path}")
@@ -3588,6 +3613,9 @@ def plot_technology_barplot_with_errorbars(
     """
     os.makedirs(export_dir, exist_ok=True)
 
+    # Set font size to match other plots
+    plt.rcParams.update({"font.size": fontsize})
+
     # --- prepare data -------------------------------------------------------
     df = data.query("Year == 2050").copy()
     df["Values"] /= 1e6  # → TWh
@@ -4165,8 +4193,8 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
         file_type="png",
         capacity_factors=capacity_factors,
         variant_plot=True,
-        fig_width=fig_width,
-        fig_height=fig_height,
+        fig_width=12,
+        fig_height=7,
         fontsize=fontsize,
         title_fontsize=title_fontsize,
     )
@@ -4179,8 +4207,8 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
         file_type="png",
         capacity_factors=capacity_factors,
         variant_plot=True,
-        fig_width=fig_width,
-        fig_height=fig_height,
+        fig_width=12,
+        fig_height=7,
         fontsize=fontsize,
         title_fontsize=title_fontsize,
     )
@@ -4314,8 +4342,8 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
         usage_dict_carbon_costs=usage_dict_carbon_costs,
         export_dir=export_path,
         file_type=file_type,
-        fig_width=fig_width,
-        fig_height=fig_height,
+        fig_width=12,
+        fig_height=7,
         fontsize=fontsize,
         title_fontsize=title_fontsize,
     )
@@ -4538,18 +4566,18 @@ if __name__ == "__main__":
     data_folder = "export/main"
     
     # Configure plot dimensions and font sizes
-    fig_width = 12  # Change this to adjust all plot widths
-    fig_height = 8  # Change this to adjust all plot heights
-    fontsize = 14   # Change this to adjust general font size
-    title_fontsize = 18  # Change this to adjust title font size
+    fig_width = 10  # Change this to adjust all plot widths (10)
+    fig_height = 6  # Change this to adjust all plot heights (6)
+    fontsize = 14   # Change this to adjust general font size (14)
+    title_fontsize = 18  # Change this to adjust title font size (18)
 
-    #specific_plots(fig_width=fig_width, fig_height=fig_height, fontsize=fontsize, title_fontsize=title_fontsize)
+    specific_plots(fig_width=fig_width, fig_height=fig_height, fontsize=fontsize, title_fontsize=title_fontsize)
     #main(custom_order=custom_order, file_type=file_type, export_dir=export_dir, data_folder=data_folder, 
     #     fig_width=fig_width, fig_height=fig_height, fontsize=fontsize, title_fontsize=title_fontsize)
     # plot_efs(export_dir=export_dir)
     #plot_efs_for_presentation(export_dir=export_dir, file_type=file_type)
 
-    mga_plots(include_fossils=True, fossil_breakdown=True, fig_width=fig_width, fig_height=fig_height, fontsize=fontsize, title_fontsize=title_fontsize)
+    mga_plots(include_fossils=False, fossil_breakdown=False, fig_width=fig_width, fig_height=fig_height, fontsize=fontsize, title_fontsize=title_fontsize)
 
     #SA_plots(fig_width=fig_width, fig_height=fig_height, fontsize=fontsize, title_fontsize=title_fontsize)
 
