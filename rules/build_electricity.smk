@@ -590,25 +590,48 @@ rule build_hac_features:
         scripts("build_hac_features.py")
 
 
-rule process_cost_data:
-    params:
-        costs=config_provider("costs"),
-        max_hours=config_provider("electricity", "max_hours"),
-    input:
-        network=resources("networks/base_s.nc"),
-        costs=rules.retrieve_cost_data.output["costs"],
-        custom_costs=config_provider("costs", "custom_cost_fn"),
-    output:
-        resources("costs_{planning_horizons}_processed.csv"),
-    log:
-        logs("build_cost_data_{planning_horizons}.log"),
-    benchmark:
-        benchmarks("build_cost_data_{planning_horizons}")
-    threads: 1
-    resources:
-        mem_mb=4000,
-    script:
-        scripts("process_cost_data.py")
+if config["foresight"] == "overnight":
+    COST_YEAR = config["costs"]["year"]
+
+    rule process_cost_data:
+        params:
+            costs=config_provider("costs"),
+            max_hours=config_provider("electricity", "max_hours"),
+        input:
+            network=resources("networks/base_s.nc"),
+            costs=rules.retrieve_cost_data.output["costs"],
+            custom_costs=config_provider("costs", "custom_cost_fn"),
+        output:
+            resources(f"costs_{COST_YEAR}_processed.csv"),
+        log:
+            logs(f"build_cost_data_{COST_YEAR}.log"),
+        benchmark:
+            benchmarks(f"build_cost_data_{COST_YEAR}")
+        threads: 1
+        resources:
+            mem_mb=4000,
+        script:
+            scripts("process_cost_data.py")
+else:
+    rule process_cost_data:
+        params:
+            costs=config_provider("costs"),
+            max_hours=config_provider("electricity", "max_hours"),
+        input:
+            network=resources("networks/base_s.nc"),
+            costs=rules.retrieve_cost_data.output["costs"],
+            custom_costs=config_provider("costs", "custom_cost_fn"),
+        output:
+            resources("costs_{planning_horizons}_processed.csv"),
+        log:
+            logs("build_cost_data_{planning_horizons}.log"),
+        benchmark:
+            benchmarks("build_cost_data_{planning_horizons}")
+        threads: 1
+        resources:
+            mem_mb=4000,
+        script:
+            scripts("process_cost_data.py")
 
 
 rule simplify_network:

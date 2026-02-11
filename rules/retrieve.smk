@@ -429,15 +429,28 @@ if (COSTS_DATASET := dataset_version("costs"))["source"] in [
     "primary",
 ]:
 
-    rule retrieve_cost_data:
-        message:
-            "Retrieving cost data for {wildcards.planning_horizons}"
-        input:
-            costs=storage(COSTS_DATASET["url"] + "/costs_{planning_horizons}.csv"),
-        output:
-            costs=COSTS_DATASET["folder"] + "/costs_{planning_horizons}.csv",
-        run:
-            copy2(input["costs"], output["costs"])
+    if config["foresight"] == "overnight":
+        COST_YEAR = config["costs"]["year"]
+
+        rule retrieve_cost_data:
+            message:
+                f"Retrieving cost data for {COST_YEAR}"
+            input:
+                costs=storage(COSTS_DATASET["url"] + f"/costs_{COST_YEAR}.csv"),
+            output:
+                costs=COSTS_DATASET["folder"] + f"/costs_{COST_YEAR}.csv",
+            run:
+                copy2(input["costs"], output["costs"])
+    else:
+        rule retrieve_cost_data:
+            message:
+                "Retrieving cost data for {wildcards.planning_horizons}"
+            input:
+                costs=storage(COSTS_DATASET["url"] + "/costs_{planning_horizons}.csv"),
+            output:
+                costs=COSTS_DATASET["folder"] + "/costs_{planning_horizons}.csv",
+            run:
+                copy2(input["costs"], output["costs"])
 
 
 if (POWERPLANTS_DATASET := dataset_version("powerplants"))["source"] in [

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-# snakemake -call all --configfile config/config.yaml --rerun-incomplete --cores 8 --use-conda or use 10 cores maybe
+# snakemake --configfile config/config.yaml --rerun-incomplete --cores 8 --use-conda or use 10 cores maybe
 # --rerun-triggers mtime
 # conda config --set channel_priority strict
 
@@ -96,25 +96,15 @@ if config["foresight"] == "perfect":
 
 
 rule all:
-    default_target: True
     input:
         expand(RESULTS + "graphs/costs.svg", run=config["run"]["name"]),
         expand(resources("maps/power-network.pdf"), run=config["run"]["name"]),
         expand(
-            RESULTS + "csvs/{name}.csv",
+            resources("maps/power-network-s-{clusters}.pdf"),
             run=config["run"]["name"],
             **config["scenario"],
-            name=[
-                "costs", "capacities", "energy", "energy_balance",
-                "capacity_factors", "metrics", "curtailment",
-                "prices", "weighted_prices", "market_values",
-                "nodal_costs", "nodal_capacities",
-                "nodal_energy_balance", "nodal_capacity_factors",
-                "cumulative_costs",
-            ],
         ),
         expand(
-            RESULTS + "csvs/custom_metrics.csv",
             RESULTS
             + "maps/static/base_s_{clusters}_{opts}_{sector_opts}-costs-all_{planning_horizons}.pdf",
             run=config["run"]["name"],
@@ -126,73 +116,11 @@ rule all:
             run=config["run"]["name"],
             **config["scenario"],
         ),
-
-    #     expand(RESULTS + "graphs/costs.svg", run=config["run"]["name"]),
-    #     expand(
-    #         resources("maps/power-network-s-{clusters}.pdf"),
-    #         run=config["run"]["name"],
-    #         **config["scenario"],
-    #     ),
-    #     expand(
-    #         RESULTS
-    #         + "maps/base_s_{clusters}_{opts}_{sector_opts}-costs-all_{planning_horizons}.pdf",
-    #         run=config["run"]["name"],
-    #         **config["scenario"],
-    #     ),
-    #     lambda w: expand(
-    #         (
-    #             RESULTS
-    #             + "maps/base_s_{clusters}_{opts}_{sector_opts}-h2_network_{planning_horizons}.pdf"
-    #             if config_provider("sector", "H2_network")(w)
-    #             else []
-    #         ),
-    #         run=config["run"]["name"],
-    #         **config["scenario"],
-    #     ),
-    #     lambda w: expand(
-    #         (
-    #             RESULTS
-    #             + "maps/base_s_{clusters}_{opts}_{sector_opts}-ch4_network_{planning_horizons}.pdf"
-    #             if config_provider("sector", "gas_network")(w)
-    #             else []
-    #         ),
-    #         run=config["run"]["name"],
-    #         **config["scenario"],
-    #     ),
-    #     lambda w: expand(
-    #         (
-    #             RESULTS + "csvs/cumulative_costs.csv"
-    #             if config_provider("foresight")(w) == "myopic"
-    #             else []
-    #         ),
-    #         run=config["run"]["name"],
-    #     ),
-    #     lambda w: expand(
-    #         (
-    #             RESULTS
-    #             + "maps/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}-balance_map_{carrier}.pdf"
-    #         ),
-    #         **config["scenario"],
-    #         run=config["run"]["name"],
-    #         carrier=config_provider("plotting", "balance_map", "bus_carriers")(w),
-    #     ),
-    #     directory(
-    #         expand(
-    #             RESULTS
-    #             + "graphics/balance_timeseries/s_{clusters}_{opts}_{sector_opts}_{planning_horizons}",
-    #             run=config["run"]["name"],
-    #             **config["scenario"],
-    #         ),
-    #     ),
-    #     directory(
-    #         expand(
-    #             RESULTS
-    #             + "graphics/heatmap_timeseries/s_{clusters}_{opts}_{sector_opts}_{planning_horizons}",
-    #             run=config["run"]["name"],
-    #             **config["scenario"],
-    #         ),
-    #     ),
-    # default_target: True
+        expand(
+            RESULTS + "csvs/custom_metrics.csv",
+            run=config["run"]["name"],
+            **config["scenario"],
+        ),
         lambda w: expand(
             (
                 RESULTS
@@ -305,7 +233,6 @@ rule all:
         lambda w: balance_map_paths("interactive", w),
     default_target: True
 
-
 rule create_scenarios:
     output:
         config["run"]["scenarios"]["file"],
@@ -334,7 +261,6 @@ rule purge:
                 (Path(dir_path) / ".gitkeep").touch()
 
             rmtree("doc/_build", ignore_errors=True)
-            rmtree("GSA/", ignore_errors=True)
             print(
                 "Purging all generated resources, results and docs. Downloads are kept."
             )
