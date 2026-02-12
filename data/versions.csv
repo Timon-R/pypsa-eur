@@ -1,4 +1,5 @@
 dataset,version,source,tags,added,note,url
+costs,Timon_08,primary,supported,2026-01-21,"Part of the `technologydata` repository and versioned on GitHub, TimonsVersion.",https://raw.githubusercontent.com/Timon-R/technology-data/v0.0.8/outputs
 aquifer_data,v1.2,primary,latest supported,2025-12-02,,https://download.bgr.de/bgr/grundwasser/IHME1500/v12/shp/IHME1500_v12.zip
 aquifer_data,v1.2,archive,latest supported,2026-01-13,,https://data.pypsa.org/workflows/eur/aquifer_data/v1.2/IHME1500_v12.zip
 attributed_ports,2020-07-10,primary,latest supported,2025-12-02,,https://datacatalogfiles.worldbank.org/ddh-published/0038118/1/DR0046414/attributed_ports.geojson

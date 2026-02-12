@@ -21,14 +21,15 @@ remote:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
   prefix: ""
-  name: "test"
+  name: "test_50"
   scenarios:
     enable: false
     file: config/scenarios.yaml
   disable_progressbar: false
   shared_resources:
     policy: 'base'
-    exclude: []
+    exclude: 
+    - costs_
   use_shadow_directory: false
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#foresight
@@ -37,8 +38,8 @@ foresight: overnight
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#scenario
 scenario:
   clusters:
-  - 2
-  #- 50
+  # - 2
+  - 50
   opts:
   - ""
   sector_opts:
@@ -49,39 +50,39 @@ scenario:
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#countries
 countries:
 - AL
-# - AT
-# - BA
-# - BE
-# - BG
-# - CH
-# - CZ
-# - DE
-# - DK
-# - EE
-# - ES
-# - FI
-# - FR
-# - GB
-# - GR
-# - HR
-# - HU
-# - IE
-# - IT
-# - LT
-# - LU
-# - LV
-# - ME
-# - MK
-# - NL
-# - 'NO'
-# - PL
-# - PT
-# - RO
-# - RS
-# - SE
-# - SI
-# - SK
-# - XK
+- AT
+- BA
+- BE
+- BG
+- CH
+- CZ
+- DE
+- DK
+- EE
+- ES
+- FI
+- FR
+- GB
+- GR
+- HR
+- HU
+- IE
+- IT
+- LT
+- LU
+- LV
+- ME
+- MK
+- NL
+- 'NO'
+- PL
+- PT
+- RO
+- RS
+- SE
+- SI
+- SK
+- XK
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#snapshots
 snapshots:
@@ -581,17 +582,17 @@ biomass:
     2045: 1
     2050: 1
   emission_factors: #tCO2/MWh #municipal solid waste is not included in the emission factors
-    agricultural waste: 0
-    fuelwood residues: 0
-    secondary forestry residues: 0
-    sawdust: 0
+    agricultural waste: 0 #######!
+    fuelwood residues: 0.09 #tco2/MWh
+    secondary forestry residues: 0.2772
+    sawdust: 0.1872
     residues from landscape care: 0
-    grasses: 0
-    woody crops: 0
-    fuelwoodRW: 0
-    manure: 0
+    grasses: 0.2016
+    woody crops: 0.1908
+    fuelwoodRW: 0.1872
+    manure: 0 ######!
     sludge: 0
-    C&P_RW: 0
+    C&P_RW: 0.1836
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#solar_thermal
 solar_thermal:
@@ -1013,7 +1014,7 @@ sector:
     enable: true
     price: 54 #EUR/MWh
     max_amount: 1390 # TWh
-    upstream_emissions_factor: .1 #share of solid biomass CO2 emissions at full combustion
+    upstream_emissions_factor: 0.52 #share of solid biomass CO2 emissions at full combustion, equals 0.1908/0.3667 (53 g/MJ; same as woody crops) 
   non-edible_crops: true
   imports:
     enable: false
@@ -1027,9 +1028,9 @@ sector:
       oil: 125
   renewable_emissions:
     enable: false
-    solar: 12.2 #ton/MW, asssuming 10000 m2/MW
-    onwind: 2.44 #ton/MW assuming 2000 m2/MW
-    solar-hsat: 24.4 #ton/MW, assumming 20000 m2/MW, ammoritised over 30 years, carbon storage loss is 1.22 kgCO2/m2/year
+    solar: 1.87 
+    onwind: 2.77 
+    solar-hsat: 0.21 #ton/MW
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#industry
 industry:
@@ -1119,8 +1120,7 @@ industry:
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#costs
 costs:
-  year: 2040
-  version: Timon-R/technology-data/v0.0.8 #v0.12.0
+  year: 2050
   social_discountrate: 0.02
   fill_values:
     FOM: 0
@@ -1455,7 +1455,7 @@ data:
     version: latest
   costs:
     source: primary
-    version: latest
+    version: Timon_08
   country_runoff:
     source: archive
     version: latest
