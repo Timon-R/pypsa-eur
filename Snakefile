@@ -6,6 +6,12 @@
 # --rerun-triggers mtime
 # conda config --set channel_priority strict
 
+# snakemake --configfile config/config.yaml --list-outputs \
+#   | grep '^results/test_50/csvs/.*\\.csv$' > /tmp/csv_targets.txt
+
+# snakemake --configfile config/config.yaml --rerun-incomplete --cores 8 $(cat /tmp/csv_targets.txt)
+
+
 from pathlib import Path
 import yaml
 from os.path import normpath, exists, join
@@ -95,142 +101,153 @@ if config["foresight"] == "perfect":
     include: "rules/solve_perfect.smk"
 
 
+# rule all:
+#     input:
+#         expand(RESULTS + "graphs/costs.svg", run=config["run"]["name"]),
+#         expand(resources("maps/power-network.pdf"), run=config["run"]["name"]),
+#         expand(
+#             resources("maps/power-network-s-{clusters}.pdf"),
+#             run=config["run"]["name"],
+#             **config["scenario"],
+#         ),
+#         expand(
+#             RESULTS
+#             + "maps/static/base_s_{clusters}_{opts}_{sector_opts}-costs-all_{planning_horizons}.pdf",
+#             run=config["run"]["name"],
+#             **config["scenario"],
+#         ),
+#         # COP profiles plots
+#         expand(
+#             RESULTS + "graphs/cop_profiles_s_{clusters}_{planning_horizons}.html",
+#             run=config["run"]["name"],
+#             **config["scenario"],
+#         ),
+#         expand(
+#             RESULTS + "csvs/custom_metrics.csv",
+#             run=config["run"]["name"],
+#             **config["scenario"],
+#         ),
+#         lambda w: expand(
+#             (
+#                 RESULTS
+#                 + "maps/static/base_s_{clusters}_{opts}_{sector_opts}-h2_network_{planning_horizons}.pdf"
+#                 if config_provider("sector", "H2_network")(w)
+#                 else []
+#             ),
+#             run=config["run"]["name"],
+#             **config["scenario"],
+#         ),
+#         lambda w: expand(
+#             (
+#                 RESULTS
+#                 + "maps/static/base_s_{clusters}_{opts}_{sector_opts}-ch4_network_{planning_horizons}.pdf"
+#                 if config_provider("sector", "gas_network")(w)
+#                 else []
+#             ),
+#             run=config["run"]["name"],
+#             **config["scenario"],
+#         ),
+#         lambda w: expand(
+#             (
+#                 RESULTS + "csvs/cumulative_costs.csv"
+#                 if config_provider("foresight")(w) == "myopic"
+#                 else []
+#             ),
+#             run=config["run"]["name"],
+#         ),
+#         expand(
+#             RESULTS
+#             + "graphics/balance_timeseries/s_{clusters}_{opts}_{sector_opts}_{planning_horizons}",
+#             run=config["run"]["name"],
+#             **config["scenario"],
+#         ),
+#         expand(
+#             RESULTS
+#             + "graphics/heatmap_timeseries/s_{clusters}_{opts}_{sector_opts}_{planning_horizons}",
+#             run=config["run"]["name"],
+#             **config["scenario"],
+#         ),
+#         # Explicitly list heat source types for temperature maps
+#         lambda w: expand(
+#             (
+#                 RESULTS
+#                 + "maps/static/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}-heat_source_temperature_map_river_water.html"
+#                 if config_provider("plotting", "enable_heat_source_maps")(w)
+#                 and "river_water"
+#                 in config_provider("sector", "heat_pump_sources", "urban central")(w)
+#                 else []
+#             ),
+#             **config["scenario"],
+#             run=config["run"]["name"],
+#         ),
+#         lambda w: expand(
+#             (
+#                 RESULTS
+#                 + "maps/static/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}-heat_source_temperature_map_sea_water.html"
+#                 if config_provider("plotting", "enable_heat_source_maps")(w)
+#                 and "sea_water"
+#                 in config_provider("sector", "heat_pump_sources", "urban central")(w)
+#                 else []
+#             ),
+#             **config["scenario"],
+#             run=config["run"]["name"],
+#         ),
+#         lambda w: expand(
+#             (
+#                 RESULTS
+#                 + "maps/static/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}-heat_source_temperature_map_ambient_air.html"
+#                 if config_provider("plotting", "enable_heat_source_maps")(w)
+#                 and "air"
+#                 in config_provider("sector", "heat_pump_sources", "urban central")(w)
+#                 else []
+#             ),
+#             **config["scenario"],
+#             run=config["run"]["name"],
+#         ),
+#         # Only river_water has energy maps
+#         lambda w: expand(
+#             (
+#                 RESULTS
+#                 + "maps/static/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}-heat_source_energy_map_river_water.html"
+#                 if config_provider("plotting", "enable_heat_source_maps")(w)
+#                 and "river_water"
+#                 in config_provider("sector", "heat_pump_sources", "urban central")(w)
+#                 else []
+#             ),
+#             **config["scenario"],
+#             run=config["run"]["name"],
+#         ),
+#         expand(
+#             RESULTS
+#             + "graphics/balance_timeseries/s_{clusters}_{opts}_{sector_opts}_{planning_horizons}",
+#             run=config["run"]["name"],
+#             **config["scenario"],
+#         ),
+#         expand(
+#             RESULTS
+#             + "graphics/heatmap_timeseries/s_{clusters}_{opts}_{sector_opts}_{planning_horizons}",
+#             run=config["run"]["name"],
+#             **config["scenario"],
+#         ),
+#         expand(
+#             RESULTS
+#             + "graphics/interactive_bus_balance/s_{clusters}_{opts}_{sector_opts}_{planning_horizons}",
+#             run=config["run"]["name"],
+#             **config["scenario"],
+#         ),
+#         lambda w: balance_map_paths("static", w),
+#         lambda w: balance_map_paths("interactive", w),
+#     default_target: True
+
 rule all:
     input:
-        expand(RESULTS + "graphs/costs.svg", run=config["run"]["name"]),
-        expand(resources("maps/power-network.pdf"), run=config["run"]["name"]),
-        expand(
-            resources("maps/power-network-s-{clusters}.pdf"),
-            run=config["run"]["name"],
-            **config["scenario"],
-        ),
-        expand(
-            RESULTS
-            + "maps/static/base_s_{clusters}_{opts}_{sector_opts}-costs-all_{planning_horizons}.pdf",
-            run=config["run"]["name"],
-            **config["scenario"],
-        ),
-        # COP profiles plots
-        expand(
-            RESULTS + "graphs/cop_profiles_s_{clusters}_{planning_horizons}.html",
-            run=config["run"]["name"],
-            **config["scenario"],
-        ),
+        expand(RESULTS + "csvs/energy_balance.csv", run=config["run"]["name"]),
         expand(
             RESULTS + "csvs/custom_metrics.csv",
             run=config["run"]["name"],
             **config["scenario"],
         ),
-        lambda w: expand(
-            (
-                RESULTS
-                + "maps/static/base_s_{clusters}_{opts}_{sector_opts}-h2_network_{planning_horizons}.pdf"
-                if config_provider("sector", "H2_network")(w)
-                else []
-            ),
-            run=config["run"]["name"],
-            **config["scenario"],
-        ),
-        lambda w: expand(
-            (
-                RESULTS
-                + "maps/static/base_s_{clusters}_{opts}_{sector_opts}-ch4_network_{planning_horizons}.pdf"
-                if config_provider("sector", "gas_network")(w)
-                else []
-            ),
-            run=config["run"]["name"],
-            **config["scenario"],
-        ),
-        lambda w: expand(
-            (
-                RESULTS + "csvs/cumulative_costs.csv"
-                if config_provider("foresight")(w) == "myopic"
-                else []
-            ),
-            run=config["run"]["name"],
-        ),
-        expand(
-            RESULTS
-            + "graphics/balance_timeseries/s_{clusters}_{opts}_{sector_opts}_{planning_horizons}",
-            run=config["run"]["name"],
-            **config["scenario"],
-        ),
-        expand(
-            RESULTS
-            + "graphics/heatmap_timeseries/s_{clusters}_{opts}_{sector_opts}_{planning_horizons}",
-            run=config["run"]["name"],
-            **config["scenario"],
-        ),
-        # Explicitly list heat source types for temperature maps
-        lambda w: expand(
-            (
-                RESULTS
-                + "maps/static/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}-heat_source_temperature_map_river_water.html"
-                if config_provider("plotting", "enable_heat_source_maps")(w)
-                and "river_water"
-                in config_provider("sector", "heat_pump_sources", "urban central")(w)
-                else []
-            ),
-            **config["scenario"],
-            run=config["run"]["name"],
-        ),
-        lambda w: expand(
-            (
-                RESULTS
-                + "maps/static/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}-heat_source_temperature_map_sea_water.html"
-                if config_provider("plotting", "enable_heat_source_maps")(w)
-                and "sea_water"
-                in config_provider("sector", "heat_pump_sources", "urban central")(w)
-                else []
-            ),
-            **config["scenario"],
-            run=config["run"]["name"],
-        ),
-        lambda w: expand(
-            (
-                RESULTS
-                + "maps/static/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}-heat_source_temperature_map_ambient_air.html"
-                if config_provider("plotting", "enable_heat_source_maps")(w)
-                and "air"
-                in config_provider("sector", "heat_pump_sources", "urban central")(w)
-                else []
-            ),
-            **config["scenario"],
-            run=config["run"]["name"],
-        ),
-        # Only river_water has energy maps
-        lambda w: expand(
-            (
-                RESULTS
-                + "maps/static/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}-heat_source_energy_map_river_water.html"
-                if config_provider("plotting", "enable_heat_source_maps")(w)
-                and "river_water"
-                in config_provider("sector", "heat_pump_sources", "urban central")(w)
-                else []
-            ),
-            **config["scenario"],
-            run=config["run"]["name"],
-        ),
-        expand(
-            RESULTS
-            + "graphics/balance_timeseries/s_{clusters}_{opts}_{sector_opts}_{planning_horizons}",
-            run=config["run"]["name"],
-            **config["scenario"],
-        ),
-        expand(
-            RESULTS
-            + "graphics/heatmap_timeseries/s_{clusters}_{opts}_{sector_opts}_{planning_horizons}",
-            run=config["run"]["name"],
-            **config["scenario"],
-        ),
-        expand(
-            RESULTS
-            + "graphics/interactive_bus_balance/s_{clusters}_{opts}_{sector_opts}_{planning_horizons}",
-            run=config["run"]["name"],
-            **config["scenario"],
-        ),
-        lambda w: balance_map_paths("static", w),
-        lambda w: balance_map_paths("interactive", w),
+        expand(RESULTS + "csvs/cumulative_costs.csv", run=config["run"]["name"]),
     default_target: True
 
 rule create_scenarios:

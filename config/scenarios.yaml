@@ -11,64 +11,30 @@
 #   electricity:
 #       renewable_carriers: [wind, solar] # override the list of renewable carriers
 
-# normal:
-#   electricity:
-#     renewable_carriers:
-#     - solar
-#     - onwind
-#     - offwind-ac
-#     - offwind-dc
-#     - hydro
+#for MGA
+# default_bm0:
+#   sector:
+#     renewable_emissions:
+#       enable: false
+#     biomass: false
 
-default_bm0:
-  biomass:
-    emission_factors:
-      agricultural waste: 0
-      fuelwood residues: 0
-      secondary forestry residues: 0
-      sawdust: 0
-      residues from landscape care: 0
-      grasses: 0
-      woody crops: 0
-      fuelwoodRW: 0
-      manure: 0
-      sludge: 0
-      C&P_RW: 0
-  sector:
-    renewable_emissions:
-      enable: false
-    biomass: false
+# default_710_bm0:
+#   sector:
+#     renewable_emissions:
+#       enable: false
+#     co2_sequestration_potential:
+#       2050: 710
+#     biomass: false
 
-default_710_bm0:
-  biomass:
-    emission_factors:
-      agricultural waste: 0
-      fuelwood residues: 0
-      secondary forestry residues: 0
-      sawdust: 0
-      residues from landscape care: 0
-      grasses: 0
-      woody crops: 0
-      fuelwoodRW: 0
-      manure: 0
-      sludge: 0
-      C&P_RW: 0
-  sector:
-    renewable_emissions:
-      enable: false
-    co2_sequestration_potential:
-      2050: 710
-    biomass: false
+# cscs_bm0:
+#   sector:
+#     biomass: false
 
-cscs_bm0:
-  sector:
-    biomass: false
-
-cscs_710_bm0:
-  sector:
-    biomass: false
-    co2_sequestration_potential:
-      2050: 710
+# cscs_710_bm0:
+#   sector:
+#     biomass: false
+#     co2_sequestration_potential:
+#       2050: 710
 
 default:
   biomass:
