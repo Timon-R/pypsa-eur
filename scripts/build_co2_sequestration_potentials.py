@@ -18,6 +18,29 @@ from shapely.ops import unary_union
 CRS = "EPSG:4326"
 
 
+def _read_kml_with_coalesced_id(path: str) -> gpd.GeoDataFrame:
+    """
+    Read KML and create a robust `ID` column from available ID-like fields.
+
+    CO2Stop KML files can store the identifier in `ID2` while `id` is often empty.
+    """
+    gdf = gpd.read_file(path)
+    gdf = gdf.loc[:, ~gdf.columns.duplicated()]
+
+    id_cols = [c for c in ["ID", "ID2", "id"] if c in gdf.columns]
+    if not id_cols:
+        raise KeyError(f"No ID column found in {path}.")
+
+    gdf["ID"] = gdf[id_cols[0]]
+    for col in id_cols[1:]:
+        gdf["ID"] = gdf["ID"].fillna(gdf[col])
+
+    gdf["ID"] = gdf["ID"].astype(str).str.strip()
+    gdf.loc[gdf["ID"].isin(["", "nan", "None"]), "ID"] = np.nan
+
+    return gdf
+
+
 def convert_to_2d(
     geom: sg.base.BaseGeometry | Any,
 ) -> sg.base.BaseGeometry | Any:
@@ -82,13 +105,13 @@ def create_capacity_map_storage(table_fn: str, map_fn: str) -> gpd.GeoDataFrame:
     df = pd.read_csv(table_fn)
 
     sel = ["COUNTRYCOD", "ID", "geometry"]
-    gdf = gpd.read_file(map_fn).rename(columns={"id": "ID"})[sel]
+    gdf = _read_kml_with_coalesced_id(map_fn)
+    gdf = gdf.dropna(subset=["ID"])[sel]
     gdf.geometry = gdf.geometry.buffer(0)
 
     # Combine shapes with the same id into one multi-polygon
-    gdf = gdf.groupby(["COUNTRYCOD", "ID"]).agg(unary_union).reset_index()
-    gdf.set_geometry("geometry", inplace=True)
-    gdf.set_crs(CRS, inplace=True)
+    gdf = gdf.groupby(["COUNTRYCOD", "ID"], as_index=False).agg({"geometry": unary_union})
+    gdf = gpd.GeoDataFrame(gdf, geometry="geometry", crs=CRS)
 
     # conservative estimate: use MIN
     df["conservative estimate Mt"] = (
@@ -128,6 +151,7 @@ def create_capacity_map_storage(table_fn: str, map_fn: str) -> gpd.GeoDataFrame:
         "optimistic estimate Mt",
     ]
     df = df[sel]
+    df["STORAGE_UNIT_ID"] = df["STORAGE_UNIT_ID"].astype(str).str.strip()
 
     gdf = gdf.merge(df, left_on="ID", right_on="STORAGE_UNIT_ID", how="left").drop(
         "STORAGE_UNIT_ID", axis=1
@@ -155,12 +179,12 @@ def create_capacity_map_traps(table_fn: list[str], map_fn: str) -> gpd.GeoDataFr
     df = pd.concat([pd.read_csv(path) for path in table_fn], ignore_index=True)
 
     sel = ["COUNTRYCOD", "ID", "geometry"]
-    gdf = gpd.read_file(map_fn).rename(columns={"id": "ID"})[sel]
+    gdf = _read_kml_with_coalesced_id(map_fn)
+    gdf = gdf.dropna(subset=["ID"])[sel]
 
     # Combine shapes with the same id into one multi-polygon
-    gdf = gdf.groupby(["COUNTRYCOD", "ID"]).agg(unary_union).reset_index()
-    gdf.set_geometry("geometry", inplace=True)
-    gdf.set_crs(CRS, inplace=True)
+    gdf = gdf.groupby(["COUNTRYCOD", "ID"], as_index=False).agg({"geometry": unary_union})
+    gdf = gpd.GeoDataFrame(gdf, geometry="geometry", crs=CRS)
 
     # conservative estimate: use MIN
     df["conservative estimate aquifer Mt"] = (
@@ -250,6 +274,7 @@ def create_capacity_map_traps(table_fn: list[str], map_fn: str) -> gpd.GeoDataFr
         "conservative estimate GAS Mt",
     ]
     df = df[sel]
+    df["TRAP_ID"] = df["TRAP_ID"].astype(str).str.strip()
 
     gdf = gdf.merge(df, left_on="ID", right_on="TRAP_ID", how="left").drop(
         "TRAP_ID", axis=1

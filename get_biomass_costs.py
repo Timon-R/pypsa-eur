@@ -10,7 +10,7 @@ def get_biomass_costs(scenario="ENS_Med", year=2050):
     # Scenarios: ENS_Low, ENS_Med, ENS_High
     # Years: 2010, 2020, ... , 2050
 
-    enspreso = "data/ENSPRESO_BIOMASS.xlsx"
+    enspreso = "data/enspreso_biomass/archive/2019-06-20/ENSPRESO_BIOMASS.xlsx"
     enspreso = pd.ExcelFile(enspreso)
 
     database_file = enspreso

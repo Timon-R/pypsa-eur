@@ -20,14 +20,14 @@ remote:
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
-  prefix: ""
-  name: "test_50"
+  prefix: "main"
+  name: 'all'
   scenarios:
-    enable: false
+    enable: true
     file: config/scenarios.yaml
   disable_progressbar: false
   shared_resources:
-    policy: 'base'
+    policy: false
     exclude: 
     - costs_
   use_shadow_directory: false
@@ -582,7 +582,7 @@ biomass:
     2045: 1
     2050: 1
   emission_factors: #tCO2/MWh #municipal solid waste is not included in the emission factors
-    agricultural waste: 0 #######!
+    agricultural waste: 0.04284
     fuelwood residues: 0.09 #tco2/MWh
     secondary forestry residues: 0.2772
     sawdust: 0.1872
@@ -590,7 +590,7 @@ biomass:
     grasses: 0.2016
     woody crops: 0.1908
     fuelwoodRW: 0.1872
-    manure: 0 ######!
+    manure: 0.06192
     sludge: 0
     C&P_RW: 0.1836
 
@@ -873,7 +873,7 @@ sector:
   SMR_cc: true
   regional_oil_demand: true
   regional_coal_demand: false
-  regional_co2_sequestration_potential:
+  regional_yes,questration_potential:
     enable: true
     attribute:
     - conservative estimate Mt
@@ -1029,8 +1029,9 @@ sector:
   renewable_emissions:
     enable: false
     solar: 1.87 
-    onwind: 2.77 
-    solar-hsat: 0.21 #ton/MW
+    solar-hsat: 2.77 #ton/MW
+    onwind: 0.21
+
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#industry
 industry:
@@ -1093,8 +1094,8 @@ industry:
     2045: 0.16
     2050: 0.2
   HVC_environment_sequestration_fraction: 0.0
-  waste_to_energy: false
-  waste_to_energy_cc: false
+  waste_to_energy: true
+  waste_to_energy_cc: true
   sector_ratios_fraction_future:
     2020: 0.0
     2025: 0.05

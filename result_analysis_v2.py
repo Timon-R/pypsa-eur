@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
+import argparse
 import os
 import string
 from math import isfinite
@@ -9,6 +10,66 @@ from math import isfinite
 import pandas as pd
 import pypsa
 import yaml
+
+
+DEFAULT_RESULTS_DIR = "results/main"
+DEFAULT_EXPORT_DIR = "export/main"
+DEFAULT_SCENARIOS = ("default", "default_710", "cscs", "cscs_710")
+DEFAULT_DIFFERENCE_SCENARIOS = ("default", "cscs")
+
+
+def _flatten_cli_list(values):
+    """
+    Parse list arguments that may be space-separated and/or comma-separated.
+    """
+    parsed = []
+    for value in values:
+        parsed.extend([part.strip() for part in value.split(",") if part.strip()])
+    return parsed
+
+
+def parse_args(argv=None):
+    """
+    Parse CLI args while preserving legacy defaults from result_analysis.py.
+    """
+    parser = argparse.ArgumentParser(
+        description="Standalone result analysis script (v2) with legacy-compatible defaults."
+    )
+    parser.add_argument("--results-dir", default=DEFAULT_RESULTS_DIR)
+    parser.add_argument("--export-dir", default=DEFAULT_EXPORT_DIR)
+    parser.add_argument(
+        "--scenarios",
+        nargs="*",
+        default=list(DEFAULT_SCENARIOS),
+        help="Scenario list (space-separated or comma-separated).",
+    )
+    parser.add_argument(
+        "--difference-scenarios",
+        nargs="*",
+        default=list(DEFAULT_DIFFERENCE_SCENARIOS),
+        help="Exactly two scenarios for difference exports.",
+    )
+    parser.add_argument(
+        "--check-quality",
+        action="store_true",
+        help="Run solver-log quality checks before analysis.",
+    )
+    parser.add_argument(
+        "--run-mga",
+        action="store_true",
+        help="Also run MGA postprocessing exports.",
+    )
+    parser.add_argument("--mga-results-dir", default="results/MGA")
+    parser.add_argument("--mga-export-dir", default="export/mga")
+
+    args = parser.parse_args(argv)
+    args.scenarios = _flatten_cli_list(args.scenarios)
+    args.difference_scenarios = _flatten_cli_list(args.difference_scenarios)
+    if len(args.difference_scenarios) != 2:
+        raise ValueError(
+            "`--difference-scenarios` must contain exactly two items."
+        )
+    return args
 
 def get_emission_factors(config_file_path = "config/config.yaml", new_names=False, add_imported_biomass=False):
 
@@ -2638,27 +2699,20 @@ def check_result_quality(results_dir="results"):
 
 
 if __name__ == "__main__":
-    #results_dir = "results"
+    args = parse_args()
 
-    # scenarios = ["default_optimal", "optimal", "default_710_optimal", "710_optimal"]
-    # difference_scenarios = ["default_optimal", "optimal"]
-    # export_dir = "export/seq"
+    if args.check_quality:
+        check_result_quality(results_dir=args.results_dir)
 
-    results_dir = "results/main"
-    scenarios = ["default","default_710","cscs", "cscs_710"]
-    difference_scenarios = ["default", "cscs"]
-    export_dir = "export/main"
+    main(
+        results_dir=args.results_dir,
+        export_dir=args.export_dir,
+        scenarios=args.scenarios,
+        difference_scenarios=args.difference_scenarios,
+    )
 
-    # check_result_quality(results_dir="results/MGA")
-
-    # scenarios = ["default_optimal", "optimal"]
-    # export_dir = "export/basic"
-
-    main(results_dir=results_dir, export_dir=export_dir, scenarios=scenarios, difference_scenarios=difference_scenarios)
-
-    #get_biomass_potentials(export_dir=export_dir)
-
-    #get_mga_results(results_dir="results/MGA", export_dir="export/mga")
+    if args.run_mga:
+        get_mga_results(results_dir=args.mga_results_dir, export_dir=args.mga_export_dir)
 
 
     # results = load_results("results/GSA", "all")

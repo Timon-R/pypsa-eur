@@ -6,11 +6,6 @@
 # --rerun-triggers mtime
 # conda config --set channel_priority strict
 
-# snakemake --configfile config/config.yaml --list-outputs \
-#   | grep '^results/test_50/csvs/.*\\.csv$' > /tmp/csv_targets.txt
-
-# snakemake --configfile config/config.yaml --rerun-incomplete --cores 8 $(cat /tmp/csv_targets.txt)
-
 
 from pathlib import Path
 import yaml
