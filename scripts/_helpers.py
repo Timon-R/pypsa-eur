@@ -279,6 +279,45 @@ def configure_logging(snakemake, skip_handlers=False):
         )
     logging.basicConfig(**kwargs)
 
+    class _SuppressNoisyPyPSAWarnings(logging.Filter):
+        """Filter known high-volume PyPSA warnings that do not affect model validity."""
+
+        _network_spam = {
+            "The network has not been optimized yet and no model is stored.",
+            "The network has not been optimized yet and no objective value is stored.",
+            "The network has not been optimized yet and no objective constant is stored.",
+        }
+        _consistency_prefixes = (
+            "The following links have buses which are not defined:",
+            "The following buses have no attached components, which can break the lopf:",
+        )
+
+        def __init__(self):
+            super().__init__()
+            self._seen_consistency = set()
+
+        def filter(self, record):
+            msg = record.getMessage()
+            if record.name == "pypsa.networks" and msg in self._network_spam:
+                return False
+            if (
+                record.name == "pypsa.network.transform"
+                and "is a standard attribute for other components but not for" in msg
+            ):
+                return False
+            if record.name == "pypsa.consistency":
+                for prefix in self._consistency_prefixes:
+                    if msg.startswith(prefix):
+                        if prefix in self._seen_consistency:
+                            return False
+                        self._seen_consistency.add(prefix)
+                        break
+            return True
+
+    spam_filter = _SuppressNoisyPyPSAWarnings()
+    for handler in logging.getLogger().handlers:
+        handler.addFilter(spam_filter)
+
     # Setup a function to handle uncaught exceptions and include them with their stacktrace into logfiles
     def handle_exception(exc_type, exc_value, exc_traceback):
         # Log the exception

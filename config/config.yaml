@@ -1272,16 +1272,19 @@ solving:
       PreDual: 0
       GURO_PAR_BARDENSETHRESH: 200
     "gurobi-numeric-focus":
-      NumericFocus: 3
+      NumericFocus: 3 
+      threads: 32
       method: 2
       crossover: 0
-      BarHomogeneous: 1
-      BarConvTol: 1.0e-05
-      FeasibilityTol: 0.0001
-      OptimalityTol: 0.0001
-      ObjScale: -0.5
-      threads: 8
+      BarConvTol: 1.e-6
       Seed: 123
+      AggFill: 0
+      PreDual: 0
+      GURO_PAR_BARDENSETHRESH: 200
+      FeasibilityTol: 1.e-4
+      OptimalityTol: 1.e-4
+      BarHomogeneous: 1
+      CrossoverBasis: 1
     "gurobi-fallback":
       crossover: 0
       method: 2

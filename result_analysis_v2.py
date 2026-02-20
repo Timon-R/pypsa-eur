@@ -2224,7 +2224,7 @@ def main(results_dir="results", export_dir="export",scenarios=["default", "carbo
           ], "heat production"],
         [["urban central solid biomass CHP","urban central solid biomass CHP CC"], "CHP"],
         [["solid biomass to hydrogen","solid biomass to hydrogen CC","SMR","SMR CC"], "hydrogen production"],
-        [["OCGT"], "electricity production"],
+        [["OCGT", "CCGT"], "electricity production"],
     ]
     solid_biomass_use_by_sector = (
         get_data(  # this doesn't account for the gas share yet

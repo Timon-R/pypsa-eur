@@ -80,21 +80,7 @@ new_names_dict = {
     "solid biomass import": "imported biomass",
 }
 
-biomass_potentials_TWh = {
-    "agricultural waste": 290.4185038259868,
-    "fuelwood residues": 547.1662388608518,
-    "secondary forestry residues": 87.15159435646442,
-    "sawdust": 30.14011967737334,
-    "residues from landscape care": 70.67024100998525,
-    "grasses": 472.9656047672824,
-    "woody crops": 111.53964182929641,
-    "fuelwoodRW": 86.6139452513965,
-    "C&P_RW": 666.8196265469048,
-    "not included": 0.0,
-    "manure": 345.45933182016194,
-    "sludge": 13.908196004274894,
-    "solid biomass import": 1390,
-}
+BIOMASS_POTENTIAL_KEYS = tuple(emission_factors.keys())
 
 biomass_costs = {  # Euro/MWh_LHV (ENS_Med)
     "agricultural waste": 11.32275524454902,
@@ -269,7 +255,7 @@ def load_model_biomass_potentials_TWh(folder_path="export/main"):
     """
     results_dir = _infer_results_dir_from_export_folder(folder_path)
     potentials_by_scenario = {}
-    biomass_keys = set(biomass_potentials_TWh.keys())
+    biomass_keys = set(BIOMASS_POTENTIAL_KEYS)
 
     if not os.path.isdir(results_dir):
         return potentials_by_scenario
@@ -301,9 +287,9 @@ def load_model_biomass_potentials_TWh(folder_path="export/main"):
             continue
 
         scenario_name = SCENARIO_RENAME_MAP.get(scenario_folder, scenario_folder)
-        scenario_potentials = {
-            row["carrier"]: float(row["value"]) * 1e-6 for _, row in stores.iterrows()
-        }
+        scenario_potentials = {key: 0.0 for key in BIOMASS_POTENTIAL_KEYS}
+        for _, row in stores.iterrows():
+            scenario_potentials[row["carrier"]] = float(row["value"]) * 1e-6
         potentials_by_scenario[scenario_name] = scenario_potentials
 
     return potentials_by_scenario
@@ -311,27 +297,33 @@ def load_model_biomass_potentials_TWh(folder_path="export/main"):
 
 def resolve_biomass_potentials_TWh(potentials_by_scenario, scenario=None):
     """
-    Resolve biomass potentials for a scenario with fallback to hardcoded defaults.
+    Resolve biomass potentials for a scenario without hardcoded defaults.
 
     If scenario is None or missing, uses the max potential per carrier across
     available scenarios.
     """
-    potentials = biomass_potentials_TWh.copy()
-
     if not potentials_by_scenario:
-        return potentials
+        return {key: 0.0 for key in BIOMASS_POTENTIAL_KEYS}
 
     if scenario is not None and scenario in potentials_by_scenario:
-        potentials.update(potentials_by_scenario[scenario])
-        return potentials
+        return {
+            key: float(potentials_by_scenario[scenario].get(key, 0.0))
+            for key in BIOMASS_POTENTIAL_KEYS
+        }
 
-    merged = {}
+    if scenario is not None and scenario not in potentials_by_scenario:
+        warnings.warn(
+            f"Scenario '{scenario}' not found in model potentials. "
+            "Using max potential per carrier across available scenarios."
+        )
+
+    merged = {key: 0.0 for key in BIOMASS_POTENTIAL_KEYS}
     for scenario_potentials in potentials_by_scenario.values():
         for carrier, value in scenario_potentials.items():
-            merged[carrier] = max(merged.get(carrier, 0.0), float(value))
+            if carrier in merged:
+                merged[carrier] = max(merged[carrier], float(value))
 
-    potentials.update(merged)
-    return potentials
+    return merged
 
 
 def create_elliptical_wedge(
@@ -375,6 +367,8 @@ def create_gravitational_plot(
     usage_threshold=False,
     variant_plot=False,
     include_solar_hsat=True,
+    fill_usage=True,
+    hollow_biomass_legend=False,
     fig_width=DEFAULT_FIGURE_WIDTH,
     fig_height=DEFAULT_FIGURE_HEIGHT,
     fontsize=DEFAULT_FONTSIZE,
@@ -392,25 +386,43 @@ def create_gravitational_plot(
         "font.size": fontsize,
     })
 
+    biomass = None
+    biomass_variant = None
     if biomass_supply is not None and scenario is not None:
-        biomass = biomass_supply[biomass_supply["Folder"] == scenario]
+        biomass = biomass_supply[biomass_supply["Folder"] == scenario].copy()
         # remove the 1 from the data_name
-        biomass.loc[:, "Data Name"] = biomass["Data Name"].str.replace(
-            "1", ""
+        biomass.loc[:, "Data Name"] = biomass["Data Name"].str.replace("1", "", regex=False)
+    if variant_plot and biomass_supply is not None and scenario is not None:
+        biomass_variant = biomass_supply[
+            biomass_supply["Folder"] == f"{scenario} 710"
+        ].copy()
+        biomass_variant.loc[:, "Data Name"] = biomass_variant["Data Name"].str.replace(
+            "1", "", regex=False
         )
-    if variant_plot:
-        biomass_variant = biomass_supply[biomass_supply["Folder"] == f"{scenario} 710"]
 
-    potentials_lookup = biomass_potentials if biomass_potentials is not None else biomass_potentials_TWh
+    potentials_lookup = biomass_potentials if biomass_potentials is not None else {}
 
     # Extract data for plotting
     biomass_types = list(emission_factors.keys())
     emissions = [emission_factors[bt] for bt in biomass_types]
     costs = [biomass_costs[bt] for bt in biomass_types]
-    potentials = [potentials_lookup[bt] for bt in biomass_types]
+    missing_potentials = [bt for bt in biomass_types if bt not in potentials_lookup]
+    if missing_potentials:
+        warnings.warn(
+            "Missing biomass potentials for: "
+            + ", ".join(missing_potentials)
+            + ". Assuming 0 TWh for missing entries."
+        )
+
+    potentials = [float(potentials_lookup.get(bt, 0.0)) for bt in biomass_types]
 
     # Normalize potentials for circle sizes
-    max_potential = max(potentials)
+    max_potential = max(potentials) if potentials else 0.0
+    if max_potential <= 0:
+        raise ValueError(
+            "No positive biomass potentials available for plotting. "
+            "Check results/<scenario>/csvs/capacities.csv input data."
+        )
     sizes = [max_potential * (p / max_potential) for p in potentials]
 
     fig, ax = plt.subplots(figsize=(fig_width, fig_height))
@@ -418,6 +430,49 @@ def create_gravitational_plot(
     dig_biomass_color = "blue"
     solid_biomass_color = "green"
     y_upper_bound_candidates = []
+    scenario_key = (scenario or "").strip().lower()
+    is_carbon_costs = (
+        "carbon" in scenario_key
+        or scenario_key in {"optimal", "cscs", "carbon_costs"}
+    )
+    if is_carbon_costs:
+        biomass_label_offsets = {
+            "sludge": {
+                "dx": -0.4,
+                "dy": 0.0,
+                "ha": "right",
+                "va": "center",
+                "next_to_marker": True,
+            },
+        }
+        renewable_label_offsets = {
+            "solar": {
+                "dx": 0.4,
+                "dy": 0.0,
+                "ha": "left",
+                "va": "center",
+                "next_to_marker": True,
+            },
+        }
+    else:
+        biomass_label_offsets = {
+            "sludge": {
+                "dx": 0.4,
+                "dy": 0.0,
+                "ha": "left",
+                "va": "center",
+                "next_to_marker": True,
+            },
+        }
+        renewable_label_offsets = {
+            "solar": {
+                "dx": -0.4,
+                "dy": 0.0,
+                "ha": "right",
+                "va": "center",
+                "next_to_marker": True,
+            },
+        }
 
     # Draw the plot first to get the limits
     for i, bt in enumerate(biomass_types):
@@ -436,17 +491,27 @@ def create_gravitational_plot(
         )
         location = float(emissions[i]) + 2 * float(sizes[i]) / max_potential * 0.015 + 0.01
         if (
-            bt == "secondary forestry residues" or bt == "sludge" or "import" in bt or bt == "fuelwoodRW"
+            bt == "secondary forestry residues"
+            or bt == "sludge"
+            or "import" in bt
+            or bt == "fuelwoodRW"
+            or bt == "C&P_RW"
         ):  # below the point
             location = float(emissions[i]) - 2 * float(sizes[i]) / max_potential * 0.015 - 0.015
+        label_cfg = biomass_label_offsets.get(bt, {})
+        label_x = float(costs[i]) + label_cfg.get("dx", 0.0)
+        label_y = location + label_cfg.get("dy", 0.0)
+        if label_cfg.get("next_to_marker", False):
+            label_y = float(emissions[i]) + label_cfg.get("dy", 0.0)
         plt.text(
-            float(costs[i]),
-            location,
+            label_x,
+            label_y,
             new_names_dict[bt],
             fontsize=fontsize,
-            ha="center",
+            ha=label_cfg.get("ha", "center"),
+            va=label_cfg.get("va", "center"),
         )
-        y_upper_bound_candidates.append(max(float(emissions[i]), location))
+        y_upper_bound_candidates.append(max(float(emissions[i]), location, label_y))
 
     # Add renewable energy crosses if capacity factors are provided
     if capacity_factors is not None:
@@ -528,15 +593,21 @@ def create_gravitational_plot(
                 if tech == "solar":  # below the point
                     location = emissions_per_mwh - 0.02                
                 # Add text label
+                label_cfg = renewable_label_offsets.get(tech, {})
+                label_x = lcoe[tech] + label_cfg.get("dx", 0.0)
+                label_y = location + label_cfg.get("dy", 0.0)
+                if label_cfg.get("next_to_marker", False):
+                    label_y = emissions_per_mwh + label_cfg.get("dy", 0.0)
                 plt.text(
-                    lcoe[tech],
-                    location,
+                    label_x,
+                    label_y,
                     f"{tech}",
                     fontsize=fontsize,
-                    ha="center",
+                    ha=label_cfg.get("ha", "center"),
+                    va=label_cfg.get("va", "center"),
                     color='black'
                 )
-                y_upper_bound_candidates.append(max(emissions_per_mwh, location))
+                y_upper_bound_candidates.append(max(emissions_per_mwh, location, label_y))
     
     # Add fossil fuel markers
     if show_fossil_fuels:
@@ -560,8 +631,10 @@ def create_gravitational_plot(
             
             # Add text label
             y_location = float(data["emission"]) + 0.012
+            va = "bottom"
             if fuel == "oil":
                 y_location = float(data["emission"]) - 0.003
+                va = "top"
             x_location = float(data["cost"])
             if fuel == "oil": # right from the point
                 x_location = float(data["cost"]) + 1.3
@@ -571,6 +644,7 @@ def create_gravitational_plot(
                 fuel,
                 fontsize=fontsize,
                 ha="center",
+                va=va,
                 color='black',
             )
             y_upper_bound_candidates.append(max(float(data["emission"]), y_location))
@@ -584,111 +658,157 @@ def create_gravitational_plot(
     y_upper = max(emissions) + 0.05
     if y_upper_bound_candidates:
         y_upper = max(y_upper, max(y_upper_bound_candidates) + 0.02)
+    # Add extra top margin so upper-right legend does not overlap labels.
+    y_upper += 0.04
     plt.ylim(-0.02, y_upper)
     fig.canvas.draw()
 
-    # Get the actual data ratio
-    data_ratio = ax.get_data_ratio()
+    def marker_radii_in_data_units(x, y, marker_area_points2):
+        """
+        Convert scatter marker area (points^2) to x/y radii in data units.
 
-    # Get the physical dimensions ratio
-    bbox = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
-    width_inches, height_inches = bbox.width, bbox.height
-    physical_ratio = height_inches / width_inches
+        This makes custom wedge/ellipse overlays match the scatter circle size exactly.
+        """
+        # For plt.scatter with circular marker 'o', marker diameter in points is sqrt(s),
+        # so radius is 0.5 * sqrt(s).
+        radius_points = 0.5 * np.sqrt(float(marker_area_points2))
+        radius_pixels = radius_points * fig.dpi / 72.0
 
-    # Calculate the combined adjustment factor
-    adjustment_factor = data_ratio / physical_ratio
+        x_px, y_px = ax.transData.transform((float(x), float(y)))
+        x_right, _ = ax.transData.inverted().transform((x_px + radius_pixels, y_px))
+        _, y_up = ax.transData.inverted().transform((x_px, y_px + radius_pixels))
 
-    # Now draw the wedges with the proper adjustment
+        return abs(float(x_right) - float(x)), abs(float(y_up) - float(y))
+
+    near_full_usage_pct = 99.0
+
+    def _usage_pct(df, biomass_type, potential):
+        if df is None or potential <= 0:
+            return None
+        vals = df.loc[df["Data Name"] == biomass_type, "Values"]
+        if vals.empty:
+            return None
+        usage_pct = float(np.clip(float(vals.iloc[0]) * multiplier / potential * 100.0, 0.0, 100.0))
+        # Visual-only rule: treat near-full usage as full circle.
+        if usage_pct > near_full_usage_pct:
+            usage_pct = 100.0
+        return usage_pct
+
+    def _draw_usage_patch(x, y, radius_x, radius_y, usage_pct, facecolor):
+        if usage_pct is None or usage_pct <= 0:
+            return
+        if usage_pct >= 100.0 - 1e-9:
+            ellipse = mpatches.Ellipse(
+                (float(x), float(y)),
+                width=radius_x * 2,
+                height=radius_y * 2,
+                facecolor=facecolor,
+                edgecolor="none",
+                alpha=1,
+            )
+            ax.add_patch(ellipse)
+            return
+        theta1 = 90
+        theta2 = 90 - 360 * (usage_pct / 100)
+        wedge_path = create_elliptical_wedge(
+            float(x),
+            float(y),
+            radius_x,
+            radius_y,
+            theta1,
+            theta2,
+        )
+        wedge_patch = mpatches.PathPatch(
+            wedge_path, facecolor=facecolor, edgecolor="none", alpha=1
+        )
+        ax.add_patch(wedge_patch)
+
+    def _draw_delta_patch(x, y, radius_x, radius_y, low_usage_pct, high_usage_pct, facecolor):
+        if low_usage_pct is None or high_usage_pct is None:
+            return
+        low = float(np.clip(low_usage_pct, 0.0, 100.0))
+        high = float(np.clip(high_usage_pct, 0.0, 100.0))
+        if high - low <= 1e-9:
+            return
+        theta1 = 90 - 360 * (low / 100)
+        theta2 = 90 - 360 * (high / 100)
+        wedge_path = create_elliptical_wedge(
+            float(x),
+            float(y),
+            radius_x,
+            radius_y,
+            theta1,
+            theta2,
+        )
+        wedge_patch = mpatches.PathPatch(
+            wedge_path, facecolor=facecolor, edgecolor="none", alpha=1
+        )
+        ax.add_patch(wedge_patch)
+
+    # Now draw the wedges with signed difference segments:
+    # - base scenario usage in solid color
+    # - high sequestration variant increase in light color
+    # - high sequestration variant decrease in salmon
     for i, bt in enumerate(biomass_types):
-        if variant_plot:
-            if bt in ["manure", "sludge"]:
-                color = "lightblue"
-            else:
-                color = "lightgreen"
-            if biomass_variant is not None and bt in biomass_variant["Data Name"].values:
-                supply = (
-                    biomass_variant[biomass_variant["Data Name"] == bt]["Values"].values[0].item()
-                    * multiplier
-                )
-                potential = potentials_lookup[bt]
-                usage = supply / potential * 100
-                if usage > 99:
-                    usage = 100
-                theta1 = 90
-                theta2 = 90 - 360 * (usage / 100)
-
-                # Correctly convert from area (sizes[i]) to radius, matching the scatter plot circles
-                # The scatter plot uses s=area, so we need sqrt(sizes[i]/pi) to get equivalent radius
-                circle_radius = np.sqrt(float(sizes[i]) / np.pi)*0.95
-                width = circle_radius * 0.09  # Scale factor for visual appearance
-                height = width * adjustment_factor
-                if usage >= 99.5:  # Special case for (nearly) 100% usage
-                    # Draw a filled ellipse instead of a wedge
-                    ellipse = mpatches.Ellipse(
-                        (float(costs[i]), float(emissions[i])),
-                        width=width * 2,  # Diameter = 2*radius
-                        height=height * 2,
-                        facecolor=color,
-                        edgecolor="none",
-                        alpha=1,
-                    )
-                    ax.add_patch(ellipse)
-                else:
-                    # Normal case: draw a wedge
-                    theta1 = 90
-                    theta2 = 90 - 360 * (usage / 100)
-                    wedge_path = create_elliptical_wedge(
-                        float(costs[i]), float(emissions[i]), width, height, theta1, theta2
-                    )
-                    wedge_patch = mpatches.PathPatch(
-                        wedge_path, facecolor=color, edgecolor="none", alpha=1
-                    )
-                    ax.add_patch(wedge_patch)
-
         if bt in ["manure", "sludge"]:
             color = dig_biomass_color
+            increase_color = "lightblue"
         else:
             color = solid_biomass_color
-        if biomass_supply is not None and bt in biomass["Data Name"].values:
-            supply = (
-                biomass[biomass["Data Name"] == bt]["Values"].values[0].item()
-                * multiplier
+            increase_color = "lightgreen"
+        decrease_color = "lightsalmon"
+
+        if fill_usage:
+            potential = float(potentials_lookup.get(bt, 0.0))
+            if potential <= 0:
+                continue
+            radius_x, radius_y = marker_radii_in_data_units(
+                costs[i], emissions[i], sizes[i]
             )
-            potential = potentials_lookup[bt]
-            usage = supply / potential * 100
-            if usage > 99:
-                usage = 100
-            theta1 = 90
-            theta2 = 90 - 360 * (usage / 100)
+            base_usage = _usage_pct(biomass, bt, potential)
+            variant_usage = _usage_pct(biomass_variant, bt, potential)
 
-            # Correctly convert from area (sizes[i]) to radius, matching the scatter plot circles
-            # The scatter plot uses s=area, so we need sqrt(sizes[i]/pi) to get equivalent radius
-            circle_radius = np.sqrt(float(sizes[i]) / np.pi)*0.95 #for some reason the circles are too big so they need to be scaled down
-            width = circle_radius * 0.09  # Scale factor for visual appearance
-            height = width * adjustment_factor
+            _draw_usage_patch(
+                float(costs[i]),
+                float(emissions[i]),
+                radius_x,
+                radius_y,
+                base_usage,
+                color,
+            )
 
-            if usage >= 99.5:  # Special case for (nearly) 100% usage
-                # Draw a filled ellipse instead of a wedge
-                ellipse = mpatches.Ellipse(
-                    (float(costs[i]), float(emissions[i])),
-                    width=width * 2,  # Diameter = 2*radius
-                    height=height * 2,
-                    facecolor=color,
-                    edgecolor="none",
-                    alpha=1,
+            if variant_plot and base_usage is not None and variant_usage is not None:
+                if variant_usage > base_usage:
+                    _draw_delta_patch(
+                        float(costs[i]),
+                        float(emissions[i]),
+                        radius_x,
+                        radius_y,
+                        base_usage,
+                        variant_usage,
+                        increase_color,
+                    )
+                elif variant_usage < base_usage:
+                    _draw_delta_patch(
+                        float(costs[i]),
+                        float(emissions[i]),
+                        radius_x,
+                        radius_y,
+                        variant_usage,
+                        base_usage,
+                        decrease_color,
+                    )
+
+            # Fallback: if base scenario has no data for this type, still show variant usage.
+            if variant_plot and base_usage is None and variant_usage is not None:
+                _draw_usage_patch(
+                    float(costs[i]),
+                    float(emissions[i]),
+                    radius_x,
+                    radius_y,
+                    variant_usage,
+                    increase_color,
                 )
-                ax.add_patch(ellipse)
-            else:
-                # Normal case: draw a wedge
-                theta1 = 90
-                theta2 = 90 - 360 * (usage / 100)
-                wedge_path = create_elliptical_wedge(
-                    float(costs[i]), float(emissions[i]), width, height, theta1, theta2
-                )
-                wedge_patch = mpatches.PathPatch(
-                    wedge_path, facecolor=color, edgecolor="none", alpha=1
-                )
-                ax.add_patch(wedge_patch)
 
         # Plot usage threshold shading (if specified) behind all other elements
         if usage_threshold:
@@ -803,7 +923,7 @@ def create_gravitational_plot(
         scatterpoints=1,
         frameon=True,
         labelspacing=1,
-        title="Potential",
+        title="Biomass potential",
         loc="upper right",
         borderpad=1.2,
     )
@@ -812,8 +932,6 @@ def create_gravitational_plot(
     color_legend_elements = [
         Line2D([0], [0], marker='o', color='none', markerfacecolor='green',
             markeredgecolor='green', label='Solid biomass', markersize=10, linewidth=0),
-        Line2D([0], [0], marker='o', color='none', markerfacecolor='lightgreen',
-            markeredgecolor='lightgreen', label='Additional solid biomass use\nwith high co2 seq. potential', markersize=10, linewidth=0),
         Line2D([0], [0], marker='o', color='none', markerfacecolor='blue',
             markeredgecolor='blue', label='Digestible biomass', markersize=10, linewidth=0),
         Line2D([0], [0], marker='x', color='none', markerfacecolor='black',
@@ -821,31 +939,24 @@ def create_gravitational_plot(
         Line2D([0], [0], marker='x', color='none', markerfacecolor='orange',
             markeredgecolor='orange', label='Renewable energy', markersize=10, linewidth=0),
     ]
-    if scenario is None or "Default" in scenario:
-        color_legend_elements = [
-            Line2D([0], [0], marker='o', color='none', markerfacecolor='green',
-                markeredgecolor='green', label='Solid biomass', markersize=10, linewidth=0),
-            Line2D([0], [0], marker='o', color='none', markerfacecolor='blue',
-                markeredgecolor='blue', label='Digestible biomass', markersize=10, linewidth=0),
-            Line2D([0], [0], marker='x', color='none', markerfacecolor='black',
-                markeredgecolor='black', label='Fossil fuels', markersize=10, linewidth=0),
-            Line2D([0], [0], marker='x', color='none', markerfacecolor='orange',
-                markeredgecolor='orange', label='Renewable energy', markersize=10, linewidth=0),
-        ]
-    else:
-        color_legend_elements = [
-            Line2D([0], [0], marker='o', color='none', markerfacecolor='green',
-                markeredgecolor='green', label='Solid biomass', markersize=10, linewidth=0),
-            Line2D([0], [0], marker='o', color='none', markerfacecolor='lightgreen',
-                markeredgecolor='lightgreen', label='Additional solid biomass use\nwith high co2 seq. potential', markersize=10, linewidth=0),
-            Line2D([0], [0], marker='o', color='none', markerfacecolor='blue',
-                markeredgecolor='blue', label='Digestible biomass', markersize=10, linewidth=0),
-            Line2D([0], [0], marker='x', color='none', markerfacecolor='black',
-                markeredgecolor='black', label='Fossil fuels', markersize=10, linewidth=0),
-            Line2D([0], [0], marker='x', color='none', markerfacecolor='orange',
-                markeredgecolor='orange', label='Renewable energy', markersize=10, linewidth=0),
-        ]
 
+    if fill_usage and variant_plot and biomass_supply is not None:
+        color_legend_elements.insert(
+            1,
+            Line2D(
+                [0], [0], marker='o', color='none',
+                markerfacecolor='lightgreen', markeredgecolor='lightgreen',
+                label='Higher use in high CO2 seq. variant', markersize=10, linewidth=0
+            ),
+        )
+        color_legend_elements.insert(
+            2,
+            Line2D(
+                [0], [0], marker='o', color='none',
+                markerfacecolor='lightsalmon', markeredgecolor='lightsalmon',
+                label='Lower use in high CO2 seq. variant', markersize=10, linewidth=0
+            ),
+        )
 
     if biomass_supply is None:
         color_legend_elements = [
@@ -858,6 +969,11 @@ def create_gravitational_plot(
             Line2D([0], [0], marker='x', color='none', markerfacecolor='orange',
                 markeredgecolor='orange', label='Renewable energy', markersize=10, linewidth=0),
         ]
+
+    if hollow_biomass_legend:
+        for handle in color_legend_elements:
+            if handle.get_marker() == "o":
+                handle.set_markerfacecolor("none")
 
     legend2 = ax.legend(
         handles=color_legend_elements,
@@ -1456,9 +1572,9 @@ def plot_costs_vs_prices_combined(df, usage_dict_default, usage_dict_carbon_cost
         biomass: palette[i % len(palette)] for i, biomass in enumerate(biomass_types)
     }
     
-    # Calculate dimensions to fit legend within the specified figure size
-    # Reserve space for legend (approximately 20% of width)
-    legend_width_fraction = 0.22
+    # Calculate dimensions to fit legend within the specified figure size.
+    # Reserve explicit space on the right so the legend never overlaps the plots.
+    legend_width_fraction = 0.30
     plots_width_fraction = 1 - legend_width_fraction
     
     # Create figure with exact specified dimensions
@@ -1470,8 +1586,8 @@ def plot_costs_vs_prices_combined(df, usage_dict_default, usage_dict_carbon_cost
     bottom_margin = 0.12
     top_margin = 0.15  # Space for title
     subplot_height = 1 - top_margin - bottom_margin
-    subplot_width = (plots_width_fraction - left_margin) / 2
     spacing_between_plots = 0.02
+    subplot_width = (plots_width_fraction - left_margin - spacing_between_plots) / 2
     
     # Create subplots with precise positioning
     ax1 = fig.add_axes([left_margin, bottom_margin, subplot_width, subplot_height])
@@ -1614,15 +1730,16 @@ def plot_costs_vs_prices_combined(df, usage_dict_default, usage_dict_carbon_cost
     # Add shared legend positioned within the figure boundaries
     by_label = {handle.get_label(): handle for handle in legend_handles}
     
-    # Position legend in the reserved space on the right
-    legend_x = left_margin + 2.1 * subplot_width + spacing_between_plots + 0.02
+    # Position legend directly next to (not on top of) the right subplot.
+    plots_right_edge = left_margin + 2 * subplot_width + spacing_between_plots
+    legend_x = plots_right_edge + 0.02
     legend_y = 0.5
     
     fig.legend(
         by_label.values(),
         by_label.keys(),
         title="Biomass Types",
-        loc="center",
+        loc="center left",
         bbox_to_anchor=(legend_x, legend_y),
         bbox_transform=fig.transFigure,
         borderaxespad=0,
@@ -2227,7 +2344,7 @@ def plot_biomass_use(df, title, x_label, y_label, file_name, year=2050,export_di
                      biomass_potentials=None,
                      fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT, fontsize=DEFAULT_FONTSIZE, title_fontsize=DEFAULT_TITLE_FONTSIZE):
     file_path = f"{file_name}.{file_type}"
-    potentials_lookup = biomass_potentials if biomass_potentials is not None else biomass_potentials_TWh
+    potentials_lookup = biomass_potentials if biomass_potentials is not None else {}
 
     plt.rcParams.update({"font.size": 18})
     df["Data Name"] = df["Data Name"].str.replace("1", "")
@@ -2697,7 +2814,7 @@ def plot_bar_with_totals(
 
 
 def get_usage_dict(df, scenario, year=2050, biomass_potentials=None):
-    potentials = biomass_potentials if biomass_potentials is not None else biomass_potentials_TWh
+    potentials = biomass_potentials if biomass_potentials is not None else {}
     # remove 1 from data_name
     df["Data Name"] = df["Data Name"].str.replace("1", "")
     # filter year
@@ -4355,6 +4472,23 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
         file_type="png",
         capacity_factors=capacity_factors,
         variant_plot=True,
+        fig_width=12,
+        fig_height=7,
+        fontsize=fontsize,
+        title_fontsize=title_fontsize,
+    )
+    create_gravitational_plot(
+        "Cost vs Emissions/CSCs (Default, Unfilled)",
+        "gravitational_plot_default_unfilled",
+        biomass_supply=data,
+        biomass_potentials=default_potentials,
+        scenario="Default",
+        export_dir=export_path,
+        file_type="png",
+        capacity_factors=capacity_factors,
+        variant_plot=True,
+        fill_usage=False,
+        hollow_biomass_legend=True,
         fig_width=12,
         fig_height=7,
         fontsize=fontsize,

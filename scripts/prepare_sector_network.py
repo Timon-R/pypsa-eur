@@ -1596,7 +1596,9 @@ def insert_electricity_distribution_grid(
     v2gs = n.links.index[n.links.carrier == "V2G"]
     n.links.loc[v2gs, "bus1"] += " low voltage"
 
-    hps = n.links.index[n.links.carrier.str.contains("heat pump")]
+    # Only rewire heat-pump links that actually consume AC electricity at bus1.
+    # This avoids corrupting non-electric buses such as "lowT industry".
+    hps = n.links.carrier.str.contains("heat pump", na=False) & n.links.bus1.isin(nodes)
     n.links.loc[hps, "bus1"] += " low voltage"
 
     rh = n.links.index[n.links.carrier.str.contains("resistive heater")]
@@ -7083,6 +7085,18 @@ if __name__ == "__main__":
     maybe_adjust_costs_and_potentials(
         n, snakemake.params["adjustments"], investment_year
     )
+
+    # Fail fast on invalid link bus references before exporting the network.
+    link_bus_cols = [c for c in ["bus0", "bus1", "bus2", "bus3", "bus4"] if c in n.links]
+    for col in link_bus_cols:
+        mask = n.links[col].notna() & (n.links[col] != "") & ~n.links[col].isin(n.buses.index)
+        if mask.any():
+            bad_links = n.links.index[mask]
+            sample = ", ".join(bad_links[:5].astype(str))
+            raise RuntimeError(
+                f"Found {len(bad_links)} links with undefined `{col}` buses. "
+                f"Examples: {sample}"
+            )
 
     n.meta = dict(snakemake.config, **dict(wildcards=dict(snakemake.wildcards)))
 

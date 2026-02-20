@@ -1517,6 +1517,98 @@ def create_optimization_model(
     extra_functionality(n, n.snapshots, planning_horizons)
 
 
+def _is_nan_coeff_error(exc: Exception) -> bool:
+    """Check if an exception indicates NaN coefficients in a linear expression."""
+    message = str(exc).lower()
+    return "contains nan" in message and "coeff" in message
+
+
+def _get_link_dispatch_model_index(n: pypsa.Network) -> pd.Index:
+    """Get link names represented in the Link-p optimization variable."""
+    try:
+        link_dispatch = n.model["Link-p"]
+    except (AttributeError, KeyError):
+        return pd.Index([])
+
+    for dim in ("name", "Link"):
+        if dim in getattr(link_dispatch, "dims", ()):
+            coords = link_dispatch.coords[dim]
+            if hasattr(coords, "to_index"):
+                return pd.Index(coords.to_index())
+            return pd.Index(coords.values)
+    return pd.Index([])
+
+
+def _build_mga_weights(
+    n: pypsa.Network, links: pd.Index
+) -> dict[str, dict[str, pd.DataFrame]]:
+    # PyPSA MGA expects a time-indexed table of coefficients for Link-p.
+    # Build coefficients on the full Link-p index (0 for non-target links, 1 for targets)
+    # to avoid NaN coefficients when internal reindexing aligns against all links.
+    model_links = _get_link_dispatch_model_index(n)
+    all_links = model_links if not model_links.empty else pd.Index(links)
+    all_links = pd.Index(all_links).astype(str)
+    selected_links = pd.Index(links).astype(str)
+
+    coeffs = pd.DataFrame(0.0, index=n.snapshots, columns=all_links)
+    cols = coeffs.columns.intersection(selected_links)
+    if not cols.empty:
+        coeffs.loc[:, cols] = 1.0
+
+    return {
+        "Link": {
+            "p": coeffs,
+        }
+    }
+
+
+def _weights_have_nan_coeffs(
+    n: pypsa.Network, weights: dict[str, dict[str, pd.DataFrame]]
+) -> bool:
+    """
+    Check whether MGA weights create NaN coefficients in the objective expression.
+
+    Uses `build_linexpr_from_weights` when available (PyPSA >=0.35).
+    """
+    build_linexpr = getattr(n.optimize, "build_linexpr_from_weights", None)
+    if build_linexpr is None:
+        return False
+
+    try:
+        build_linexpr(weights).to_polars()
+        return False
+    except (TypeError, ValueError) as exc:
+        if _is_nan_coeff_error(exc):
+            return True
+        raise
+
+
+def _filter_nan_coeff_links(
+    n: pypsa.Network, links: pd.Index
+) -> tuple[pd.Index, pd.Index]:
+    """Filter out biomass links that would introduce NaN objective coefficients."""
+    if links.empty:
+        return links, pd.Index([])
+
+    weights = _build_mga_weights(n, links)
+    if not _weights_have_nan_coeffs(n, weights):
+        return links, pd.Index([])
+
+    logger.warning(
+        "Detected NaN coefficients in MGA objective. Checking biomass links individually."
+    )
+    valid_links = []
+    invalid_links = []
+    for link in links:
+        single_link = pd.Index([link])
+        if _weights_have_nan_coeffs(n, _build_mga_weights(n, single_link)):
+            invalid_links.append(link)
+        else:
+            valid_links.append(link)
+
+    return pd.Index(valid_links), pd.Index(invalid_links)
+
+
 def run_mga(
     n: pypsa.Network,
     solving: dict,
@@ -1552,22 +1644,60 @@ def run_mga(
 
     biomass_links = n.links.index[n.links.carrier.isin(biomass_types)]
     if biomass_links.empty:
-        logger.info("MGA enabled but no biomass links found; skipping.")
-        return None, None
+        raise RuntimeError(
+            "MGA is enabled but no biomass links were found in the network."
+        )
 
-    weights = {
-        "Link": {
-            "p": pd.DataFrame(1, index=n.snapshots, columns=biomass_links),
-        }
-    }
+    model_links = _get_link_dispatch_model_index(n)
+    logger.info(
+        f"MGA biomass link candidates: {len(biomass_links)}; Link-p model links: {len(model_links)}"
+    )
+    if not model_links.empty:
+        missing_in_model = biomass_links.difference(model_links)
+        if not missing_in_model.empty:
+            logger.warning(
+                f"Skipping {len(missing_in_model)} biomass links not represented in Link-p dispatch variables."
+            )
+        biomass_links = biomass_links.intersection(model_links)
+
+    if biomass_links.empty:
+        raise RuntimeError(
+            "MGA is enabled but none of the biomass links are represented in the Link-p model variables."
+        )
+
+    original_biomass_links = biomass_links.copy()
+    biomass_links, nan_links = _filter_nan_coeff_links(n, biomass_links)
+    if not nan_links.empty:
+        sample = ", ".join(nan_links[:5].astype(str))
+        logger.warning(
+            f"Skipping {len(nan_links)} biomass links that produce NaN MGA coefficients. Examples: {sample}"
+        )
+
+    if biomass_links.empty:
+        logger.warning(
+            "All biomass links were flagged by the NaN pre-check. "
+            "Retrying MGA once with the unfiltered biomass link set."
+        )
+        biomass_links = original_biomass_links
+
+    weights = _build_mga_weights(n, biomass_links)
 
     logger.info(f"Solving MGA. Sense: {mga['sense']}. Slack: {mga['slack']}.")
-    status, condition = n.optimize.optimize_mga(
-        weights=weights,
-        sense=mga["sense"],
-        slack=mga["slack"],
-        **solve_kwargs,
-    )
+    try:
+        status, condition = n.optimize.optimize_mga(
+            weights=weights,
+            sense=mga["sense"],
+            slack=mga["slack"],
+            **solve_kwargs,
+        )
+    except ValueError as exc:
+        if _is_nan_coeff_error(exc):
+            raise RuntimeError(
+                "MGA objective still contains NaN coefficients after sanitizing biomass links."
+            ) from exc
+        raise
+
+    condition = condition or ""
 
     if status != "ok":
         logger.warning(
