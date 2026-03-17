@@ -13,6 +13,10 @@ logging:
   level: INFO
   format: "%(levelname)s:%(name)s:%(message)s"
 
+# Local plotting controls (read by plotting.py only).
+plotting:
+  biomass_transport_cost_weighting: potential # options: potential, use
+
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#remote
 remote:
   ssh: ""

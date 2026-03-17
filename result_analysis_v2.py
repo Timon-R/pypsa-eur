@@ -110,6 +110,308 @@ def get_emission_factors(config_file_path = "config/config.yaml", new_names=Fals
 
     return emission_factors
 
+
+def _load_country_transport_costs_EUR_per_MWh():
+    """
+    Load country-specific biomass transport cost rates in EUR/MWh/km.
+    """
+    sc1_path = "data/biomass_transport_costs_supplychain1.csv"
+    sc2_path = "data/biomass_transport_costs_supplychain2.csv"
+    if not (os.path.isfile(sc1_path) and os.path.isfile(sc2_path)):
+        return None
+
+    sc1 = pd.read_csv(sc1_path, index_col=0, skiprows=2)
+    sc2 = pd.read_csv(sc2_path, index_col=0, skiprows=2)
+    transport_costs = pd.concat([sc1["EUR/km/ton"], sc2["EUR/km/ton"]], axis=1).mean(
+        axis=1
+    )
+    transport_costs /= 4.8  # MWh/t conversion
+    transport_costs = transport_costs.rename(index={"UK": "GB", "EL": "GR"})
+    if "SE" in transport_costs.index and "NO" not in transport_costs.index:
+        transport_costs.loc["NO"] = transport_costs.loc["SE"]
+    return transport_costs
+
+
+def _collect_biomass_transport_cost_rows(
+    results_dir,
+    scenarios,
+    weighting,
+    average_distance_km=200.0,
+):
+    """
+    Collect scenario/carrier weighted-average biomass transport adders [EUR/MWh].
+    """
+    if weighting not in {"use", "potential"}:
+        raise ValueError("weighting must be 'use' or 'potential'")
+
+    transport_costs = _load_country_transport_costs_EUR_per_MWh()
+    if transport_costs is None:
+        print(
+            "Warning: Missing biomass transport supply-chain input files. "
+            "Skipping biomass transport-cost exports."
+        )
+        return []
+
+    biomass_carriers = sorted(get_emission_factors(add_imported_biomass=True).keys())
+    no_transport_carriers = {"manure", "sludge", "solid biomass import"}
+
+    if scenarios == "all":
+        scenario_folders = [
+            folder
+            for folder in os.listdir(results_dir)
+            if os.path.isdir(os.path.join(results_dir, folder))
+        ]
+    else:
+        scenario_folders = [
+            folder
+            for folder in scenarios
+            if os.path.isdir(os.path.join(results_dir, folder))
+        ]
+
+    rows = []
+    for scenario in scenario_folders:
+        if weighting == "use":
+            source_path = os.path.join(results_dir, scenario, "csvs", "nodal_energy_balance.csv")
+            if not os.path.isfile(source_path):
+                print(
+                    f"Warning: Missing nodal_energy_balance.csv for '{scenario}'. "
+                    "Skipping scenario in use-weighted transport export."
+                )
+                continue
+            source_df = pd.read_csv(source_path, skiprows=3)
+            required_columns = {"component", "carrier", "location", "bus_carrier"}
+            if not required_columns.issubset(set(source_df.columns)):
+                print(
+                    f"Warning: nodal_energy_balance for '{scenario}' missing required columns "
+                    f"{sorted(required_columns)}. Skipping scenario in use-weighted transport export."
+                )
+                continue
+            value_column = source_df.columns[-1]
+            source_df["value"] = pd.to_numeric(source_df[value_column], errors="coerce").fillna(0.0)
+            weighted_rows = source_df[
+                (source_df["component"] == "Link")
+                & (source_df["carrier"].isin(biomass_carriers))
+                & (source_df["bus_carrier"] == source_df["carrier"])
+            ].copy()
+            weighted_rows["weight_mwh"] = (-weighted_rows["value"]).clip(lower=0.0)
+        else:
+            source_path = os.path.join(results_dir, scenario, "csvs", "nodal_capacities.csv")
+            if not os.path.isfile(source_path):
+                print(
+                    f"Warning: Missing nodal_capacities.csv for '{scenario}'. "
+                    "Skipping scenario in potential-weighted transport export."
+                )
+                continue
+            source_df = pd.read_csv(source_path, skiprows=3)
+            required_columns = {"component", "carrier", "location"}
+            if not required_columns.issubset(set(source_df.columns)):
+                print(
+                    f"Warning: nodal_capacities for '{scenario}' missing required columns "
+                    f"{sorted(required_columns)}. Skipping scenario in potential-weighted transport export."
+                )
+                continue
+            value_column = source_df.columns[-1]
+            source_df["value"] = pd.to_numeric(source_df[value_column], errors="coerce").fillna(0.0)
+            weighted_rows = source_df[
+                (source_df["component"] == "Store")
+                & (source_df["carrier"].isin(biomass_carriers))
+            ].copy()
+            weighted_rows["weight_mwh"] = weighted_rows["value"].clip(lower=0.0)
+
+        weighted_rows["country"] = weighted_rows["location"].astype(str).str[:2]
+        weighted_rows["transport_adder"] = weighted_rows["country"].map(transport_costs).fillna(0.0)
+        weighted_rows["transport_adder"] *= average_distance_km
+        weighted_rows.loc[
+            weighted_rows["carrier"].isin(no_transport_carriers), "transport_adder"
+        ] = 0.0
+
+        for carrier in biomass_carriers:
+            carrier_rows = weighted_rows[weighted_rows["carrier"] == carrier]
+            total_weight_mwh = float(carrier_rows["weight_mwh"].sum())
+            if total_weight_mwh > 0:
+                avg_transport_cost = float(
+                    (carrier_rows["weight_mwh"] * carrier_rows["transport_adder"]).sum()
+                    / total_weight_mwh
+                )
+            else:
+                avg_transport_cost = 0.0
+
+            rows.append(
+                {
+                    "scenario": scenario,
+                    "carrier": carrier,
+                    "weight_basis": weighting,
+                    "weight_TWh": total_weight_mwh * 1e-6,
+                    "avg_transport_cost_EUR_per_MWh": avg_transport_cost,
+                }
+            )
+
+    return rows
+
+
+def _export_transport_rows(rows, export_dir, filename):
+    if not rows:
+        return False
+    os.makedirs(export_dir, exist_ok=True)
+    output_path = os.path.join(export_dir, filename)
+    pd.DataFrame(rows).sort_values(["scenario", "carrier"]).to_csv(output_path, index=False)
+    print(f"Results exported to {output_path}")
+    return True
+
+
+def export_biomass_avg_transport_cost_by_type(
+    results_dir,
+    scenarios,
+    export_dir="export",
+    average_distance_km=200.0,
+):
+    """
+    Export both use-weighted and potential-weighted biomass transport adders [EUR/MWh].
+
+    Files written:
+    - biomass_avg_transport_cost_by_type_use_weighted.csv
+    - biomass_avg_transport_cost_by_type_potential_weighted.csv
+    - biomass_avg_transport_cost_by_type.csv (legacy alias, potential-weighted)
+    """
+    try:
+        use_rows = _collect_biomass_transport_cost_rows(
+            results_dir=results_dir,
+            scenarios=scenarios,
+            weighting="use",
+            average_distance_km=average_distance_km,
+        )
+        potential_rows = _collect_biomass_transport_cost_rows(
+            results_dir=results_dir,
+            scenarios=scenarios,
+            weighting="potential",
+            average_distance_km=average_distance_km,
+        )
+    except Exception as exc:
+        print(
+            "Warning: Failed to build biomass transport-cost outputs. "
+            f"Skipping export. ({exc})"
+        )
+        return
+
+    wrote_use = _export_transport_rows(
+        use_rows,
+        export_dir,
+        "biomass_avg_transport_cost_by_type_use_weighted.csv",
+    )
+    wrote_potential = _export_transport_rows(
+        potential_rows,
+        export_dir,
+        "biomass_avg_transport_cost_by_type_potential_weighted.csv",
+    )
+
+    if wrote_potential:
+        _export_transport_rows(
+            potential_rows,
+            export_dir,
+            "biomass_avg_transport_cost_by_type.csv",
+        )
+    elif not wrote_use:
+        print(
+            "Warning: No biomass transport-cost rows produced. "
+            "Skipped biomass transport-cost exports."
+        )
+
+
+def calculate_renewable_lcoe(
+    results,
+    scenarios,
+    year="2050",
+    carriers=("solar", "solar-hsat", "onwind"),
+):
+    """
+    Calculate model-implied renewable LCOE [EUR/MWh] from summary outputs.
+
+    Uses:
+    - costs.csv: capital + marginal costs by (component, carrier)
+    - energy.csv: generated energy by (component, carrier)
+    """
+    rows = []
+    if scenarios == "all":
+        scenario_list = list(results.keys())
+    else:
+        scenario_list = list(scenarios)
+
+    for scenario in scenario_list:
+        scenario_data = results.get(scenario, {})
+        costs_df = scenario_data.get("costs")
+        energy_df = scenario_data.get("energy")
+
+        if costs_df is None or energy_df is None:
+            print(
+                f"Warning: Missing costs/energy for '{scenario}'. "
+                "Skipping renewable LCOE export for this scenario."
+            )
+            continue
+        if not {"A", "B", "C", "D"}.issubset(set(costs_df.columns)):
+            print(
+                f"Warning: Unexpected costs format for '{scenario}'. "
+                "Skipping renewable LCOE export for this scenario."
+            )
+            continue
+        if not {"A", "B", "C"}.issubset(set(energy_df.columns)):
+            print(
+                f"Warning: Unexpected energy format for '{scenario}'. "
+                "Skipping renewable LCOE export for this scenario."
+            )
+            continue
+
+        costs_df = costs_df.copy()
+        energy_df = energy_df.copy()
+        costs_df["D"] = pd.to_numeric(costs_df["D"], errors="coerce").fillna(0.0)
+        energy_df["C"] = pd.to_numeric(energy_df["C"], errors="coerce").fillna(0.0)
+
+        generator_costs = costs_df[costs_df["B"] == "Generator"]
+        capital = generator_costs[generator_costs["A"] == "capital"].set_index("C")["D"]
+        marginal = generator_costs[generator_costs["A"] == "marginal"].set_index("C")["D"]
+        generation = energy_df[energy_df["A"] == "Generator"].set_index("B")["C"]
+
+        for carrier in carriers:
+            generation_mwh = float(generation.get(carrier, 0.0))
+            if generation_mwh <= 0:
+                continue
+            capital_eur = float(capital.get(carrier, 0.0))
+            marginal_eur = float(marginal.get(carrier, 0.0))
+            total_eur = capital_eur + marginal_eur
+            lcoe = total_eur / generation_mwh
+            rows.append(
+                {
+                    "Folder": scenario,
+                    "Year": str(year),
+                    "Data Name": carrier,
+                    "Generation [MWh]": generation_mwh,
+                    "Capital costs [EUR]": capital_eur,
+                    "Marginal costs [EUR]": marginal_eur,
+                    "Total costs [EUR]": total_eur,
+                    "LCOE [EUR/MWh]": lcoe,
+                }
+            )
+    return rows
+
+
+def export_renewable_lcoe(
+    results,
+    scenarios,
+    export_dir="export",
+    year="2050",
+):
+    rows = calculate_renewable_lcoe(results, scenarios, year=year)
+    if not rows:
+        print("Warning: No renewable LCOE rows produced.")
+        return
+    os.makedirs(export_dir, exist_ok=True)
+    file_path = os.path.join(export_dir, "renewable_lcoe.csv")
+    (
+        pd.DataFrame(rows)
+        .sort_values(["Folder", "Data Name"])
+        .to_csv(file_path, index=False)
+    )
+    print(f"Results exported to {file_path}")
+
 def load_results(results_dir, folders="all"):
     """
     Load results from CSV files in the specified directory.
@@ -210,93 +512,89 @@ def calculate_difference(
     dict: Dictionary containing the processed data.
     """
     # Get the dataframes
-    df1 = results[scenario1][dataframe]
-    df2 = results[scenario2][dataframe]
+    df1 = results[scenario1][dataframe].copy()
+    df2 = results[scenario2][dataframe].copy()
 
     merged_df1 = pd.DataFrame()
     merged_df2 = pd.DataFrame()
-    for df, merged_df, scenario in [
-        (df1, merged_df1, scenario1),
-        (df2, merged_df2, scenario2),
-    ]:
-        # remove the data that should be removed, all fields must meet the corresponding remove condition (a list of fields)
+    remaining_data = {}
+
+    for df_source, scenario in [(df1, scenario1), (df2, scenario2)]:
+        df = df_source.reset_index(drop=True).copy()
+        merged_df = pd.DataFrame()
+
+        # Remove data where all fields in a remove-condition match.
         for remove in remove_list:
-            condition = pd.Series([True] * len(df))
+            condition = pd.Series([True] * len(df), index=df.index)
             for field in remove:
-                condition &= ~df.iloc[:, 0].str.contains(field, case=False, na=False)
-            df = df[condition]
+                condition &= ~df.iloc[:, 0].astype(str).str.contains(
+                    field, case=False, na=False
+                )
+            df = df[condition].reset_index(drop=True)
 
-        df1 = df1.reset_index(drop=True)
-        df2 = df2.reset_index(drop=True)
         for merge_conditions, new_name, is_cc in merge_list:
-            merged_data = pd.DataFrame()
-            df = df.reset_index(drop=True)
-            condition = pd.Series([False] * len(df))
+            if df.empty:
+                break
 
+            # Build a fresh OR-mask for this merge group only.
+            condition = pd.Series([False] * len(df), index=df.index)
             for merge_condition in merge_conditions:
                 field_condition = pd.Series([True] * len(df), index=df.index)
                 for i, field in enumerate(merge_condition):
-                    field_condition &= df.iloc[:, i].str.contains(
+                    field_condition &= df.iloc[:, i].astype(str).str.contains(
                         field, case=True, na=False
                     )
                 condition |= field_condition
-                condition = condition.reindex(df.index, fill_value=False)
-                added_data = df[condition]
-                # if is_cc is True, CC case sensitive must be in the data_name
-                if is_cc:
-                    added_data = added_data[
-                        added_data[data_name_columns[-1]].str.contains(
-                            "CC", case=True, na=False
-                        )
-                    ]
-                # if is_cc is False, CC case sensitive must not be in the data_name
-                elif is_cc == False:
-                    added_data = added_data[
-                        ~added_data[data_name_columns[-1]].str.contains(
-                            "CC", case=True, na=False
-                        )
-                    ]
-                else:
-                    added_data = added_data
-                merged_data = pd.concat([merged_data, added_data])
-                # remove the added data from the original data
-                if not merged_data.empty:
-                    if scenario == scenario1:
-                        df1 = df1[~df1.index.isin(merged_data.index)]
-                        df1 = df1.reset_index(drop=True)
-                    else:
-                        df2 = df2[~df2.index.isin(merged_data.index)]
-                        df2 = df2.reset_index(drop=True)
-                    df = df[~df.index.isin(merged_data.index)]
-                    df = df.reset_index(drop=True)
-            # create a new row using the new_name and the sum of the values of merged rows
-            if not merged_data.empty:
-                new_row = {
-                    "folder": scenario1,
-                    "year": year,
-                    "data_name": new_name,
-                    "values": merged_data[value_column].sum() * multiplier,
-                }
-                merged_df = pd.concat([merged_df, pd.DataFrame([new_row])])
+
+            added_data = df[condition].copy()
+
+            # CC filtering inside the matched subset.
+            if is_cc is True:
+                added_data = added_data[
+                    added_data[data_name_columns[-1]]
+                    .astype(str)
+                    .str.contains("CC", case=True, na=False)
+                ]
+            elif is_cc is False:
+                added_data = added_data[
+                    ~added_data[data_name_columns[-1]]
+                    .astype(str)
+                    .str.contains("CC", case=True, na=False)
+                ]
+
+            if added_data.empty:
+                continue
+
+            # Create merged row using the sum of matched values.
+            new_row = {
+                "folder": scenario,
+                "year": year,
+                "data_name": new_name,
+                "values": added_data[value_column].sum() * multiplier,
+            }
+            merged_df = pd.concat([merged_df, pd.DataFrame([new_row])], ignore_index=True)
+
+            # Remove only the rows actually used for this merge.
+            df = df.drop(index=added_data.index).reset_index(drop=True)
+
         if scenario == scenario1:
             merged_df1 = merged_df
         else:
             merged_df2 = merged_df
+        remaining_data[scenario] = df
 
     # Add remaining data, data_name will be a combination of the data_name_columns
-    for df, scenario, merged_df in [
-        (df1, scenario1, merged_df1),
-        (df2, scenario2, merged_df2),
-    ]:
+    for scenario, merged_df in [(scenario1, merged_df1), (scenario2, merged_df2)]:
+        df = remaining_data.get(scenario, pd.DataFrame())
         for _, row in df.iterrows():
-            key = "_".join([row[column] for column in data_name_columns])
+            key = "_".join([str(row[column]) for column in data_name_columns])
             key = key.replace(" ", "_")
             new_row = {
                 "year": year,
                 "data_name": key,
                 "values": row[value_column] * multiplier,
             }
-            merged_df = pd.concat([merged_df, pd.DataFrame([new_row])])
+            merged_df = pd.concat([merged_df, pd.DataFrame([new_row])], ignore_index=True)
         if scenario == scenario1:
             merged_df1 = merged_df
         else:
@@ -1734,6 +2032,11 @@ def merge_data(data_dict, merge_fields, data_name_key, value_key, excepted_keys,
 def main(results_dir="results", export_dir="export",scenarios=["default", "carbon_costs"],difference_scenarios=["default", "carbon_costs"]):
 
     results = load_results(results_dir, scenarios)
+    export_biomass_avg_transport_cost_by_type(
+        results_dir=results_dir,
+        scenarios=scenarios,
+        export_dir=export_dir,
+    )
 
     electricity_generation_share = get_data(
         results,
@@ -2025,6 +2328,79 @@ def main(results_dir="results", export_dir="export",scenarios=["default", "carbo
                     - cost_difference[existing_key][f"values_{scenario1}"]
                 )
 
+    # Merge biomass-to-methanol capital + marginal parts into one category.
+    methanol_parts = {
+        "capital_Link_biomass-to-methanol",
+        "marginal_Link_biomass-to-methanol",
+    }
+    methanol_keys = [
+        key
+        for key, content in cost_difference.items()
+        if content.get("data_name") in methanol_parts
+    ]
+    if methanol_keys:
+        methanol_val1 = 0.0
+        methanol_val2 = 0.0
+        methanol_year = "2050"
+        for key in methanol_keys:
+            content = cost_difference[key]
+            methanol_val1 += float(content.get(f"values_{scenario1}", 0.0) or 0.0)
+            methanol_val2 += float(content.get(f"values_{scenario2}", 0.0) or 0.0)
+            methanol_year = content.get("year", methanol_year)
+            del cost_difference[key]
+
+        existing_key = next(
+            (
+                key
+                for key, value in cost_difference.items()
+                if value.get("data_name") == "biomass-to-methanol"
+                and value.get("year") == methanol_year
+            ),
+            None,
+        )
+        if existing_key is None:
+            merged_key = f"{scenario1}_{scenario2}_{methanol_year}_biomass-to-methanol"
+            cost_difference[merged_key] = {
+                "year": methanol_year,
+                "data_name": "biomass-to-methanol",
+                f"values_{scenario1}": methanol_val1,
+                f"values_{scenario2}": methanol_val2,
+                "difference": methanol_val2 - methanol_val1,
+            }
+        else:
+            cost_difference[existing_key][f"values_{scenario1}"] += methanol_val1
+            cost_difference[existing_key][f"values_{scenario2}"] += methanol_val2
+            cost_difference[existing_key]["difference"] = (
+                cost_difference[existing_key][f"values_{scenario2}"]
+                - cost_difference[existing_key][f"values_{scenario1}"]
+            )
+
+    # Merge all methanolisation cost types (capital, marginal, etc.) into one category.
+    methanolisation_keys = [
+        key
+        for key, content in cost_difference.items()
+        if "methanolisation" in str(content.get("data_name", ""))
+    ]
+    if methanolisation_keys:
+        methanolisation_val1 = 0.0
+        methanolisation_val2 = 0.0
+        methanolisation_year = "2050"
+        for key in methanolisation_keys:
+            content = cost_difference[key]
+            methanolisation_val1 += float(content.get(f"values_{scenario1}", 0.0) or 0.0)
+            methanolisation_val2 += float(content.get(f"values_{scenario2}", 0.0) or 0.0)
+            methanolisation_year = content.get("year", methanolisation_year)
+            del cost_difference[key]
+
+        merged_key = f"{scenario1}_{scenario2}_{methanolisation_year}_methanolisation"
+        cost_difference[merged_key] = {
+            "year": methanolisation_year,
+            "data_name": "methanolisation",
+            f"values_{scenario1}": methanolisation_val1,
+            f"values_{scenario2}": methanolisation_val2,
+            "difference": methanolisation_val2 - methanolisation_val1,
+        }
+
     export_results(cost_difference, "cost_difference.csv", include_difference=True, export_dir=export_dir, scenario1=difference_scenarios[0], scenario2=difference_scenarios[1])
 
     hydrogen_production = get_data(
@@ -2136,6 +2512,7 @@ def main(results_dir="results", export_dir="export",scenarios=["default", "carbo
     )
     weighted_prices = add_costs(weighted_prices, shadow_price)
     export_results(weighted_prices, "weighted_prices.csv",export_dir=export_dir, simply_print=True)
+    export_renewable_lcoe(results, scenarios, export_dir=export_dir, year="2050")
 
     solid_biomass_supply = get_data(
         results,
