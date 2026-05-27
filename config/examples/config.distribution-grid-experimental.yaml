@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../schema.json
+# yaml-language-server: $schema=../schema.default.json
 # SPDX-FileCopyrightText: Contributors to PyPSA-Eur <https://github.com/pypsa/pypsa-eur>
 #
 # SPDX-License-Identifier: CC0-1.0
@@ -67,7 +67,7 @@ overpass_api:
 
 osm_network_release:
   release_version: "experimental"
-  under_construction: keep
+  under_construction: remove
   remove_after: "2025-12-31"
   compare_to:
     version: latest

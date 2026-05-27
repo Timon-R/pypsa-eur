@@ -47,6 +47,10 @@ class DataConfig(BaseModel):
         default_factory=_DataSourceConfig,
         description="World Bank urban population data source configuration.",
     )
+    worldbank_commodity_prices: _DataSourceConfig = Field(
+        default_factory=_DataSourceConfig,
+        description="World Bank commodity prices data source configuration.",
+    )
     gem_europe_gas_tracker: _DataSourceConfig = Field(
         default_factory=_DataSourceConfig,
         description="GEM Europe Gas Tracker data source configuration.",
@@ -106,6 +110,10 @@ class DataConfig(BaseModel):
     seawater_temperature: _DataSourceConfig = Field(
         default_factory=_DataSourceConfig,
         description="Seawater temperature data source configuration.",
+    )
+    swiss_energy_balances: _DataSourceConfig = Field(
+        default_factory=lambda: _DataSourceConfig(source="primary"),
+        description="Swiss energy balances data source configuration.",
     )
     synthetic_electricity_demand: _DataSourceConfig = Field(
         default_factory=lambda: _DataSourceConfig(source="primary"),
@@ -196,7 +204,7 @@ class DataConfig(BaseModel):
         description="Powerplants data source configuration.",
     )
     costs: _DataSourceConfig = Field(
-        default_factory=lambda: _DataSourceConfig(source="primary"),
+        default_factory=_DataSourceConfig,
         description="Costs data source configuration.",
     )
     country_runoff: _DataSourceConfig = Field(
@@ -238,6 +246,18 @@ class DataConfig(BaseModel):
     jrc_ardeco: _DataSourceConfig = Field(
         default_factory=_DataSourceConfig,
         description="JRC ARDECO data source configuration.",
+    )
+    jrc_energy_atlas: _DataSourceConfig = Field(
+        default_factory=_DataSourceConfig,
+        description="JRC Energy Atlas data source configuration.",
+    )
+    desnz_electricity_consumption: _DataSourceConfig = Field(
+        default_factory=_DataSourceConfig,
+        description="DESNZ (UK Department for Energy Security and Net Zero) electricity consumption data source configuration.",
+    )
+    ons_lad: _DataSourceConfig = Field(
+        default_factory=_DataSourceConfig,
+        description="ONS (Office for National Statistics) Local Authority District data source configuration.",
     )
     bidding_zones_electricitymaps: _DataSourceConfig = Field(
         default_factory=_DataSourceConfig,
