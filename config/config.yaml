@@ -588,8 +588,8 @@ biomass:
   emission_factors: #tCO2/MWh #municipal solid waste is not included in the emission factors
     agricultural waste: 0.04284
     fuelwood residues: 0.09 #tco2/MWh
-    secondary forestry residues: 0.2772
-    sawdust: 0.1872
+    secondary forestry residues: 0.2736
+    sawdust: 0.2844
     residues from landscape care: 0
     grasses: 0.2016
     woody crops: 0.1908

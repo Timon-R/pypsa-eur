@@ -3129,6 +3129,164 @@ def plot_efs_for_presentation(export_dir="export/plots",file_type="png",
     print(f"Emission factors plot saved to {file_path}")
 
 
+def plot_efs_clean(
+    export_dir="export/plots",
+    file_type="png",
+    fig_width=12,
+    fig_height=5,
+    fontsize=11,
+    title_fontsize=13,
+):
+    """Clean emission factor bar chart, grouped by category, no cost labels."""
+
+    # ── Data ────────────────────────────────────────────────────────────────
+    # Ordered by category: Agriculture → Forest/Wood → Waste/Other → Fossils
+    categories = {
+        "Agriculture": [
+            "crop residues",
+            "grasses",
+            "woody crops",
+            "manure",
+        ],
+        "Forest & Wood": [
+            "logging residues",
+            "secondary forestry residues",
+            "sawdust",
+            "chips and pellets",
+            "stemwood",
+            "imported biomass",
+        ],
+        "Other": [
+            "residues from landscape care",
+            "sludge",
+            "municipal waste",
+        ],
+        "Fossil fuels": [
+            "natural gas",
+            "oil",
+            "coal",
+        ],
+    }
+
+    fossil_efs = {"natural gas": 0.198, "oil": 0.2571, "coal": 0.3361}
+    other_efs = {
+        "residues from landscape care": emission_factors_new_names.get("residues from landscape care", 0),
+        "sludge": emission_factors_new_names.get("sludge", 0),
+        "municipal waste": 0.0,
+    }
+
+    # Colours: two green shades for biomass categories, distinct for fossils
+    cat_colors = {
+        "Agriculture":    "#6abf69",   # medium green
+        "Forest & Wood":  "#2e7d32",   # dark green
+        "Other":          "#a5d6a7",   # light green
+        "Fossil fuels":   None,        # handled per-bar below
+    }
+    fossil_bar_colors = {
+        "natural gas": "#78909c",   # blue-grey
+        "oil":         "#8d4004",   # dark brown
+        "coal":        "#212121",   # near-black
+    }
+
+    # ── Layout ───────────────────────────────────────────────────────────────
+    plt.rcParams.update({"font.size": fontsize, "font.family": "sans-serif"})
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+
+    bar_width = 0.72
+    category_gap = 0.9   # extra space between categories
+    bar_gap = 0.28       # space between bars within a category
+
+    x_coords = []
+    bar_colors = []
+    labels = []
+    efs = []
+
+    x = 0.0
+    cat_spans = {}   # {cat_name: (x_start, x_end)} for bracket/legend
+
+    for cat_idx, (cat_name, members) in enumerate(categories.items()):
+        x_start = x
+        for member in members:
+            if cat_name == "Fossil fuels":
+                ef = fossil_efs[member]
+                color = fossil_bar_colors[member]
+            elif cat_name == "Other":
+                ef = other_efs.get(member, 0)
+                color = cat_colors[cat_name]
+            else:
+                ef = emission_factors_new_names.get(member)
+                if ef is None:
+                    continue
+                color = cat_colors[cat_name]
+            x_coords.append(x)
+            bar_colors.append(color)
+            labels.append(member)
+            efs.append(ef)
+            x += bar_width + bar_gap
+        x_end = x - bar_gap
+        cat_spans[cat_name] = (x_start, x_end)
+        x += category_gap   # extra gap between categories
+
+    # ── Draw bars ────────────────────────────────────────────────────────────
+    for xi, ef, color in zip(x_coords, efs, bar_colors):
+        ax.bar(xi, ef, width=bar_width, color=color, linewidth=0,
+               zorder=3, alpha=0.92)
+
+    # ── Category separators ──────────────────────────────────────────────────
+    ylim_top = max(efs) * 1.18
+    ax.set_ylim(0, ylim_top)
+
+    # Draw a thin vertical line between categories
+    prev_xe = None
+    for cat_name, (xs, xe) in cat_spans.items():
+        if prev_xe is not None:
+            sep_x = (prev_xe + xs) / 2
+            ax.axvline(sep_x, color="#cccccc", lw=1.0, linestyle="--", zorder=1)
+        prev_xe = xe
+
+    # ── Axes formatting ──────────────────────────────────────────────────────
+    ax.set_xticks(x_coords)
+    ax.set_xticklabels(labels, rotation=40, ha="right", fontsize=fontsize - 1)
+    ax.set_ylabel("tonCO₂/MWh", fontsize=fontsize)
+    ax.set_title("Emission Factors for Biomass and Fossil Fuel Feedstocks",
+                 fontsize=title_fontsize, pad=10)
+
+    ax.yaxis.grid(True, linestyle="--", linewidth=0.6, alpha=0.6, zorder=0)
+    ax.set_axisbelow(True)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    # Category legend
+    legend_handles = [
+        mpatches.Patch(color=cat_colors["Agriculture"],   label="Agriculture"),
+        mpatches.Patch(color=cat_colors["Forest & Wood"], label="Forest & Wood"),
+        mpatches.Patch(color=cat_colors["Other"],         label="Other"),
+        mpatches.Patch(color=fossil_bar_colors["natural gas"], label="Natural gas"),
+        mpatches.Patch(color=fossil_bar_colors["oil"],    label="Oil"),
+        mpatches.Patch(color=fossil_bar_colors["coal"],   label="Coal"),
+    ]
+    ax.legend(handles=legend_handles, loc="upper left", frameon=False,
+              fontsize=fontsize - 1, ncol=6)
+
+    # Secondary y-axis in g/MJ
+    ax2 = ax.twinx()
+    ax2.set_ylim(ax.get_ylim()[0] / 0.0036, ax.get_ylim()[1] / 0.0036)
+    ax2.set_ylabel("gCO₂/MJ", fontsize=fontsize)
+    ax2.yaxis.set_major_locator(MultipleLocator(10))
+    ax2.spines["top"].set_visible(False)
+
+    plt.tight_layout()
+
+    # ── Save ─────────────────────────────────────────────────────────────────
+    os.makedirs(export_dir, exist_ok=True)
+    out_path = os.path.join(export_dir, f"emission_factors_clean.{file_type}")
+    if out_path.endswith(".pgf"):
+        configure_for_pgf()
+    plt.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"Clean emission factors plot saved to {out_path}")
+
+
 def plot_bar_with_totals(
     df,
     title,
@@ -5882,7 +6040,7 @@ if __name__ == "__main__":
 
     custom_order = ["Default", "Carbon Stock Changes", "Default 710", "Carbon Stock Changes 710"]  
     export_dir = "export/main_plots"
-    data_folder = "export/main"
+    data_folder = "export/main_new"
     
     # Configure plot dimensions and font sizes
     fig_width = 10  # Change this to adjust all plot widths (10)
@@ -5890,10 +6048,11 @@ if __name__ == "__main__":
     fontsize = 14   # Change this to adjust general font size (14)
     title_fontsize = 18  # Change this to adjust title font size (18)
 
-    specific_plots(fig_width=fig_width, fig_height=fig_height, fontsize=fontsize, title_fontsize=title_fontsize)
+    specific_plots(folder_path=data_folder, fig_width=fig_width, fig_height=fig_height, fontsize=fontsize, title_fontsize=title_fontsize)
     main(custom_order=custom_order, file_type=file_type, export_dir=export_dir, data_folder=data_folder, 
          fig_width=fig_width, fig_height=fig_height, fontsize=fontsize, title_fontsize=title_fontsize)
     plot_efs(export_dir=export_dir)
+    plot_efs_clean(export_dir=export_dir, file_type=file_type)
     #plot_efs_for_presentation(export_dir=export_dir, file_type=file_type)
 
     mga_fontsize = max(fontsize + 4, 18)

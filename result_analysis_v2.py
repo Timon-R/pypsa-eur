@@ -12,8 +12,8 @@ import pypsa
 import yaml
 
 
-DEFAULT_RESULTS_DIR = "results/main"
-DEFAULT_EXPORT_DIR = "export/main"
+DEFAULT_RESULTS_DIR = "results/main_new"
+DEFAULT_EXPORT_DIR = "export/main_new"
 DEFAULT_SCENARIOS = ("default", "default_710", "cscs", "cscs_710")
 DEFAULT_DIFFERENCE_SCENARIOS = ("default", "cscs")
 
