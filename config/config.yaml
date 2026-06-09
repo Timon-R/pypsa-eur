@@ -27,8 +27,9 @@ run:
     file: config/scenarios.yaml
   disable_progressbar: false
   shared_resources:
-    policy: false
-    exclude: []
+    policy: base
+    exclude:
+    - costs_  # processed cost table: producer keeps {planning_horizons}, consumers resolve the year -> force per-run on both so base doesn't split them
   use_shadow_directory: false
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#foresight
@@ -143,6 +144,7 @@ electricity:
     - "offwind-float"
     - OCGT
     - CCGT
+    - nuclear
     StorageUnit: []
     Store:
     - battery
@@ -581,17 +583,17 @@ biomass:
     2045: 1
     2050: 1
   emission_factors: #tCO2/MWh #municipal solid waste is not included in the emission factors
-    agricultural waste: 0
-    fuelwood residues: 0
-    secondary forestry residues: 0
-    sawdust: 0
-    residues from landscape care: 0
-    grasses: 0
-    woody crops: 0
-    fuelwoodRW: 0
-    manure: 0
-    sludge: 0
-    C&P_RW: 0
+    agricultural waste: 0.01116 #3.1 g/MJ (straw)
+    fuelwood residues: 0.1368 #38 g/MJ (logging residues)
+    secondary forestry residues: 0.36 #100 g/MJ (woodchips)
+    sawdust: 0.36 #100 g/MJ
+    residues from landscape care: 0 #0 by assumption
+    grasses: 0.13 #35 g/MJ (Miscanthus, switchgrass; supplement)
+    woody crops: 0.14 #39 g/MJ (poplar, willow; supplement)
+    fuelwoodRW: 0.3276 #91 g/MJ (fuel wood)
+    manure: 0.01944 #5.4 g/MJ (manure biogas)
+    sludge: 0 #0 by assumption
+    C&P_RW: 0.3312 #92 g/MJ (pellets)
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#solar_thermal
 solar_thermal:
@@ -911,7 +913,7 @@ sector:
       ocgt: true
       allam: false
     biomass_to_methanol: true
-    biomass_to_methanol_cc: false
+    biomass_to_methanol_cc: true
   ammonia: true
   min_part_load_electrolysis: 0
   min_part_load_fischer_tropsch: 0.5
@@ -956,9 +958,9 @@ sector:
   gas_distribution_grid: true
   gas_distribution_grid_cost_factor: 1.0
   biomass_spatial: true
-  biomass_transport: false
+  biomass_transport: true
   biogas_upgrading: true
-  biogas_upgrading_cc: false
+  biogas_upgrading_cc: true
   conventional_generation:
     OCGT: gas
     CCGT: gas
@@ -1016,7 +1018,7 @@ sector:
     enable: true
     price: 54 #EUR/MWh
     max_amount: 1390 # TWh
-    upstream_emissions_factor: 0.52 #share of solid biomass CO2 emissions at full combustion, equals 0.1908/0.3667 (53 g/MJ; same as woody crops) 
+    upstream_emissions_factor: 0.72 #fraction of biomass combustion CO2 intensity (0.3667 tCO2/MWh); import-weighted ClimFor CSC = 73.0 gCO2/MJ = 0.263 tCO2/MWh (see supplement)
   non-edible_crops: true
   imports:
     enable: false
@@ -1030,9 +1032,9 @@ sector:
       oil: 125
   renewable_emissions:
     enable: true
-    solar: 1.87 
-    onwind: 2.77 
-    solar-hsat: 0.21 #ton/MW
+    solar: 5.60 #tCO2/MW/yr; E_loss=198 tCO2/ha x 1.15 ha/MW x r_elec=2.46%
+    onwind: 0.63 #tCO2/MW/yr; E_loss=198 tCO2/ha x 0.13 ha/MW x r_elec=2.46%
+    solar-hsat: 8.28 #tCO2/MW/yr; E_loss=198 tCO2/ha x 1.70 ha/MW x r_elec=2.46%
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#industry
 industry:

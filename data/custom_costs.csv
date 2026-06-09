@@ -11,3 +11,6 @@ all,battery inverter,marginal_cost,0,EUR/MWh,Default value to prevent mathematic
 all,home battery storage,marginal_cost,0,EUR/MWh,Default value to prevent mathematical degeneracy in optimisation,
 all,water tank charger,marginal_cost,0.03,EUR/MWh,Default value to prevent mathematical degeneracy in optimisation,
 all,central water pit charger,marginal_cost,0.025,EUR/MWh,Default value to prevent mathematical degeneracy in optimisation,
+all,electricity grid connection,investment,148.151,EUR/kW,from old pypsa cost assumptions (missing in Timon_09 fork),
+all,electricity grid connection,FOM,2.0,%/year,from old pypsa cost assumptions (missing in Timon_09 fork),
+all,electricity grid connection,lifetime,40.0,years,from old pypsa cost assumptions (missing in Timon_09 fork),

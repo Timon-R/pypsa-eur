@@ -38,7 +38,7 @@
 # - Condsider creating a new conda environment for the decoupled GSA workflow to avoid conflicts with other packages.
 # - The `covariance_plot` option can be used to visualize parameter covariance.
 # - Currently the script only support unifrom distribution, but it can be changed to other distributions if needed as long as SALib supports it.
-# - Setting run.shared_resources.policy to base or true can reduce computation—unfortunately while it worked for me before, I currently have wildcard errors when using it (RuleException in file "[...]build_electricity.smk", line 310:Not all output, log and benchmark files of rule build_renewable_profiles contain the same wildcards. This is crucial though, in order to avoid that two or more jobs write to the same file.)
+# - Set run.shared_resources.policy to "base" to avoid recomputing the run-invariant upstream resources (cutouts, base network, renewable availability matrices and profiles, etc.) for every GSA run; only the elec/sector/solved networks—which depend on the sampled parameters—are kept per-run. The earlier wildcard error (build_renewable_profiles) was fixed upstream (PR #1403) and no longer occurs. Do NOT use policy "true": it strips the {run} wildcard from the per-run networks too, collapsing all GSA runs onto the same files.
 
 general:
   replicates: 10 #10 is standard
