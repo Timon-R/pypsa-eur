@@ -9,8 +9,15 @@ rule solve_sector_network:
             "networks/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}.nc"
         ),
     output:
-        network=temp(RESULTS
-        + "networks/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}.nc"),
+        network=(
+            RESULTS
+            + "networks/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}.nc"
+            if config["solving"]["options"].get("keep_network", False)
+            else temp(
+                RESULTS
+                + "networks/base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}.nc"
+            )
+        ),
         config=RESULTS
         + "configs/config.base_s_{clusters}_{opts}_{sector_opts}_{planning_horizons}.yaml",
         model=(

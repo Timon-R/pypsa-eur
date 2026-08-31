@@ -3757,6 +3757,7 @@ def add_biomass(
     cf_industry,
     pop_layout,
     biomass_potentials_file,
+    biomass_potentials_all_file=None,
     biomass_transport_costs_file=None,
     nyears=1,
 ):
@@ -3788,7 +3789,11 @@ def add_biomass(
     pop_layout : pd.DataFrame
         DataFrame containing population layout information
     biomass_potentials_file : str
-        Path to CSV file containing biomass potentials data
+        Path to CSV file containing biomass potentials data (aggregated by carrier)
+    biomass_potentials_all_file : str, optional
+        Path to CSV file containing biomass potentials resolved by individual
+        feedstock. Used to compute potential-weighted fuel costs for carriers that
+        bundle several feedstocks. Falls back to an unweighted mean if not provided.
     biomass_transport_costs_file : str, optional
         Path to CSV file containing biomass transport costs data.
         Required if biomass_transport or biomass_spatial options are True.
@@ -3816,15 +3821,27 @@ def add_biomass(
     biomass_potentials = pd.read_csv(biomass_potentials_file, index_col=0) * nyears
     biomass_types = list(snakemake.params["biomass"]["classes"].keys())
     biomass_types.remove("not included")
-    # Creates a costs dictionary for the biomass carriers, if a carrier consists of multiple biomass types, a (unweighted!) cost average is calculated
-    biomass_costs = {
-        carrier: sum(
-            costs.at[biomass, "fuel"]
-            for biomass in snakemake.params["biomass"]["classes"][carrier]
-        )
-        / len(snakemake.params["biomass"]["classes"][carrier])
-        for carrier in biomass_types
-    }
+
+    # Per-feedstock EU-total potentials (TWh/a, before carrier aggregation) used to
+    # weight the fuel cost of carriers that bundle several feedstocks.
+    if biomass_potentials_all_file is not None:
+        feedstock_potentials = pd.read_csv(biomass_potentials_all_file, index_col=0).sum()
+    else:
+        feedstock_potentials = pd.Series(dtype=float)
+
+    # Build the fuel-cost dictionary for the biomass carriers. If a carrier consists of
+    # multiple feedstocks (e.g. woody crops = willow + poplar), the fuel cost is a
+    # potential-weighted average over its feedstocks, so the resource mix is reflected;
+    # it falls back to an unweighted mean if no potential data is available.
+    def _carrier_fuel_cost(carrier):
+        feedstocks = snakemake.params["biomass"]["classes"][carrier]
+        fuel = np.array([costs.at[f, "fuel"] for f in feedstocks], dtype=float)
+        weights = np.nan_to_num(feedstock_potentials.reindex(feedstocks).to_numpy(dtype=float), nan=0.0)
+        if weights.sum() > 0:
+            return float(np.average(fuel, weights=weights))
+        return float(fuel.mean())
+
+    biomass_costs = {carrier: _carrier_fuel_cost(carrier) for carrier in biomass_types}
     biomass_types.remove("municipal solid waste")
     logger.info(f"biomass_types: {biomass_types}")
     logger.info(f"biomass_costs: {biomass_costs}")
@@ -6931,6 +6948,7 @@ if __name__ == "__main__":
             cf_industry=cf_industry,
             pop_layout=pop_layout,
             biomass_potentials_file=snakemake.input.biomass_potentials,
+            biomass_potentials_all_file=snakemake.input.biomass_potentials_all,
             biomass_transport_costs_file=snakemake.input.biomass_transport_costs,
             nyears=nyears,
         )

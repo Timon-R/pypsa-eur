@@ -145,27 +145,27 @@ parameters:
           2050:
   
   ef_wind:
-    groupname: ef_wind #E_loss x 0.13 ha/MW x r_elec; E_loss & r_elec co-vary with the SDR (min 117/1.89%, max 385/3.67%)
-    min: 0.29 #ton/MW/year (117 tCO2/ha, r_elec 1.89%)
-    max: 1.84 #ton/MW/year (385 tCO2/ha, r_elec 3.67%)
+    groupname: ef_wind #E_loss x 0.13 ha/MW x r_elec; E_loss & r_elec co-vary with the SDR (min 108/1.91%, max 320/3.51%)
+    min: 0.27 #ton/MW/year (108 tCO2/ha, r_elec 1.91%)
+    max: 1.46 #ton/MW/year (320 tCO2/ha, r_elec 3.51%)
     config_file_location: #has to be a non-binary numerical value so that the sampling can be done
       sector:
         renewable_emissions:
           onwind:
 
   ef_solar:
-    groupname: ef_solar #E_loss x 1.15 ha/MW x r_elec; E_loss & r_elec co-vary with the SDR (min 117/1.89%, max 385/3.67%)
-    min: 2.54
-    max: 16.25
+    groupname: ef_solar #E_loss x 1.15 ha/MW x r_elec; E_loss & r_elec co-vary with the SDR (min 108/1.91%, max 320/3.51%)
+    min: 2.37
+    max: 12.92
     config_file_location: #has to be a non-binary numerical value so that the sampling can be done
       sector:
         renewable_emissions:
           solar:
 
   ef_solar-hsat:
-    groupname: ef_solar-hsat #E_loss x 1.70 ha/MW x r_elec; E_loss & r_elec co-vary with the SDR (min 117/1.89%, max 385/3.67%)
-    min: 3.76
-    max: 24.02
+    groupname: ef_solar-hsat #E_loss x 1.70 ha/MW x r_elec; E_loss & r_elec co-vary with the SDR (min 108/1.91%, max 320/3.51%)
+    min: 3.51
+    max: 19.09
     config_file_location: #has to be a non-binary numerical value so that the sampling can be done
       sector:
         renewable_emissions:
@@ -209,64 +209,64 @@ parameters:
           agricultural waste:
   ef_logging_residues: #name of parameter only for reference
     groupname: ef_logging_residues #name of group for grouping the parameters
-    min: 0.0504 #14 g/MJ
-    max: 0.288 #80 g/MJ
+    min: 0.054 #15 g/MJ
+    max: 0.2664 #74 g/MJ
     config_file_location: #has to be a non-binary numerical value so that the sampling can be done
       biomass:
         emission_factors:
           fuelwood residues:
   ef_stemwood: #name of parameter only for reference
     groupname: ef_stemwood #name of group for grouping the parameters
-    min: 0.252 #70 g/MJ
-    max: 0.4464 #124 g/MJ
+    min: 0.0936 #26 g/MJ
+    max: 0.4068 #113 g/MJ
     config_file_location: #has to be a non-binary numerical value so that the sampling can be done
       biomass:
         emission_factors:
           fuelwoodRW:
   ef_grasses: #name of parameter only for reference
     groupname: ef_grasses #name of group for grouping the parameters
-    min: 0.0468 #13 g/MJ
-    max: 0.288 #80 g/MJ
+    min: 0.0957 #26.6 g/MJ (Y=4.2, r_E IQR)
+    max: 0.5096 #141.5 g/MJ (Y=4.2, r_E IQR)
     config_file_location: #has to be a non-binary numerical value so that the sampling can be done
       biomass:
         emission_factors:
           grasses:
   ef_sawdust: #name of parameter only for reference
     groupname: ef_sawdust #name of group for grouping the parameters
-    min: 0.2988 #83 g/MJ
-    max: 0.432 #120 g/MJ
+    min: 0.1188 #33 g/MJ
+    max: 0.4104 #114 g/MJ
     config_file_location: #has to be a non-binary numerical value so that the sampling can be done
       biomass:
         emission_factors:
           sawdust:
   ef_secondary_forestry_residues: #name of parameter only for reference
     groupname: ef_secondary_forestry_residues #name of group for grouping the parameters
-    min: 0.2484 #69 g/MJ
-    max: 0.5076 #141 g/MJ
+    min: 0.1188 #33 g/MJ
+    max: 0.4104 #114 g/MJ
     config_file_location: #has to be a non-binary numerical value so that the sampling can be done
       biomass:
         emission_factors:
           secondary forestry residues:
   ef_woody_crops: #name of parameter only for reference
     groupname: ef_woody_crops #name of group for grouping the parameters
-    min: 0.054 #15 g/MJ
-    max: 0.3276 #91 g/MJ
+    min: 0.0879 #24.4 g/MJ (Y=4.2, r_E IQR)
+    max: 0.4682 #130.1 g/MJ (Y=4.2, r_E IQR)
     config_file_location: #has to be a non-binary numerical value so that the sampling can be done
       biomass:
         emission_factors:
           woody crops:
   ef_C&P_RW: #name of parameter only for reference
     groupname: ef_chips_and_pellets #name of group for grouping the parameters
-    min: 0.2124 #59 g/MJ
-    max: 0.486 #135 g/MJ
+    min: 0.1332 #37 g/MJ
+    max: 0.4608 #128 g/MJ
     config_file_location: #has to be a non-binary numerical value so that the sampling can be done
       biomass:
         emission_factors:
           C&P_RW:
   ef_biomass_import: #fraction of biomass combustion CO2 intensity (0.3667 tCO2/MWh); import-weighted ClimFor CSC, see supplement
     groupname: ef_biomass_import #name of group for grouping the parameters
-    min: 0.44 #45 gCO2/MJ (import-weighted min)
-    max: 1.11 #113 gCO2/MJ (import-weighted max)
+    min: 0.29 #29 gCO2/MJ (import-weighted min)
+    max: 1.06 #108 gCO2/MJ (import-weighted max)
     config_file_location: #has to be a non-binary numerical value so that the sampling can be done
       sector:
         solid_biomass_import:

@@ -246,17 +246,85 @@ if config["foresight"] == "perfect":
 #         lambda w: balance_map_paths("interactive", w),
 #     default_target: True
 
-rule all:
-    default_target: True
-    input:
-        expand(RESULTS + "csvs/energy_balance.csv", run=config["run"]["name"]),
-        expand(
+def all_input(w):
+    # Always-on lightweight CSV outputs (kept for the main run, MGA and GSA).
+    targets = [
+        *expand(RESULTS + "csvs/energy_balance.csv", run=config["run"]["name"]),
+        *expand(
             RESULTS + "csvs/custom_metrics.csv",
             run=config["run"]["name"],
             **config["scenario"],
         ),
-        expand(RESULTS + "csvs/cumulative_costs.csv", run=config["run"]["name"]),
+        *expand(RESULTS + "csvs/cumulative_costs.csv", run=config["run"]["name"]),
+    ]
+    # Rich outputs (network maps, summary graphs, time-series graphics) only for
+    # the main run. Gated on solving.options.keep_network so MGA/GSA stay CSV-only.
+    if config["solving"]["options"].get("keep_network", False):
+        targets += expand(
+            resources("maps/power-network.pdf"), run=config["run"]["name"]
+        )
+        targets += expand(
+            resources("maps/power-network-s-{clusters}.pdf"),
+            run=config["run"]["name"],
+            **config["scenario"],
+        )
+        targets += expand(
+            RESULTS
+            + "maps/static/base_s_{clusters}_{opts}_{sector_opts}-costs-all_{planning_horizons}.pdf",
+            run=config["run"]["name"],
+            **config["scenario"],
+        )
+        targets += expand(
+            RESULTS + "graphs/cop_profiles_s_{clusters}_{planning_horizons}.html",
+            run=config["run"]["name"],
+            **config["scenario"],
+        )
+        targets += expand(RESULTS + "graphs/costs.pdf", run=config["run"]["name"])
+        targets += expand(RESULTS + "graphs/energy.pdf", run=config["run"]["name"])
+        targets += expand(
+            RESULTS + "graphs/balances-energy.pdf", run=config["run"]["name"]
+        )
+        targets += expand(
+            RESULTS
+            + "graphics/balance_timeseries/s_{clusters}_{opts}_{sector_opts}_{planning_horizons}",
+            run=config["run"]["name"],
+            **config["scenario"],
+        )
+        targets += expand(
+            RESULTS
+            + "graphics/heatmap_timeseries/s_{clusters}_{opts}_{sector_opts}_{planning_horizons}",
+            run=config["run"]["name"],
+            **config["scenario"],
+        )
+        targets += expand(
+            RESULTS
+            + "graphics/interactive_bus_balance/s_{clusters}_{opts}_{sector_opts}_{planning_horizons}",
+            run=config["run"]["name"],
+            **config["scenario"],
+        )
+        if config_provider("sector", "H2_network")(w):
+            targets += expand(
+                RESULTS
+                + "maps/static/base_s_{clusters}_{opts}_{sector_opts}-h2_network_{planning_horizons}.pdf",
+                run=config["run"]["name"],
+                **config["scenario"],
+            )
+        if config_provider("sector", "gas_network")(w):
+            targets += expand(
+                RESULTS
+                + "maps/static/base_s_{clusters}_{opts}_{sector_opts}-ch4_network_{planning_horizons}.pdf",
+                run=config["run"]["name"],
+                **config["scenario"],
+            )
+        targets += balance_map_paths("static", w)
+        targets += balance_map_paths("interactive", w)
+    return targets
+
+
+rule all:
     default_target: True
+    input:
+        all_input,
 
 rule create_scenarios:
     output:

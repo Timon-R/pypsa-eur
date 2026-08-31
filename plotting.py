@@ -78,8 +78,8 @@ new_names_dict = {
     "woody crops": "woody crops",
     "grasses": "grasses",
     "fuelwoodRW": "stemwood",
-    "C&P_RW": "chips and pellets",
-    "secondary forestry residues": "secondary forestry residues",
+    "C&P_RW": "fuel pellets",
+    "secondary forestry residues": "woodchips",
     "sawdust": "sawdust",
     "fuelwood residues": "logging residues",
     "agricultural waste": "crop residues",
@@ -91,19 +91,19 @@ new_names_dict = {
 
 BIOMASS_POTENTIAL_KEYS = tuple(emission_factors.keys())
 
-biomass_costs = {  # Euro/MWh_LHV (ENS_Med)
-    "agricultural waste": 11.32275524454902,
-    "fuelwood residues": 13.533604337722517,
-    "fuelwoodRW": 11.121582112826298,
-    "manure": 19.440634202419798,
-    "residues from landscape care": 9.238953786361055,
-    "secondary forestry residues": 7.198446278808251,
-    "woody crops": 39.1074178603587,  # mean of Willow and Poplar
-    "grasses": 16.703166765916077,
-    "sludge": 19.42966385933722,
-    "solid biomass import": 54,
-    "sawdust": 5.696405201022603,
-    "C&P_RW": 22.389579273883896,
+biomass_costs = {  # EUR_2025/MWh_LHV (ENS_Med); biomass from technology-data Timon_09 costs_2050.csv (= ENSPRESO EUR_2010 x 1.4443)
+    "agricultural waste": 16.3530,
+    "fuelwood residues": 19.5461,
+    "fuelwoodRW": 16.0625,
+    "manure": 28.0774,
+    "residues from landscape care": 13.3435,
+    "secondary forestry residues": 10.3965,
+    "woody crops": 53.4543,  # potential-weighted avg of Willow (62%) and Poplar (38%)
+    "grasses": 24.1238,
+    "sludge": 28.0616,
+    "solid biomass import": 54,  # model config price (EUR/MWh), used as-is
+    "sawdust": 8.2271,
+    "C&P_RW": 32.3365,
 }
 
 def configure_for_pgf():
@@ -669,6 +669,140 @@ def create_elliptical_wedge(
     return Path(vertices, codes)
 
 
+def _declutter_labels(
+    fig,
+    ax,
+    records,
+    pad_px=3.5,
+    k_anchor=0.010,
+    step_cap_px=5.0,
+    n_iter=1500,
+    leader_threshold_px=10.0,
+    leader_gap_px=2.5,
+    leader_kwargs=None,
+):
+    """Force-directed label placement (ggrepel-style, no external dependency).
+
+    ``records`` is a list of dicts with keys ``text`` (a matplotlib Text artist),
+    ``anchor`` (the marker center in data coordinates) and ``r_px`` (the marker
+    radius in pixels). Labels are repelled from one another and from every marker,
+    softly pulled back toward their own anchor, clamped inside the axes, and given a
+    thin leader line whenever they end up far from their marker.
+    """
+    if not records:
+        return
+    renderer = fig.canvas.get_renderer()
+    trans = ax.transData
+    inv = trans.inverted()
+
+    # Center-anchor every label so its data position coincides with its bbox center.
+    for rec in records:
+        t = rec["text"]
+        t.set_ha("center")
+        t.set_va("center")
+    fig.canvas.draw()
+
+    n = len(records)
+    centers = np.zeros((n, 2))
+    halfs = np.zeros((n, 2))
+    anchors = np.zeros((n, 2))
+    radii = np.zeros(n)
+    for i, rec in enumerate(records):
+        bb = rec["text"].get_window_extent(renderer=renderer)
+        halfs[i] = [bb.width / 2.0 + pad_px, bb.height / 2.0 + pad_px]
+        anchors[i] = trans.transform(rec["anchor"])
+        radii[i] = rec["r_px"]
+    # Seed each label just outside the marker cloud (radially away from its centroid)
+    # so labels fan out rather than all stacking upward.
+    centroid = anchors.mean(axis=0)
+    for i in range(n):
+        d = anchors[i] - centroid
+        norm = (d[0] ** 2 + d[1] ** 2) ** 0.5
+        dirn = d / norm if norm > 1e-6 else np.array([0.0, 1.0])
+        centers[i] = anchors[i] + dirn * (radii[i] + halfs[i, 1] + 4.0)
+
+    ax_bb = ax.get_window_extent(renderer=renderer)
+    xlo, xhi, ylo, yhi = ax_bb.x0, ax_bb.x1, ax_bb.y0, ax_bb.y1
+
+    for _ in range(n_iter):
+        forces = k_anchor * (anchors - centers)
+        # Label-to-label repulsion along the axis of least overlap.
+        for i in range(n):
+            for j in range(i + 1, n):
+                dx = centers[i, 0] - centers[j, 0]
+                dy = centers[i, 1] - centers[j, 1]
+                ox = (halfs[i, 0] + halfs[j, 0]) - abs(dx)
+                oy = (halfs[i, 1] + halfs[j, 1]) - abs(dy)
+                if ox > 0 and oy > 0:
+                    if ox < oy:
+                        s = ox / 2.0 + 0.5
+                        sign = 1.0 if dx >= 0 else -1.0
+                        forces[i, 0] += sign * s
+                        forces[j, 0] -= sign * s
+                    else:
+                        s = oy / 2.0 + 0.5
+                        sign = 1.0 if dy >= 0 else -1.0
+                        forces[i, 1] += sign * s
+                        forces[j, 1] -= sign * s
+        # Label-to-marker repulsion (keep each bbox clear of every marker).
+        for i in range(n):
+            for m in range(n):
+                amx, amy = anchors[m]
+                cxp = min(max(amx, centers[i, 0] - halfs[i, 0]), centers[i, 0] + halfs[i, 0])
+                cyp = min(max(amy, centers[i, 1] - halfs[i, 1]), centers[i, 1] + halfs[i, 1])
+                ddx = cxp - amx
+                ddy = cyp - amy
+                dist = (ddx ** 2 + ddy ** 2) ** 0.5
+                R = radii[m] + 1.0
+                if dist < R:
+                    vx = centers[i, 0] - amx
+                    vy = centers[i, 1] - amy
+                    vmag = (vx ** 2 + vy ** 2) ** 0.5 or 1.0
+                    push = (R - dist) + 0.5
+                    forces[i, 0] += vx / vmag * push
+                    forces[i, 1] += vy / vmag * push
+        mag = np.sqrt((forces ** 2).sum(axis=1, keepdims=True))
+        scale = np.minimum(1.0, step_cap_px / np.maximum(mag, 1e-9))
+        centers += forces * scale
+        centers[:, 0] = np.clip(centers[:, 0], xlo + halfs[:, 0], xhi - halfs[:, 0])
+        centers[:, 1] = np.clip(centers[:, 1], ylo + halfs[:, 1], yhi - halfs[:, 1])
+
+    # Preference pass: if a label can sit centered directly above its own marker
+    # without touching any other label or any marker, snap it there. Crowded labels
+    # that have no free space above keep their force-directed position.
+    def _spot_is_free(i, cand):
+        if not (xlo + halfs[i, 0] <= cand[0] <= xhi - halfs[i, 0]
+                and ylo + halfs[i, 1] <= cand[1] <= yhi - halfs[i, 1]):
+            return False
+        for j in range(n):
+            if j == i:
+                continue
+            if (abs(cand[0] - centers[j, 0]) < halfs[i, 0] + halfs[j, 0]
+                    and abs(cand[1] - centers[j, 1]) < halfs[i, 1] + halfs[j, 1]):
+                return False
+        for m in range(n):
+            amx, amy = anchors[m]
+            cxp = min(max(amx, cand[0] - halfs[i, 0]), cand[0] + halfs[i, 0])
+            cyp = min(max(amy, cand[1] - halfs[i, 1]), cand[1] + halfs[i, 1])
+            if ((cxp - amx) ** 2 + (cyp - amy) ** 2) ** 0.5 < radii[m] + 1.0:
+                return False
+        return True
+
+    for _ in range(4):
+        for i in range(n):
+            above = np.array([anchors[i, 0], anchors[i, 1] + radii[i] + halfs[i, 1] + 2.0])
+            below = np.array([anchors[i, 0], anchors[i, 1] - radii[i] - halfs[i, 1] - 2.0])
+            for cand in (above, below):  # prefer centered above, else centered below
+                if abs(centers[i, 0] - cand[0]) < 1e-6 and abs(centers[i, 1] - cand[1]) < 1e-6:
+                    break  # already at this preferred spot
+                if _spot_is_free(i, cand):
+                    centers[i] = cand
+                    break
+
+    for i, rec in enumerate(records):
+        rec["text"].set_position(tuple(inv.transform(centers[i])))
+
+
 def create_gravitational_plot(
     title,
     file_name,
@@ -689,6 +823,7 @@ def create_gravitational_plot(
     include_transport_costs=True,
     fill_usage=True,
     hollow_biomass_legend=False,
+    xlim_right=None,
     fig_width=DEFAULT_FIGURE_WIDTH,
     fig_height=DEFAULT_FIGURE_HEIGHT,
     fontsize=DEFAULT_FONTSIZE,
@@ -776,97 +911,34 @@ def create_gravitational_plot(
     dig_biomass_color = "blue"
     solid_biomass_color = "green"
     y_upper_bound_candidates = []
-    scenario_key = (scenario or "").strip().lower()
-    is_carbon_costs = (
-        "carbon" in scenario_key
-        or scenario_key in {"optimal", "cscs", "carbon_costs"}
-    )
-    if is_carbon_costs:
-        biomass_label_offsets = {
-            "sludge": {
-                "dx": -0.4,
-                "dy": 0.0,
-                "ha": "right",
-                "va": "center",
-                "next_to_marker": True,
-            },
-        }
-        renewable_label_offsets = {
-            "solar": {
-                "dx": 0.6,
-                "dy": 0.0,
-                "ha": "left",
-                "va": "center",
-                "next_to_marker": True,
-            },
-            "onwind": {
-                "dx": 0.0,
-                "dy": 0.008,
-                "ha": "center",
-                "va": "bottom",
-                "next_to_marker": True,
-            },
-        }
-    else:
-        biomass_label_offsets = {
-            "sludge": {
-                "dx": 0.4,
-                "dy": 0.0,
-                "ha": "left",
-                "va": "center",
-                "next_to_marker": True,
-            },
-        }
-        renewable_label_offsets = {
-            "solar": {
-                "dx": 0.6,
-                "dy": 0.0,
-                "ha": "left",
-                "va": "center",
-                "next_to_marker": True,
-            },
-            "onwind": {
-                "dx": 0.0,
-                "dy": 0.008,
-                "ha": "center",
-                "va": "bottom",
-                "next_to_marker": True,
-            },
-        }
+    # Track every marker's x position (biomass, renewables, fossils) so the right
+    # axis limit leaves room for all of them, not just the biomass feedstocks.
+    x_upper_bound_candidates = [float(c) for c in costs]
 
-    biomass_label_offsets["residues from landscape care"] = {
-        "dx": 0.0,
-        "dy": -0.006,
-        "ha": "center",
-        "va": "top",
-        "next_to_marker": True,
-    }
+    # Point labels are set a little smaller than the axis font so long names
+    # ("residues from landscape care") crowd the plot less.
+    label_fontsize = max(fontsize - 3, 8)
 
-    biomass_label_offsets["solid biomass import"] = {
-        "dx": 0.0,
-        "dy": 0.02,
-        "ha": "center",
-        "va": "bottom",
-        "next_to_marker": True,
-    }
+    # Layering: largest bubbles at the back, smallest in front, and outline rings
+    # drawn above every fill so each circle boundary stays crisp where bubbles
+    # overlap. Labels are collected here and placed automatically (see
+    # _declutter_labels) once all markers are drawn.
+    Z_FILL = 2.0
+    Z_RING = 5.0
+    Z_MARKER = 6.0
+    Z_TEXT = 7.0
+    fill_alpha = 0.78
+    size_order = sorted(range(len(sizes)), key=lambda j: float(sizes[j]), reverse=True)
+    size_rank = {j: r for r, j in enumerate(size_order)}  # 0 = largest -> lowest layer
 
-    biomass_label_offsets["woody crops"] = {
-        "dx": 0.5,
-        "dy": 0.0,
-        "ha": "center",
-        "va": "center",
-        "next_to_marker": False,
-    }
+    def _ring_px_radius(area_pts2):
+        # Pixel radius of a scatter marker of area `area_pts2` (points^2).
+        return (0.5 * np.sqrt(float(area_pts2)) + 0.5) * fig.dpi / 72.0
 
-    biomass_label_offsets["C&P_RW"] = {
-        "dx": 0.0,
-        "dy": -0.014,
-        "ha": "center",
-        "va": "top",
-        "next_to_marker": True,
-    }
+    cross_px_radius = _ring_px_radius(80.0)
+    label_records = []
 
-    # Draw the plot first to get the limits
+    # Draw the bubble outlines first (smallest on top) to establish the limits.
     for i, bt in enumerate(biomass_types):
         if bt in ["manure", "sludge"]:
             color = dig_biomass_color
@@ -880,29 +952,23 @@ def create_gravitational_plot(
             facecolors="none",
             edgecolors=color,
             linewidth=1,
+            zorder=Z_RING + size_rank[i] * 1e-3,
         )
-        location = float(emissions[i]) + 2 * float(sizes[i]) / max_potential * 0.015 + 0.01
-        if (
-            bt == "secondary forestry residues"
-            or bt == "sludge"
-            or bt == "fuelwoodRW"
-            or bt == "C&P_RW"
-        ):  # below the point
-            location = float(emissions[i]) - 2 * float(sizes[i]) / max_potential * 0.015 - 0.015
-        label_cfg = biomass_label_offsets.get(bt, {})
-        label_x = float(costs[i]) + label_cfg.get("dx", 0.0)
-        label_y = location + label_cfg.get("dy", 0.0)
-        if label_cfg.get("next_to_marker", False):
-            label_y = float(emissions[i]) + label_cfg.get("dy", 0.0)
-        plt.text(
-            label_x,
-            label_y,
+        txt = plt.text(
+            float(costs[i]),
+            float(emissions[i]),
             new_names_dict[bt],
-            fontsize=fontsize,
-            ha=label_cfg.get("ha", "center"),
-            va=label_cfg.get("va", "center"),
+            fontsize=label_fontsize,
+            ha="center",
+            va="center",
+            zorder=Z_TEXT,
         )
-        y_upper_bound_candidates.append(max(float(emissions[i]), location, label_y))
+        label_records.append({
+            "text": txt,
+            "anchor": (float(costs[i]), float(emissions[i])),
+            "r_px": _ring_px_radius(sizes[i]),
+        })
+        y_upper_bound_candidates.append(float(emissions[i]))
 
     # Add renewable energy crosses if capacity factors are provided
     if capacity_factors is not None:
@@ -947,35 +1013,36 @@ def create_gravitational_plot(
                     marker='x',
                     color='orange',
                     s=80,
-                    label="_nolegend_"
+                    label="_nolegend_",
+                    zorder=Z_MARKER,
                 )
-                location = emissions_per_mwh + 0.01
-                if tech == "solar":  # below the point
-                    location = emissions_per_mwh - 0.02                
-                # Add text label
-                label_cfg = renewable_label_offsets.get(tech, {})
-                label_x = model_lcoe + label_cfg.get("dx", 0.0)
-                label_y = location + label_cfg.get("dy", 0.0)
-                if label_cfg.get("next_to_marker", False):
-                    label_y = emissions_per_mwh + label_cfg.get("dy", 0.0)
-                plt.text(
-                    label_x,
-                    label_y,
+                txt = plt.text(
+                    model_lcoe,
+                    emissions_per_mwh,
                     f"{tech}",
-                    fontsize=fontsize,
-                    ha=label_cfg.get("ha", "center"),
-                    va=label_cfg.get("va", "center"),
-                    color='black'
+                    fontsize=label_fontsize,
+                    ha="center",
+                    va="center",
+                    color='black',
+                    zorder=Z_TEXT,
                 )
-                y_upper_bound_candidates.append(max(emissions_per_mwh, location, label_y))
+                label_records.append({
+                    "text": txt,
+                    "anchor": (model_lcoe, emissions_per_mwh),
+                    "r_px": cross_px_radius,
+                })
+                y_upper_bound_candidates.append(emissions_per_mwh)
+                x_upper_bound_candidates.append(model_lcoe)
     
     # Add fossil fuel markers
     if show_fossil_fuels:
         # Define fossil fuel data
+        # Costs are the model fuel-cost assumptions in EUR_2025, consistent with the
+        # biomass extraction costs above (legacy basis was coal 9.55 / gas 24.57 / oil 52.9).
         fossil_fuels = {
-            "coal": {"cost": 9.55, "emission": 0.3361},
-            "gas": {"cost": 24.57, "emission": 0.198},
-            "oil": {"cost": 52.9, "emission": 0.2571}
+            "coal": {"cost": 6.72, "emission": 0.3361},
+            "gas": {"cost": 22.76, "emission": 0.198},
+            "oil": {"cost": 40.86, "emission": 0.2571}
         }
         
         # Plot fossil fuel markers
@@ -986,45 +1053,48 @@ def create_gravitational_plot(
                 marker='x',  # square marker to differentiate
                 color='black',
                 s=80,
-                label="_nolegend_"
+                label="_nolegend_",
+                zorder=Z_MARKER,
             )
-            
-            # Add text label
-            y_location = float(data["emission"]) + 0.012
-            va = "bottom"
-            if fuel == "oil":
-                y_location = float(data["emission"]) - 0.003
-                va = "top"
-            x_location = float(data["cost"])
-            if fuel == "oil": # right from the point
-                x_location = float(data["cost"]) + 1.3
-            plt.text(
-                x_location,
-                y_location,
+            txt = plt.text(
+                float(data["cost"]),
+                float(data["emission"]),
                 fuel,
-                fontsize=fontsize,
+                fontsize=label_fontsize,
                 ha="center",
-                va=va,
+                va="center",
                 color='black',
+                zorder=Z_TEXT,
             )
-            y_upper_bound_candidates.append(max(float(data["emission"]), y_location))
+            label_records.append({
+                "text": txt,
+                "anchor": (float(data["cost"]), float(data["emission"])),
+                "r_px": cross_px_radius,
+            })
+            y_upper_bound_candidates.append(float(data["emission"]))
+            x_upper_bound_candidates.append(float(data["cost"]))
 
     # Set up the axes and draw to ensure limits are calculated
     if include_transport_costs:
-        x_label = "Effective feedstock costs [EUR/MWh]"
+        x_label = "Effective feedstock costs [EUR MWh$^{-1}$]"
     else:
-        x_label = "Extraction costs (no transport) [EUR/MWh]"
+        x_label = "Extraction costs [EUR MWh$^{-1}$]"
     plt.xlabel(x_label)
-    plt.ylabel("Emission Factors in tonCO2/MWh")
+    plt.ylabel("Emission Factors in tCO$_2$ MWh$^{-1}$")
     plt.title(title)
-    plt.xlim(0, max(costs) + 5)  # Ensure this considers fossil fuel costs too
-    # Keep original biomass-based limit unless labels/markers require more headroom.
+    # Right limit covers the rightmost marker of any type, with margin for its label.
+    # An explicit xlim_right lets callers force identical x-axes across panels.
+    if xlim_right is not None:
+        plt.xlim(0, xlim_right)
+    else:
+        x_max = max(x_upper_bound_candidates) if x_upper_bound_candidates else max(costs)
+        plt.xlim(0, x_max + max(8.0, 0.10 * x_max))
+    # Headroom above and below the markers so auto-placed labels have somewhere to go.
     y_upper = max(emissions) + 0.05
     if y_upper_bound_candidates:
         y_upper = max(y_upper, max(y_upper_bound_candidates) + 0.02)
-    # Keep only a small top headroom above the highest marker/label.
-    y_upper += 0.01
-    plt.ylim(-0.02, y_upper)
+    y_upper += 0.03
+    plt.ylim(-0.05, y_upper)
     fig.canvas.draw()
 
     def marker_radii_in_data_units(x, y, marker_area_points2):
@@ -1058,7 +1128,8 @@ def create_gravitational_plot(
             usage_pct = 100.0
         return usage_pct
 
-    def _draw_usage_patch(x, y, radius_x, radius_y, usage_pct, facecolor):
+    def _draw_usage_patch(x, y, radius_x, radius_y, usage_pct, facecolor,
+                          zorder=Z_FILL, alpha=fill_alpha):
         if usage_pct is None or usage_pct <= 0:
             return
         if usage_pct >= 100.0 - 1e-9:
@@ -1068,7 +1139,8 @@ def create_gravitational_plot(
                 height=radius_y * 2,
                 facecolor=facecolor,
                 edgecolor="none",
-                alpha=1,
+                alpha=alpha,
+                zorder=zorder,
             )
             ax.add_patch(ellipse)
             return
@@ -1083,11 +1155,12 @@ def create_gravitational_plot(
             theta2,
         )
         wedge_patch = mpatches.PathPatch(
-            wedge_path, facecolor=facecolor, edgecolor="none", alpha=1
+            wedge_path, facecolor=facecolor, edgecolor="none", alpha=alpha, zorder=zorder
         )
         ax.add_patch(wedge_patch)
 
-    def _draw_delta_patch(x, y, radius_x, radius_y, low_usage_pct, high_usage_pct, facecolor):
+    def _draw_delta_patch(x, y, radius_x, radius_y, low_usage_pct, high_usage_pct, facecolor,
+                          zorder=Z_FILL, alpha=fill_alpha):
         if low_usage_pct is None or high_usage_pct is None:
             return
         low = float(np.clip(low_usage_pct, 0.0, 100.0))
@@ -1105,7 +1178,7 @@ def create_gravitational_plot(
             theta2,
         )
         wedge_patch = mpatches.PathPatch(
-            wedge_path, facecolor=facecolor, edgecolor="none", alpha=1
+            wedge_path, facecolor=facecolor, edgecolor="none", alpha=alpha, zorder=zorder
         )
         ax.add_patch(wedge_patch)
 
@@ -1131,6 +1204,7 @@ def create_gravitational_plot(
             )
             base_usage = _usage_pct(biomass, bt, potential)
             variant_usage = _usage_pct(biomass_variant, bt, potential)
+            fill_z = Z_FILL + size_rank[i] * 1e-3
 
             _draw_usage_patch(
                 float(costs[i]),
@@ -1139,6 +1213,7 @@ def create_gravitational_plot(
                 radius_y,
                 base_usage,
                 color,
+                zorder=fill_z,
             )
 
             if variant_plot and base_usage is not None and variant_usage is not None:
@@ -1151,6 +1226,7 @@ def create_gravitational_plot(
                         base_usage,
                         variant_usage,
                         increase_color,
+                        zorder=fill_z + 5e-4,
                     )
                 elif variant_usage < base_usage:
                     _draw_delta_patch(
@@ -1161,6 +1237,7 @@ def create_gravitational_plot(
                         variant_usage,
                         base_usage,
                         decrease_color,
+                        zorder=fill_z + 5e-4,
                     )
 
             # Fallback: if base scenario has no data for this type, still show variant usage.
@@ -1172,6 +1249,7 @@ def create_gravitational_plot(
                     radius_y,
                     variant_usage,
                     increase_color,
+                    zorder=fill_z,
                 )
 
         # Plot usage threshold shading (if specified) behind all other elements
@@ -1272,6 +1350,10 @@ def create_gravitational_plot(
                     else:
                         ax.fill_between(x_vals, ya1, ya2,
                                         color="lightgrey", alpha=0.2, zorder=0)
+
+    # Place all marker labels automatically: repel them from one another and from
+    # the markers, then add thin leader lines for any that had to move far.
+    _declutter_labels(fig, ax, label_records)
 
     # First legend: for circle sizes (potential)
     size_handles = [
@@ -1708,6 +1790,7 @@ def add_omitted_strip_legend(
 
 
 def plot_costs_vs_prices(df, title, x_label, y_label, file_name, scenario, usage_dict,export_dir="export/plots",file_type="png",include_co2_costs=True, add_legend=True,
+                         include_transport_costs=True,
                          biomass_transport_costs=None,
                          fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT, fontsize=DEFAULT_FONTSIZE, title_fontsize=DEFAULT_TITLE_FONTSIZE):
     """
@@ -1758,15 +1841,18 @@ def plot_costs_vs_prices(df, title, x_label, y_label, file_name, scenario, usage
 
     # Build plotting inputs from export/main/weighted_prices.csv:
     # - y-axis price is the raw weighted feedstock price (`values`).
-    # - x-axis feedstock cost is always: costs + avg_transport_cost
+    # - x-axis feedstock cost is costs (+ avg_transport_cost if include_transport_costs)
     biomass_df = biomass_df.copy()
     biomass_df["costs"] = pd.to_numeric(biomass_df["costs"], errors="coerce")
-    transport_lookup = resolve_biomass_transport_costs_EUR_per_MWh(
-        biomass_transport_costs, scenario
-    )
-    biomass_df["transport_costs"] = (
-        biomass_df["data_name"].map(transport_lookup).fillna(0.0)
-    )
+    if include_transport_costs:
+        transport_lookup = resolve_biomass_transport_costs_EUR_per_MWh(
+            biomass_transport_costs, scenario
+        )
+        biomass_df["transport_costs"] = (
+            biomass_df["data_name"].map(transport_lookup).fillna(0.0)
+        )
+    else:
+        biomass_df["transport_costs"] = 0.0
     biomass_df["costs_with_transport"] = (
         biomass_df["costs"] + biomass_df["transport_costs"]
     )
@@ -1920,6 +2006,7 @@ def plot_costs_vs_prices(df, title, x_label, y_label, file_name, scenario, usage
 def plot_costs_vs_prices_combined(df, usage_dict_default, usage_dict_carbon_costs, 
                                   export_dir="export/plots", file_type="png",
                                   include_co2_costs=True,
+                                  include_transport_costs=True,
                                   biomass_transport_costs=None,
                                   transport_cost_weighting=DEFAULT_BIOMASS_TRANSPORT_WEIGHTING,
                                   file_name="prices_costs_combined",
@@ -2012,14 +2099,17 @@ def plot_costs_vs_prices_combined(df, usage_dict_default, usage_dict_carbon_cost
 
         # Build plotting inputs from export/main/weighted_prices.csv:
         # - y-axis price is the raw weighted feedstock price (`values`).
-        # - x-axis feedstock cost is always: costs + avg_transport_cost
+        # - x-axis feedstock cost is costs (+ avg_transport_cost if include_transport_costs)
         biomass_df["costs"] = pd.to_numeric(biomass_df["costs"], errors="coerce")
-        transport_lookup = resolve_biomass_transport_costs_EUR_per_MWh(
-            biomass_transport_costs, scenario
-        )
-        biomass_df["transport_costs"] = (
-            biomass_df["data_name"].map(transport_lookup).fillna(0.0)
-        )
+        if include_transport_costs:
+            transport_lookup = resolve_biomass_transport_costs_EUR_per_MWh(
+                biomass_transport_costs, scenario
+            )
+            biomass_df["transport_costs"] = (
+                biomass_df["data_name"].map(transport_lookup).fillna(0.0)
+            )
+        else:
+            biomass_df["transport_costs"] = 0.0
         biomass_df["costs_with_transport"] = (
             biomass_df["costs"] + biomass_df["transport_costs"]
         )
@@ -2074,7 +2164,7 @@ def plot_costs_vs_prices_combined(df, usage_dict_default, usage_dict_carbon_cost
                             )
                         )
                     
-                    if usage == 0:
+                    if usage < OMITTED_USAGE_THRESHOLD_PCT:
                         omitted_types.append(biomass)
                         continue
                     elif usage >= 99:
@@ -2110,15 +2200,29 @@ def plot_costs_vs_prices_combined(df, usage_dict_default, usage_dict_carbon_cost
                         )
                     
         
+        # Imported biomass (and any feedstock without an extraction-cost/price row)
+        # has no marker; list it in the "Unused" strip when its usage is below the threshold.
+        for biomass in biomass_types:
+            if (
+                biomass not in omitted_types
+                and biomass_df[biomass_df["data_name"] == biomass].empty
+                and usage_dict.get(biomass, 0) < OMITTED_USAGE_THRESHOLD_PCT
+            ):
+                omitted_types.append(biomass)
+
         # Set plot properties
         ax.set_xlim(0, max_limit)
         ax.set_ylim(0, max_limit)
-        x_axis_label = "Effective feedstock costs [EUR/MWh]"
+        x_axis_label = (
+            "Effective feedstock costs [EUR MWh$^{-1}$]"
+            if include_transport_costs
+            else "Extraction costs [EUR MWh$^{-1}$]"
+        )
         ax.set_xlabel(x_axis_label, fontsize=fontsize)
-        
+
         # Only add y-label to the left plot
         if ax == ax1:  # Left plot
-            y_axis_label = "Prices in EUR/MWh"
+            y_axis_label = "Prices in EUR MWh$^{-1}$"
             ax.set_ylabel(y_axis_label, fontsize=fontsize)
         else:  # Right plot
             ax.set_ylabel("")  # No y-label
@@ -2644,59 +2748,115 @@ def plot_shares(df, title, x_label, y_label, file_name, custom_order=None, expor
     print(f"Shares plot saved to {full_file_path}")
 
 
+def consolidate_cost_categories(df):
+    """Fold leftover raw component names in the cost-difference data into clean
+    technology categories so the plot has no uncategorized entries.
+
+    - biomass-to-methanol with and without CC (capital + marginal) are combined into one
+      "biomass to methanol" bar (same conversion route, distinct from H2-based methanolisation).
+    - "with CC" / "without CC" variants are brought together (biogas production, waste CHP).
+    - remaining raw names get readable labels, combining their capital + marginal parts.
+    - labels use a consistent spaced style ("biomass to methanol", "biomass to liquid").
+    Operates on the raw (EUR) "Difference" column; relabeled rows are summed.
+    """
+    df = df.copy()
+    col = "Data Name"
+
+    # biomass-to-methanol: combine the with-CC parts (capital + marginal) with the
+    # without-CC route into a single, consistently spaced category
+    df.loc[df[col].isin({
+        "biomass-to-methanol",
+        "capital_Link_biomass-to-methanol_CC",
+        "marginal_Link_biomass-to-methanol_CC",
+    }), col] = "biomass to methanol"
+
+    # bring "with CC" and "without CC" variants together
+    df.loc[df[col].isin({
+        "biogas production with CC",
+        "biogas production without CC",
+    }), col] = "biogas production"
+    df.loc[df[col].isin({
+        "waste CHP with CC",
+        "capital_Link_waste_CHP",
+        "marginal_Link_waste_CHP",
+    }), col] = "waste CHP"
+
+    # clean up remaining raw names (combine capital + marginal of each)
+    df.loc[df[col].isin({
+        "capital_Link_CO2_pipeline",
+        "marginal_Link_CO2_pipeline",
+    }), col] = "CO$_2$ pipeline"
+    df.loc[df[col].isin({
+        "capital_Link_OCGT",
+        "marginal_Link_OCGT",
+    }), col] = "OCGT"
+
+    group_cols = [c for c in ["Year", col] if c in df.columns]
+    num_cols = [c for c in df.columns if c not in group_cols and pd.api.types.is_numeric_dtype(df[c])]
+    df = df.groupby(group_cols, as_index=False)[num_cols].sum()
+    return df
+
+
 def plot_costs(df, title, x_label, y_label, file_name, export_dir="export/plots",file_type="png",
                fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT, fontsize=DEFAULT_FONTSIZE, title_fontsize=DEFAULT_TITLE_FONTSIZE):
     """
     Plot costs
     """
     file_path = f"{file_name}.{file_type}"
+    # consolidate raw component names into clean technology categories
+    df = consolidate_cost_categories(df)
     # convert to billion
     df["Difference"] = df["Difference"] / 1e9
     # remove all have an absolute value less than 1
     df = df[df["Difference"].abs() > 1]
     # enforce ranked order (highest positive to most negative)
     df = df.sort_values("Difference", ascending=False).copy()
-    plt.rcParams.update({"font.size": 14})
-    # Recreate the bar chart with the reordered folders
-    plt.figure(figsize=(fig_width, fig_height))
+    plt.rcParams.update({"font.size": fontsize})
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
 
-    # Create a gradient color palette based on the values
+    # Gradient color by value (green = higher cost under CSCs, red = lower)
     norm = plt.Normalize(df["Difference"].min(), df["Difference"].max())
-    sm = plt.cm.ScalarMappable(cmap="RdYlGn", norm=norm)
-    sm.set_array([])
+    df = df.assign(_color=list(plt.cm.RdYlGn(norm(df["Difference"].values))))
 
-    # Apply the color mapping to the bars and keep hue order explicit
-    hue_order = df["Data Name"].drop_duplicates().tolist()
-    palette = {
-        row["Data Name"]: sm.to_rgba(row["Difference"])
-        for _, row in df.drop_duplicates("Data Name").iterrows()
-    }
+    x = np.arange(len(df))
+    bars = ax.bar(x, df["Difference"].values, color=list(df["_color"]), edgecolor="black", linewidth=0.3)
+    ax.axhline(0, color="black", linewidth=0.8)
 
-    ax = sns.barplot(
-        data=df,
-        x="Year",
-        y="Difference",
-        hue="Data Name",
-        hue_order=hue_order,
-        palette=palette,
-        orient="v",
-    )
-    ylim = ax.get_ylim()
-    ax.set_ylim(ylim[0] - abs(ylim[1] * 0.1), ylim[1] + abs(ylim[1] * 0.1))
+    # Value labels at the bar tips, rotated vertically to avoid overlap between adjacent bars
+    label_fontsize = max(8, fontsize - 2)
+    ax.bar_label(bars, labels=[f"{v:.0f}" for v in df["Difference"]], fontsize=label_fontsize, padding=3, rotation=90)
 
-    # Add values as labels above the bars
-    for container in ax.containers:
-        ax.bar_label(container, fmt="%.0f", fontsize=fontsize, padding=5)
+    # Headroom so the rotated value labels fit above/below the bars
+    ymin, ymax = ax.get_ylim()
+    yrange = ymax - ymin
+    ax.set_ylim(ymin - 0.12 * yrange, ymax + 0.12 * yrange)
+    ax.set_xticks([])
+    ax.set_xlim(-0.7, len(df) - 0.3)
 
     # Add labels and title
-    plt.title(title, fontsize=title_fontsize)
-    plt.xlabel(x_label)
-    plt.ylabel(y_label)
-    plt.legend(title="Legend", bbox_to_anchor=(1.05, 1), loc="upper left")
+    ax.set_title(title, fontsize=title_fontsize)
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
 
-    # Remove x-ticks and their labels
-    ax.set_xticks([])
-    ax.set_xticklabels([])
+    # Legend split into "higher cost" (positive) and "lower cost" (negative) groups
+    blank = lambda: Line2D([], [], linestyle="none", marker="")
+    pos = df[df["Difference"] > 0]
+    neg = df[df["Difference"] < 0]
+    handles, labels = [blank()], ["Higher cost (+)"]
+    for _, r in pos.iterrows():
+        handles.append(mpatches.Patch(facecolor=r["_color"], edgecolor="black", linewidth=0.3))
+        labels.append(r["Data Name"])
+    handles += [blank(), blank()]
+    labels += ["", "Lower cost (−)"]
+    for _, r in neg.iterrows():
+        handles.append(mpatches.Patch(facecolor=r["_color"], edgecolor="black", linewidth=0.3))
+        labels.append(r["Data Name"])
+    leg = ax.legend(handles, labels, bbox_to_anchor=(1.02, 1.0), loc="upper left",
+                    frameon=False, fontsize=label_fontsize, handlelength=1.3,
+                    handletextpad=0.6, labelspacing=0.35)
+    leg_texts = leg.get_texts()
+    leg_texts[0].set_fontweight("bold")
+    leg_texts[len(pos) + 2].set_fontweight("bold")
 
     # Show the plot
     plt.tight_layout()
@@ -2936,23 +3096,23 @@ def plot_biomass_use(df, title, x_label, y_label, file_name, year=2050,export_di
 
 def plot_efs(export_dir="export/plots",file_type="png",
              fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT, fontsize=DEFAULT_FONTSIZE, title_fontsize=DEFAULT_TITLE_FONTSIZE):
-    biomass_costs = {  # Euro/MWh_LHV (ENS_Med)
-        "crop residues": 11.32275524454902,
-        "logging residues": 13.533604337722517,  # fuelwood residues
-        "stemwood": 11.121582112826298,  # fuelwoodRW
-        "manure": 19.440634202419798,
-        "residues from landscape care": 9.238953786361055,
-        "secondary forestry residues": 7.198446278808251,
-        "coal": 9.5542,
-        "fuelwood": 14.5224,
-        "gas": 24.568,
-        "oil": 52.9111,
-        "woody crops": 39.1074178603587,  # mean of Willow and Poplar
-        "grasses": 16.703166765916077,  # Miscanthus, switchgrass, RCG
-        "sludge": 19.42966385933722,
+    biomass_costs = {  # EUR_2025/MWh_LHV (ENS_Med); biomass from technology-data Timon_09 costs_2050.csv
+        "crop residues": 16.3530,
+        "logging residues": 19.5461,  # fuelwood residues
+        "stemwood": 16.0625,  # fuelwoodRW
+        "manure": 28.0774,
+        "residues from landscape care": 13.3435,
+        "woodchips": 10.3965,
+        "coal": 6.72,  # EUR_2025 model fuel cost
+        "fuelwood": 15.23,  # EUR_2025 model fuel cost
+        "gas": 22.76,  # EUR_2025 model fuel cost
+        "oil": 40.86,  # EUR_2025 model fuel cost
+        "woody crops": 53.4543,  # potential-weighted avg of Willow (62%) and Poplar (38%)
+        "grasses": 24.1238,  # Miscanthus, switchgrass, RCG
+        "sludge": 28.0616,
         "imported biomass": 54,
-        "sawdust": 5.696405201022603,
-        "chips and pellets": 22.389579273883896,  # C&P_RW
+        "sawdust": 8.2271,
+        "fuel pellets": 32.3365,  # C&P_RW
     }
 
     # font size
@@ -3023,12 +3183,12 @@ def plot_efs(export_dir="export/plots",file_type="png",
         ha="right",
     )
     ax.set_xlabel("")
-    ax.set_ylabel("tonCO2/MWh")
+    ax.set_ylabel("tCO$_2$ MWh$^{-1}$")
     ax.set_title("Emission Factors and Costs for Different Feedstocks", fontsize=title_fontsize)
 
     ax2 = ax.twinx()
     ax2.set_yticks(ax.get_yticks() / 0.0036)
-    ax2.set_ylabel("g/MJ")
+    ax2.set_ylabel("gCO$_2$ MJ$^{-1}$")
 
     secondary_locator = MultipleLocator(10)  # Adjust this value as needed
     ax2.yaxis.set_major_locator(secondary_locator)
@@ -3060,7 +3220,7 @@ def plot_efs_for_presentation(export_dir="export/plots",file_type="png",
     emission_factors = emission_factors_new_names
 
     # Calculate the average emission factors for the new entries
-    to_remove_stemwood = ["chips and pellets", "stemwood", "secondary forestry residues", "sawdust"]
+    to_remove_stemwood = ["fuel pellets", "stemwood", "woodchips", "sawdust"]
     stemwood_based_biomass = sum(emission_factors[x] for x in to_remove_stemwood) / len(to_remove_stemwood)
 
     to_remove_herbaceous = ["grasses", "woody crops"]
@@ -3101,12 +3261,12 @@ def plot_efs_for_presentation(export_dir="export/plots",file_type="png",
         ha="right",
     )
     ax.set_xlabel("")
-    ax.set_ylabel("tonCO2/MWh")
+    ax.set_ylabel("tCO$_2$ MWh$^{-1}$")
     ax.set_title("Carbon Stock Changes and Emission Factors for Different Feedstocks", fontsize=title_fontsize)
 
     ax2 = ax.twinx()
     ax2.set_yticks(ax.get_yticks() / 0.0036)
-    ax2.set_ylabel("g/MJ")
+    ax2.set_ylabel("gCO$_2$ MJ$^{-1}$")
 
     secondary_locator = MultipleLocator(10)  # Adjust this value as needed
     ax2.yaxis.set_major_locator(secondary_locator)
@@ -3150,9 +3310,9 @@ def plot_efs_clean(
         ],
         "Forest & Wood": [
             "logging residues",
-            "secondary forestry residues",
+            "woodchips",
             "sawdust",
-            "chips and pellets",
+            "fuel pellets",
             "stemwood",
             "imported biomass",
         ],
@@ -3189,7 +3349,15 @@ def plot_efs_clean(
     }
 
     # ── Layout ───────────────────────────────────────────────────────────────
-    plt.rcParams.update({"font.size": fontsize, "font.family": "sans-serif"})
+    plt.rcParams.update({
+        "text.usetex": False,         # plain Matplotlib text engine
+        "font.family":   "serif",
+        "font.serif":    ["CMU Serif", "Latin Modern Roman",
+                        "Computer Modern Roman", "Times"],  # fall-backs
+        "mathtext.fontset": "cm",     # Computer Modern for $math$
+        "figure.dpi":    300,
+        "font.size": fontsize,
+    })
     fig, ax = plt.subplots(figsize=(fig_width, fig_height))
 
     bar_width = 0.72
@@ -3247,9 +3415,7 @@ def plot_efs_clean(
     # ── Axes formatting ──────────────────────────────────────────────────────
     ax.set_xticks(x_coords)
     ax.set_xticklabels(labels, rotation=40, ha="right", fontsize=fontsize - 1)
-    ax.set_ylabel("tonCO₂/MWh", fontsize=fontsize)
-    ax.set_title("Emission Factors for Biomass and Fossil Fuel Feedstocks",
-                 fontsize=title_fontsize, pad=10)
+    ax.set_ylabel("tCO$_2$ MWh$^{-1}$", fontsize=fontsize)
 
     ax.yaxis.grid(True, linestyle="--", linewidth=0.6, alpha=0.6, zorder=0)
     ax.set_axisbelow(True)
@@ -3265,13 +3431,14 @@ def plot_efs_clean(
         mpatches.Patch(color=fossil_bar_colors["oil"],    label="Oil"),
         mpatches.Patch(color=fossil_bar_colors["coal"],   label="Coal"),
     ]
+    legend_ncol = 6 if fontsize <= 12 else 3
     ax.legend(handles=legend_handles, loc="upper left", frameon=False,
-              fontsize=fontsize - 1, ncol=6)
+              fontsize=fontsize - 1, ncol=legend_ncol)
 
     # Secondary y-axis in g/MJ
     ax2 = ax.twinx()
     ax2.set_ylim(ax.get_ylim()[0] / 0.0036, ax.get_ylim()[1] / 0.0036)
-    ax2.set_ylabel("gCO₂/MJ", fontsize=fontsize)
+    ax2.set_ylabel("gCO$_2$ MJ$^{-1}$", fontsize=fontsize)
     ax2.yaxis.set_major_locator(MultipleLocator(10))
     ax2.spines["top"].set_visible(False)
 
@@ -3395,7 +3562,7 @@ def plot_bar_with_totals(
 def plot_biomass_use_vs_sequestration_potential(
     df,
     title="Total Biomass Use vs Sequestration Potential (CSCs)",
-    x_label="CO2 sequestration potential [MtCO2/yr]",
+    x_label="CO2 sequestration potential [MtCO2 yr$^{-1}$]",
     y_label="Total biomass use [TWh]",
     file_name="biomass_use_vs_sequestration_potential_cscs",
     export_dir="export/plots",
@@ -3469,8 +3636,6 @@ def plot_biomass_use_vs_sequestration_potential(
 
     y_span = max(y) - min(y) if len(y) > 1 else max(y) if len(y) else 1.0
     y_offset = max(8.0, 0.03 * y_span)
-    for xi, yi in zip(x, y):
-        ax.text(xi, yi + y_offset, f"{yi:.0f}", ha="center", va="bottom", fontsize=fontsize)
 
     ax.set_title(title, fontsize=title_fontsize)
     ax.set_xlabel(x_label)
@@ -3498,7 +3663,7 @@ def plot_biomass_use_vs_sequestration_potential(
 def plot_fossil_gas_use_vs_sequestration_potential(
     df,
     title="Fossil Gas Use vs Sequestration Potential (CSCs)",
-    x_label="CO2 sequestration potential [MtCO2/yr]",
+    x_label="CO2 sequestration potential [MtCO2 yr$^{-1}$]",
     y_label="Fossil gas use [TWh]",
     file_name="fossil_gas_use_vs_sequestration_potential_cscs",
     export_dir="export/plots",
@@ -3605,9 +3770,13 @@ def plot_selected_biomass_prices_vs_sequestration_potential(
     extra_biomass_use_df=None,
     extra_biomass_potentials_df=None,
     usage_threshold_pct=OMITTED_USAGE_THRESHOLD_PCT,
+    size_by_use=False,
+    size_metric="use_twh",
+    size_min=40.0,
+    size_max=620.0,
     title="Biomass Marginal Prices vs Sequestration Potential (CSCs)",
-    x_label="CO2 sequestration potential [MtCO2/yr]",
-    y_label="Weighted price [EUR/MWh]",
+    x_label="CO2 sequestration potential [MtCO2 yr$^{-1}$]",
+    y_label="Weighted price [EUR MWh$^{-1}$]",
     file_name="biomass_prices_vs_sequestration_potential_cscs_selected",
     export_dir="export/plots",
     file_type="png",
@@ -3628,23 +3797,30 @@ def plot_selected_biomass_prices_vs_sequestration_potential(
 
     If extra_df is provided, rows from extra_df override duplicate
     (potential, feedstock) pairs from df. This is useful for stitching
-    250/710 points from another run folder (e.g. export/main_new).
+    250/710 points from another run folder (e.g. export/main).
 
     If biomass_use_df + biomass_potentials_df are provided, only points with
     usage strictly above usage_threshold_pct (% of scenario-specific potential)
     are plotted. Extra *_df inputs follow the same override behavior as prices.
+
+    If size_by_use is True and biomass_use_df is provided, the connecting lines
+    are drawn thin and markers are sized by size_metric ("use_twh" for absolute
+    feedstock use, or "usage_pct" for share of potential), scaled linearly
+    between size_min and size_max (points^2). A size reference legend is added.
     """
     feedstocks = [
         "residues from landscape care",
         "fuelwood residues",
         "manure",
         "agricultural waste",
+        "grasses",
     ]
     display_name = {
         "residues from landscape care": "residues from landscape care",
         "fuelwood residues": "logging residues",
         "manure": "manure",
         "agricultural waste": "crop residues",
+        "grasses": "grasses",
     }
 
     def _standardize_input(data, priority):
@@ -3818,7 +3994,7 @@ def plot_selected_biomass_prices_vs_sequestration_potential(
         )
 
         data = data.merge(
-            usage[["sequestration_potential", "feedstock", "usage_pct"]],
+            usage[["sequestration_potential", "feedstock", "usage_pct", "use_twh"]],
             on=["sequestration_potential", "feedstock"],
             how="left",
         )
@@ -3852,7 +4028,24 @@ def plot_selected_biomass_prices_vs_sequestration_potential(
         "fuelwood residues": "#2A9D8F",
         "manure": "#1D4ED8",
         "agricultural waste": "#F4A261",
+        "grasses": "#8338EC",
     }
+
+    use_sizing = (
+        size_by_use
+        and size_metric in data.columns
+        and data[size_metric].notnull().any()
+    )
+    if use_sizing:
+        size_vals = data[size_metric].to_numpy(dtype=float)
+        vmin = float(np.nanmin(size_vals))
+        vmax = float(np.nanmax(size_vals))
+
+        def _marker_size(value):
+            if not np.isfinite(value) or vmax <= vmin:
+                return 0.5 * (size_min + size_max)
+            frac = (value - vmin) / (vmax - vmin)
+            return size_min + frac * (size_max - size_min)
 
     for feedstock in feedstocks:
         sub = data[data["feedstock"] == feedstock].copy()
@@ -3861,16 +4054,39 @@ def plot_selected_biomass_prices_vs_sequestration_potential(
         sub = sub.sort_values("sequestration_potential")
         x = sub["sequestration_potential"].to_numpy(dtype=float)
         y = sub["price"].to_numpy(dtype=float)
-        ax.plot(
-            x,
-            y,
-            marker="o",
-            linewidth=2.4,
-            markersize=6.5,
-            color=palette[feedstock],
-            label=display_name[feedstock],
-            zorder=3,
-        )
+        if use_sizing:
+            ax.plot(
+                x,
+                y,
+                linewidth=1.5,
+                color=palette[feedstock],
+                alpha=0.85,
+                label=display_name[feedstock],
+                zorder=2,
+            )
+            sizes = np.array(
+                [_marker_size(v) for v in sub[size_metric].to_numpy(dtype=float)]
+            )
+            ax.scatter(
+                x,
+                y,
+                s=sizes,
+                color=palette[feedstock],
+                edgecolor="white",
+                linewidth=0.7,
+                zorder=3,
+            )
+        else:
+            ax.plot(
+                x,
+                y,
+                marker="o",
+                linewidth=2.4,
+                markersize=6.5,
+                color=palette[feedstock],
+                label=display_name[feedstock],
+                zorder=3,
+            )
 
     x_vals = sorted(data["sequestration_potential"].unique())
     ax.set_xticks(x_vals)
@@ -3878,7 +4094,52 @@ def plot_selected_biomass_prices_vs_sequestration_potential(
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     ax.grid(axis="both", linestyle="--", alpha=0.25)
-    ax.legend(title="Feedstock", frameon=False, ncol=2, loc="best")
+    feedstock_legend = ax.legend(
+        title="Feedstock", frameon=False, ncol=2, loc="best"
+    )
+
+    if use_sizing:
+        ax.add_artist(feedstock_legend)
+        unit = "TWh" if size_metric == "use_twh" else "%"
+        span = vmax - vmin
+        if span <= 0:
+            ref_vals = [vmax]
+        else:
+            step = 10 ** np.floor(np.log10(span))
+            for mult in (1, 2, 5, 10):
+                if span / (step * mult) <= 3.5:
+                    step *= mult
+                    break
+            lo = np.ceil(vmin / step) * step
+            ref_vals = list(np.arange(lo, vmax + 0.5 * step, step))
+            if not ref_vals:
+                ref_vals = [vmax]
+        ref_vals = [v for v in ref_vals if vmin - 1e-9 <= v <= vmax + 1e-9]
+        if not ref_vals:
+            ref_vals = [vmax]
+        size_handles = [
+            plt.scatter(
+                [],
+                [],
+                s=_marker_size(v),
+                color="0.45",
+                edgecolor="white",
+                linewidth=0.7,
+            )
+            for v in ref_vals
+        ]
+        size_labels = [f"{v:.0f} {unit}" for v in ref_vals]
+        ax.legend(
+            size_handles,
+            size_labels,
+            title="Feedstock use",
+            frameon=False,
+            labelspacing=2.0,
+            borderpad=1.0,
+            handletextpad=1.4,
+            loc="center left",
+            bbox_to_anchor=(1.02, 0.5),
+        )
 
     if x_vals:
         ax.set_xlim(min(x_vals) - 5, max(x_vals) + 5)
@@ -3891,7 +4152,7 @@ def plot_selected_biomass_prices_vs_sequestration_potential(
 
     os.makedirs(export_dir, exist_ok=True)
     file_path = os.path.join(export_dir, file_path)
-    plt.savefig(file_path)
+    plt.savefig(file_path, bbox_inches="tight")
     plt.close()
     print(f"Selected biomass prices vs sequestration plot saved to {file_path}")
 
@@ -4739,35 +5000,28 @@ def plot_mga(df, file_name, title="Near Optimal Biomass Use", export_dir='export
             ax2.set_ylim(fossil_y_range)
 
     # Customize plot
-    ax.set_xlabel("ε (%)", fontsize=fontsize)
+    ax.set_xlabel(r"$\varepsilon$ (%)", fontsize=fontsize)
     ax.set_ylabel(f"Biomass use ({unit})", fontsize=fontsize)
     ax.set_title(title, fontsize=title_fontsize)
     ax.grid(True, linestyle="--", alpha=0.5)
     ax.tick_params(axis="both", labelsize=fontsize)
     
-    # Set x-axis ticks with smart spacing to avoid crowded labels
-    ax.set_xticks(x_vals)
-    
-    # Create labels with minimum 1% spacing
-    min_spacing = 1.0  # Minimum spacing between labels in percentage points
-    tick_labels = []
-    last_labeled = None
-    
-    for i, x in enumerate(x_vals):
-        # Always label the first point (0) and ensure minimum spacing
-        if x == 0 or last_labeled is None or abs(x - last_labeled) >= min_spacing:
-            label = f"{x:.0f}" if x == int(x) else f"{x:.0f}"
-            tick_labels.append(label)
-            last_labeled = x
+    # Set x-axis ticks, collapsing positions closer than min_spacing so that a
+    # forced-zero threshold sitting near a slack value (e.g. 19.6% vs 20%) does
+    # not produce two overlapping labels.
+    min_spacing = 1.0  # minimum spacing between ticks in percentage points
+    tick_positions = []
+    for x in x_vals:
+        if not tick_positions or x == 0 or abs(x - tick_positions[-1]) >= min_spacing:
+            tick_positions.append(x)
+    # ensure the largest deviation is the value shown at the right edge
+    if x_vals and tick_positions[-1] != x_vals[-1]:
+        if abs(x_vals[-1] - tick_positions[-1]) < min_spacing:
+            tick_positions[-1] = x_vals[-1]
         else:
-            tick_labels.append("")  # Empty label for points too close together
-    
-    # Always label the last point if it wasn't already labeled
-    if x_vals and last_labeled != x_vals[-1]:
-        last_x = x_vals[-1]
-        tick_labels[-1] = f"{last_x:.0f}" if last_x == int(last_x) else f"{last_x:.0f}"
-    
-    ax.set_xticklabels(tick_labels, fontsize=fontsize)
+            tick_positions.append(x_vals[-1])
+    ax.set_xticks(tick_positions)
+    ax.set_xticklabels([f"{x:.0f}" for x in tick_positions], fontsize=fontsize)
     
     if y_range:
         ax.set_ylim(y_range)
@@ -5047,29 +5301,40 @@ def plot_morris_mu_star(
     df: pd.DataFrame,
     file_name: str,
     unit: str,
-    title: str = "Morris μ*",
+    title: str = r"Morris $\mu^*$",
     export_dir: str = "export/GSA",
+    file_type: str = "png",
     threshold: float = 0.0,
     fig_width=DEFAULT_FIGURE_WIDTH,
     fig_height=DEFAULT_FIGURE_HEIGHT,
     fontsize=DEFAULT_FONTSIZE,
     title_fontsize=DEFAULT_TITLE_FONTSIZE,
 ):
+    mpl.rcParams.update({
+        "text.usetex": False,         # plain Matplotlib text engine
+        "font.family":   "serif",
+        "font.serif":    ["CMU Serif", "Latin Modern Roman",
+                        "Computer Modern Roman", "Times"],  # fall-backs
+        "mathtext.fontset": "cm",     # Computer Modern for $math$
+        "figure.dpi":    300,
+        "font.size": fontsize,
+    })
     plot_labels = {
-        "seq_potential": "CO2 sequestration potential",
+        "seq_potential": "CO$_2$ sequestration potential",
         "ef_wind": "CSCs from wind",
         "ef_solar": "CSCs from solar PV",
         "ef_solar-hsat": "CSCs from solar HSAT",
         "nuclear_costs": "Nuclear capital cost",
+        "electrolysis_investment": "Electrolysis capital cost",
         "ef_manure": "CSCs from manure",
         "ef_crop_residues": "CSCs from crop residues",
         "ef_logging_residues": "CSCs from logging residues",
         "ef_stemwood": "CSCs from stemwood",
         "ef_grasses": "CSCs from grasses",
         "ef_sawdust": "CSCs from sawdust",
-        "ef_secondary_forestry_residues": "CSCs from secondary forestry residues",
+        "ef_secondary_forestry_residues": "CSCs from woodchips",
         "ef_woody_crops": "CSCs from woody crops",
-        "ef_chips_and_pellets": "CSCs from chips & pellets",
+        "ef_chips_and_pellets": "CSCs from fuel pellets",
         "ef_biomass_import": "CSCs from imported biomass",
         "biomass_costs": "Biomass feedstock costs",
     }
@@ -5109,7 +5374,7 @@ def plot_morris_mu_star(
 
     ax.set_yticks(y_pos)
     ax.set_yticklabels([plot_labels[param] for param in df["parameter"]])
-    ax.set_xlabel(r"μ*({})".format(unit))
+    ax.set_xlabel(r"$\mu^*$ [{}]".format(unit))
     ax.set_title(title, fontsize=title_fontsize)
     ax.axvline(0, color="black", linewidth=0.8)
 
@@ -5117,7 +5382,7 @@ def plot_morris_mu_star(
 
     # 4 · save ------------------------------------------------------------------
     os.makedirs(export_dir, exist_ok=True)
-    out_path = os.path.join(export_dir, f"{file_name}.png")
+    out_path = os.path.join(export_dir, f"{file_name}.{file_type}")
     plt.savefig(out_path, dpi=300)
     plt.close()
     print(f"μ* plot saved → {out_path}")
@@ -5138,6 +5403,7 @@ def main(custom_order=["Default", "Carbon Stock Changes"], file_type="png", expo
         biomass_potentials=model_potentials,
         capacity_factors=capacity_factors,
         renewable_lcoe=renewable_lcoe,
+        include_transport_costs=False,
         fig_width=fig_width,
         fig_height=fig_height,
         fontsize=fontsize,
@@ -5330,7 +5596,7 @@ def main(custom_order=["Default", "Carbon Stock Changes"], file_type="png", expo
         data,
         "CO2 Shadow Prices",
         "",
-        "Shadow Price (EUR/tonCO2)",
+        "Shadow Price (EUR tonCO2$^{-1}$)",
         "shadow_prices",
         custom_order,
         export_dir=export_dir,
@@ -5402,7 +5668,7 @@ def main(custom_order=["Default", "Carbon Stock Changes"], file_type="png", expo
         data,
         "Weighted Feedstock Prices",
         "",
-        "EUR/MWh",
+        "EUR MWh$^{-1}$",
         "weighted_feedstock_prices",
         export_dir=export_dir,
         file_type=file_type,
@@ -5469,7 +5735,7 @@ def main(custom_order=["Default", "Carbon Stock Changes"], file_type="png", expo
         data,
         "BECCUS—Biogenic CO2 Allocation",
         "",
-        "Mt_CO2",
+        "Mt CO$_2$ yr$^{-1}$",
         "beccus",
         upstream_data=upstream_data,
         export_dir=export_dir,
@@ -5562,6 +5828,20 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
     carbon_costs_potentials = resolve_biomass_potentials_TWh(
         model_potentials_by_scenario, "Carbon Stock Changes"
     )
+    # Identical x-axis on the Default and CSC panels: base the right limit on the
+    # rightmost marker across BOTH scenarios (renewable LCOEs are scenario-specific),
+    # mirroring the in-function auto-margin so the two panels are directly comparable.
+    _axis_scenarios = ("Default", "Carbon Stock Changes")
+    _plotted_renewables = ("solar", "onwind", "solar-hsat")
+    _lcoe_axis_vals = [
+        renewable_lcoe[s][t]
+        for s in _axis_scenarios if isinstance(renewable_lcoe, dict) and s in renewable_lcoe
+        for t in _plotted_renewables
+        if t in renewable_lcoe[s] and renewable_lcoe[s][t] is not None and np.isfinite(renewable_lcoe[s][t])
+    ]
+    _x_max_shared = max([*biomass_costs.values(), *_lcoe_axis_vals])
+    shared_xlim_right = _x_max_shared + max(8.0, 0.10 * _x_max_shared)
+
     create_gravitational_plot(
         "Cost vs Emissions/CSCs (Default)",
         "gravitational_plot_default",
@@ -5570,11 +5850,13 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
         biomass_transport_costs=transport_costs_by_scenario,
         scenario="Default",
         export_dir=export_path,
-        file_type="png",
+        file_type=file_type,
         capacity_factors=capacity_factors,
         renewable_lcoe=renewable_lcoe,
         transport_cost_weighting=biomass_transport_cost_weighting,
         variant_plot=False,
+        include_transport_costs=False,
+        xlim_right=shared_xlim_right,
         fig_width=12,
         fig_height=gravitational_fig_height,
         fontsize=fontsize,
@@ -5588,7 +5870,7 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
         biomass_transport_costs=transport_costs_by_scenario,
         scenario="Default",
         export_dir=export_path,
-        file_type="png",
+        file_type=file_type,
         capacity_factors=capacity_factors,
         renewable_lcoe=renewable_lcoe,
         transport_cost_weighting=biomass_transport_cost_weighting,
@@ -5596,6 +5878,7 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
         include_transport_costs=False,
         fill_usage=False,
         hollow_biomass_legend=True,
+        xlim_right=shared_xlim_right,
         fig_width=12,
         fig_height=gravitational_fig_height,
         fontsize=fontsize,
@@ -5609,11 +5892,13 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
         biomass_transport_costs=transport_costs_by_scenario,
         scenario="Carbon Stock Changes",
         export_dir=export_path,
-        file_type="png",
+        file_type=file_type,
         capacity_factors=capacity_factors,
         renewable_lcoe=renewable_lcoe,
         transport_cost_weighting=biomass_transport_cost_weighting,
         variant_plot=False,
+        include_transport_costs=False,
+        xlim_right=shared_xlim_right,
         fig_width=12,
         fig_height=gravitational_fig_height,
         fontsize=fontsize,
@@ -5624,7 +5909,7 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
         bm_data,
         export_dir=export_path,
         file_name="biomass_stacked_errorbar",
-        file_type="png",
+        file_type=file_type,
         fig_width=fig_width,
         fig_height=fig_height,
         fontsize=fontsize,
@@ -5634,7 +5919,7 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
         bm_data,
         export_dir=export_path,
         file_name="biomass_stacked_no_errorbars",
-        file_type="png",
+        file_type=file_type,
         errorbars=False,
         fig_width=fig_width,
         fig_height=fig_height,
@@ -5646,7 +5931,7 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
         data,
         export_dir=export_path,
         file_name="primary_energy_errorbars",
-        file_type="png",
+        file_type=file_type,
         color_error= False,
         fig_width=fig_width,
         fig_height=fig_height,
@@ -5657,7 +5942,7 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
         data,
         export_dir=export_path,
         file_name="primary_energy_no_errorbars",
-        file_type="png",
+        file_type=file_type,
         color_error= False,
         error_bars=False,
         fig_width=fig_width,
@@ -5684,7 +5969,7 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
         data,
         "Avoided Carbon Stock Changes",
         "",
-        "Mt_CO2",
+        "Mt CO$_2$ yr$^{-1}$",
         "emission_difference",
         multiplier=1e-6,
         column="emission_difference",
@@ -5705,7 +5990,7 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
         data,
         "Avoided Carbon Stock Changes",
         "",
-        "Mt_CO2",
+        "Mt CO$_2$ yr$^{-1}$",
         "emission_difference_no_errorbars",
         multiplier=1e-6,
         column="emission_difference",
@@ -5724,9 +6009,9 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
     data = load_csv("cost_difference.csv",folder_path=folder_path)
     plot_costs(
         data,
-        "Extra Costs Due to Carbon Stock Changes (larger 1 B€)",
+        "Cost differences by technology",
         "",
-        "Cost (Billion EUR)",
+        "Cost (Billion EUR$_{2025}$)",
         "cost_difference",
         export_dir=export_path,
         file_type=file_type,
@@ -5760,8 +6045,8 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
     plot_costs_vs_prices(
         data,
         "Weighted Feedstock Prices vs. Costs",
-        "Effective feedstock costs [EUR/MWh]",
-        "Prices in EUR/MWh",
+        "Extraction costs [EUR MWh$^{-1}$]",
+        "Prices in EUR MWh$^{-1}$",
         "prices_costs_default",
         scenario="Default",
         usage_dict=usage_dict_default,
@@ -5769,6 +6054,7 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
         file_type=file_type,
         include_co2_costs=False,
         add_legend=False,
+        include_transport_costs=False,
         biomass_transport_costs=transport_costs_potential_weighted,
         fig_width=fig_width,
         fig_height=fig_height,
@@ -5778,14 +6064,15 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
     plot_costs_vs_prices(
         data,
         "Weighted Feedstock Prices vs. Costs",
-        "Effective feedstock costs [EUR/MWh]",
-        "Prices in EUR/MWh",
+        "Extraction costs [EUR MWh$^{-1}$]",
+        "Prices in EUR MWh$^{-1}$",
         "prices_costs_carbon_costs",
         scenario="Carbon Stock Changes",
         usage_dict=usage_dict_carbon_costs,
         export_dir=export_path,
         file_type=file_type,
         include_co2_costs=False,
+        include_transport_costs=False,
         biomass_transport_costs=transport_costs_potential_weighted,
         fig_width=fig_width,
         fig_height=fig_height,
@@ -5801,6 +6088,7 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
         export_dir=export_path,
         file_type=file_type,
         include_co2_costs=False,
+        include_transport_costs=False,
         biomass_transport_costs=transport_costs_potential_weighted,
         transport_cost_weighting="potential",
         file_name="prices_costs_combined_potential_weighted",
@@ -5816,6 +6104,7 @@ def specific_plots(folder_path="export/main", export_path= "export/plots", file_
         export_dir=export_path,
         file_type=file_type,
         include_co2_costs=False,
+        include_transport_costs=False,
         biomass_transport_costs=transport_costs_use_weighted,
         transport_cost_weighting="use",
         file_name="prices_costs_combined_use_weighted",
@@ -5928,7 +6217,7 @@ def mga_plots(include_fossils=False, fossil_breakdown=False, fig_width=DEFAULT_F
         title_fontsize=title_fontsize,
     )
 
-def SA_plots(export_dir="export/GSA", data_folder="GSA/SA_results", fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT, fontsize=DEFAULT_FONTSIZE, title_fontsize=DEFAULT_TITLE_FONTSIZE):
+def SA_plots(export_dir="export/GSA", data_folder="GSA/SA_results", file_type="png", fig_width=DEFAULT_FIGURE_WIDTH, fig_height=DEFAULT_FIGURE_HEIGHT, fontsize=DEFAULT_FONTSIZE, title_fontsize=DEFAULT_TITLE_FONTSIZE):
     """
     Create plots for the sensitivity analysis.
     """
@@ -5937,8 +6226,9 @@ def SA_plots(export_dir="export/GSA", data_folder="GSA/SA_results", fig_width=DE
         df=data,
         file_name="biomass_use_mu_star",
         unit="TWh",
-        title="Morris μ* for Biomass Use",
+        title=r"Morris $\mu^*$ for Biomass Use",
         export_dir=export_dir,
+        file_type=file_type,
         threshold=5,
         fig_width=fig_width,
         fig_height=fig_height,
@@ -5950,8 +6240,9 @@ def SA_plots(export_dir="export/GSA", data_folder="GSA/SA_results", fig_width=DE
         df=data,
         file_name="wind_electricity_production_mu_star",
         unit="TWh",
-        title="Morris μ* for Wind Electricity Production",
+        title=r"Morris $\mu^*$ for Wind Electricity Production",
         export_dir=export_dir,
+        file_type=file_type,
         threshold=5,
         fig_width=fig_width,
         fig_height=fig_height,
@@ -5963,8 +6254,9 @@ def SA_plots(export_dir="export/GSA", data_folder="GSA/SA_results", fig_width=DE
         df=data,
         file_name="solar_electricity_production_mu_star",  
         unit="TWh",
-        title="Morris μ* for Solar Electricity Production",
+        title=r"Morris $\mu^*$ for Solar Electricity Production",
         export_dir=export_dir,
+        file_type=file_type,
         threshold=5,
         fig_width=fig_width,
         fig_height=fig_height,
@@ -5976,8 +6268,9 @@ def SA_plots(export_dir="export/GSA", data_folder="GSA/SA_results", fig_width=DE
         df=data,
         file_name="nuclear_electricity_production_mu_star",
         unit="TWh",
-        title="Morris μ* for Nuclear Electricity Production",
+        title=r"Morris $\mu^*$ for Nuclear Electricity Production",
         export_dir=export_dir,
+        file_type=file_type,
         threshold=5,
         fig_width=fig_width,
         fig_height=fig_height,
@@ -5989,8 +6282,9 @@ def SA_plots(export_dir="export/GSA", data_folder="GSA/SA_results", fig_width=DE
         df=data,
         file_name="oil_use_mu_star",
         unit="TWh",
-        title="Morris μ* for Oil Use",
+        title=r"Morris $\mu^*$ for Oil Use",
         export_dir=export_dir,
+        file_type=file_type,
         threshold=5,
         fig_width=fig_width,
         fig_height=fig_height,
@@ -6002,8 +6296,9 @@ def SA_plots(export_dir="export/GSA", data_folder="GSA/SA_results", fig_width=DE
         df=data,
         file_name="gas_use_mu_star",
         unit="TWh",
-        title="Morris μ* for Gas Use",
+        title=r"Morris $\mu^*$ for Gas Use",
         export_dir=export_dir,
+        file_type=file_type,
         threshold=5,
         fig_width=fig_width,
         fig_height=fig_height,
@@ -6015,8 +6310,9 @@ def SA_plots(export_dir="export/GSA", data_folder="GSA/SA_results", fig_width=DE
         df=data,
         file_name="system_costs_mu_star",
         unit="Billion EUR",
-        title="Morris μ* for System Costs",
+        title=r"Morris $\mu^*$ for System Costs",
         export_dir=export_dir,
+        file_type=file_type,
         threshold=1,
         fig_width=fig_width,
         fig_height=fig_height,
@@ -6040,7 +6336,7 @@ if __name__ == "__main__":
 
     custom_order = ["Default", "Carbon Stock Changes", "Default 710", "Carbon Stock Changes 710"]  
     export_dir = "export/main_plots"
-    data_folder = "export/main_new"
+    data_folder = "export/main"
     
     # Configure plot dimensions and font sizes
     fig_width = 10  # Change this to adjust all plot widths (10)

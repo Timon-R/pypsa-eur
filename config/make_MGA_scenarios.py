@@ -3,7 +3,21 @@ from pathlib import Path
 import copy, yaml, re
 
 _BANNER = "###### {} ######"
-_FOCUS  = {"solver": {"options": "gurobi-numeric-focus"}}
+
+def _apply_focus(mapping: dict) -> dict:
+    """Force the gurobi-numeric-focus solver on a scenario.
+
+    The override must live under ``solving.solver`` because PyPSA-Eur reads the
+    solver config from ``solving``, not from a top-level ``solver`` key. It is
+    inserted before any existing ``solving`` children (e.g. ``mga``) so the YAML
+    matches the hand-maintained mga_numerical_trouble.yaml layout.
+    """
+    solving = mapping.get("solving", {})
+    mapping["solving"] = {
+        "solver": {"name": "gurobi", "options": "gurobi-numeric-focus"},
+        **solving,
+    }
+    return mapping
 
 _BIOMASS_EF = {
     "agricultural waste": 0, "fuelwood residues": 0,
@@ -44,7 +58,7 @@ def _add_bm0(name_tag: str, base_extras: dict, focus_set: set[str],
     mapping.setdefault("sector", {})
     mapping["sector"]["biomass"] = False
     if bm0_name in focus_set:
-        mapping |= _FOCUS
+        _apply_focus(mapping)
     out.append(_dump(bm0_name, mapping))
 
 # ---------------------------------------------------------------- generator
@@ -67,7 +81,7 @@ def generate_scenarios(
         opt_name = f"{tag}optimal" if tag else "optimal"
         opt_map  = {"solving": {"mga": {"enable": False}}} | extras
         if opt_name in focus_set:
-            opt_map |= _FOCUS
+            _apply_focus(opt_map)
         out.append(_dump(opt_name, opt_map))
 
         # --- biomass-zero variant
@@ -84,7 +98,7 @@ def generate_scenarios(
                                                "sense": sense,
                                                "slack": float(s)}}} | extras
                 if name in focus_set:
-                    mapping |= _FOCUS
+                    _apply_focus(mapping)
                 out.append(_dump(name, mapping))
 
     # main four families
@@ -117,7 +131,7 @@ def generate_scenarios(
                 raise ValueError(f"Cannot parse custom scenario name '{name}'")
 
             if need_focus:
-                mapping |= _FOCUS
+                _apply_focus(mapping)
             out.append(_dump(name, mapping))
 
     return "\n\n".join(out) + "\n"
@@ -126,7 +140,10 @@ def generate_scenarios(
 if __name__ == "__main__":
 
     slacks         = [0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.15, 0.2]
-    numeric_focus  = []          # e.g. ["default_min_0.15", "bm_0"]
+    # Scenarios that showed numerical trouble / sub-optimal termination and are
+    # re-solved with gurobi-numeric-focus (see config/mga_numerical_trouble.yaml).
+    numeric_focus  = ["max_0.02", "710_min_0.02", "default_710_min_0.03",
+                      "default_710_min_0.06", "default_710_min_0.07"]
     special_cases  = {}          # e.g. {"min_0.07": True}
     add_bm0_cases  = True        # toggle biomass-zero scenarios here
 
@@ -135,5 +152,9 @@ if __name__ == "__main__":
                                    special_cases=special_cases,
                                    include_bm0=add_bm0_cases)
 
+    # NB: the curated config/mga_scenarios_numeric_focus.yaml uses a per-block
+    # slack set that differs from `slacks` above, so it is produced by injecting
+    # the focus solver into config/mga_scenarios.yaml rather than by this script.
+    # Adjust `slacks` to match before regenerating if you want a 1:1 replacement.
     Path("config/mga_scenarios.yaml").write_text(yaml_text, encoding="utf-8")
     print(yaml_text)

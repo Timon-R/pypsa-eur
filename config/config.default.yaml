@@ -1234,6 +1234,7 @@ solving:
         gas pipeline: 0.3
       fractional_last_unit_size: false
     keep_files: false
+    keep_network: false  # main-run "full output" switch: if true, retains the solved network .nc AND builds maps/plots/graphics via rule all; keep false for MGA/GSA (CSV-only)
     store_model: false
     model_kwargs:
       solver_dir: ""
